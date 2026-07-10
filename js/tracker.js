@@ -4,7 +4,7 @@ const STAGES = [
     { time: 8,  text: 'Estamos poniendo tu proteína al fuego ahora mismo', icon: 'fa-fire' },
     { time: 12, text: 'Preparando tu guarnición con mucho cariño',      icon: 'fa-leaf' },
     { time: 16, text: 'Ya casi está, los últimos toques de tu plato',   icon: 'fa-star' },
-    { time: 18, text: '¡Tu plato está a punto de salir!',               icon: 'fa-bell' },
+    { time: 22, text: '¡Tu plato está a punto de salir!',               icon: 'fa-bell' },
 ];
 
 const EXPIRE_MS    = 2 * 60 * 60 * 1000; // 2 horas
