@@ -367,7 +367,81 @@
         <p>© 2026 Todos los derechos reservados</p>
     </footer>
 
+    <!-- BOTÓN JUEGOS -->
+    <button class="games-float-btn" onclick="openGamesHub()">🎮</button>
+
+    <!-- MODAL JUEGOS -->
+    <div id="games-modal" class="games-overlay">
+        <div class="games-container">
+            <button class="games-close-btn" onclick="closeGamesHub()">✕</button>
+
+            <!-- HUB -->
+            <div id="games-hub">
+                <div class="games-hub-header">
+                    <h2>🎮 Juegos</h2>
+                    <p>Mientras esperas tu pedido</p>
+                </div>
+                <div class="games-hub-grid">
+                    <button class="game-option-btn" onclick="startGame('memory')">
+                        <span class="game-icon">🃏</span>
+                        <span class="game-name">Memoria</span>
+                    </button>
+                    <button class="game-option-btn" onclick="startGame('ruleta')">
+                        <span class="game-icon">🎰</span>
+                        <span class="game-name">Ruleta</span>
+                    </button>
+                    <button class="game-option-btn" onclick="startGame('puzzle')">
+                        <span class="game-icon">🧩</span>
+                        <span class="game-name">Rompecabezas</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- MEMORIA -->
+            <div id="game-memory" style="display:none">
+                <div class="game-header">
+                    <button class="back-btn" onclick="backToHub()">← Volver</button>
+                    <h3>🃏 Memoria</h3>
+                </div>
+                <div class="game-stats">
+                    <span>Movimientos: <strong id="memory-moves">0</strong></span>
+                    <span>Tiempo: <strong id="memory-time">0s</strong></span>
+                </div>
+                <div id="memory-board" class="memory-board"></div>
+                <button class="game-btn" onclick="startMemory()">Reiniciar</button>
+            </div>
+
+            <!-- RULETA -->
+            <div id="game-ruleta" style="display:none">
+                <div class="game-header">
+                    <button class="back-btn" onclick="backToHub()">← Volver</button>
+                    <h3>🎰 ¿Qué pido hoy?</h3>
+                </div>
+                <div class="ruleta-wrapper">
+                    <div class="ruleta-pointer">▼</div>
+                    <canvas id="ruleta-canvas" width="260" height="260"></canvas>
+                </div>
+                <div id="ruleta-result" class="ruleta-result"></div>
+                <button class="game-btn" onclick="spinRuleta()">¡Girar!</button>
+            </div>
+
+            <!-- ROMPECABEZAS -->
+            <div id="game-puzzle" style="display:none">
+                <div class="game-header">
+                    <button class="back-btn" onclick="backToHub()">← Volver</button>
+                    <h3>🧩 Rompecabezas</h3>
+                </div>
+                <div class="game-stats">
+                    <span>Movimientos: <strong id="puzzle-moves">0</strong></span>
+                </div>
+                <div id="puzzle-board" class="puzzle-board"></div>
+                <button class="game-btn" onclick="initPuzzle()">Reiniciar</button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/script.js"></script>
+    <script src="js/games.js"></script>
 
 </body>
    

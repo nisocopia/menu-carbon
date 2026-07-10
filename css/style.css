@@ -435,3 +435,272 @@ footer {
     right: 0;
     background: linear-gradient(to left, #111111, transparent);
 }
+
+/* ============ JUEGOS ============ */
+
+.games-float-btn {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #FFC107;
+    color: #111;
+    font-size: 22px;
+    border: none;
+    cursor: pointer;
+    z-index: 999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s;
+}
+
+.games-float-btn:active { transform: scale(0.9); }
+
+.games-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.88);
+    z-index: 9000;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.games-container {
+    background: #1a1a1a;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 360px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 20px;
+    position: relative;
+}
+
+.games-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+/* Hub */
+.games-hub-header {
+    text-align: center;
+    margin-bottom: 24px;
+    padding-top: 8px;
+}
+
+.games-hub-header h2 {
+    color: #FFC107;
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+}
+
+.games-hub-header p {
+    color: #888;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.games-hub-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.game-option-btn {
+    background: #2a2a2a;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 16px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.game-option-btn:active { border-color: #FFC107; }
+
+.game-icon { font-size: 28px; }
+
+.game-name {
+    color: #ddd;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* Cabecera de cada juego */
+.game-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-top: 4px;
+}
+
+.game-header h3 {
+    color: #FFC107;
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.back-btn {
+    background: none;
+    border: 1px solid #444;
+    color: #aaa;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.game-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 14px;
+    color: #aaa;
+    font-size: 0.85rem;
+}
+
+.game-stats strong { color: #FFC107; }
+
+.game-btn {
+    display: block;
+    margin: 16px auto 4px;
+    background: #FFC107;
+    color: #111;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 28px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.game-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* Memoria */
+.memory-board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.memory-card {
+    aspect-ratio: 1;
+    perspective: 600px;
+    cursor: pointer;
+}
+
+.mc-inner {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.4s;
+}
+
+.memory-card.flipped .mc-inner,
+.memory-card.matched .mc-inner {
+    transform: rotateY(180deg);
+}
+
+.mc-front,
+.mc-back {
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+    backface-visibility: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.mc-front {
+    background: #2a2a2a;
+    border: 1px solid #444;
+}
+
+.mc-back {
+    background: #111;
+    transform: rotateY(180deg);
+    overflow: hidden;
+}
+
+.mc-back img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.memory-card.matched .mc-back { border: 2px solid #FFC107; }
+
+/* Ruleta */
+.ruleta-wrapper {
+    position: relative;
+    width: 260px;
+    margin: 8px auto 0;
+}
+
+.ruleta-pointer {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #FFC107;
+    font-size: 22px;
+    z-index: 1;
+}
+
+#ruleta-canvas { display: block; }
+
+.ruleta-result {
+    text-align: center;
+    color: #FFC107;
+    font-size: 1.05rem;
+    font-weight: 600;
+    min-height: 28px;
+    margin-top: 10px;
+}
+
+/* Rompecabezas */
+.puzzle-board {
+    display: grid;
+    grid-template-columns: repeat(3, 95px);
+    grid-template-rows: repeat(3, 95px);
+    gap: 3px;
+    margin: 0 auto;
+    width: fit-content;
+}
+
+.puzzle-tile {
+    width: 95px;
+    height: 95px;
+    border-radius: 6px;
+    cursor: pointer;
+    background-color: #2a2a2a;
+    transition: transform 0.1s;
+}
+
+.puzzle-tile:active { transform: scale(0.95); }
+
+.puzzle-tile.empty {
+    background-color: #111;
+    cursor: default;
+}
