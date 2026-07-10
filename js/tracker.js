@@ -1,10 +1,10 @@
 const STAGES = [
-    { time: 0,  text: 'Pedido recibido',            icon: 'fa-check-circle' },
-    { time: 4,  text: 'En cola de preparación',      icon: 'fa-clock' },
-    { time: 8,  text: 'Cocinando tu proteína',       icon: 'fa-fire' },
-    { time: 12, text: 'Preparando la guarnición',    icon: 'fa-leaf' },
-    { time: 16, text: 'Últimos detalles...',          icon: 'fa-star' },
-    { time: 18, text: '¡Tu pedido está casi listo!', icon: 'fa-bell' },
+    { time: 0,  text: '¡Tu pedido ya está en nuestras manos!',         icon: 'fa-check-circle' },
+    { time: 4,  text: 'Tu pedido entró a la cocina, ya casi empezamos', icon: 'fa-clock' },
+    { time: 8,  text: 'Estamos poniendo tu proteína al fuego ahora mismo', icon: 'fa-fire' },
+    { time: 12, text: 'Preparando tu guarnición con mucho cariño',      icon: 'fa-leaf' },
+    { time: 16, text: 'Ya casi está, los últimos toques de tu plato',   icon: 'fa-star' },
+    { time: 18, text: '¡Tu plato está a punto de salir!',               icon: 'fa-bell' },
 ];
 
 const EXPIRE_MS    = 2 * 60 * 60 * 1000; // 2 horas
