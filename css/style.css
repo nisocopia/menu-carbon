@@ -534,7 +534,7 @@ footer {
 
 .game-option-btn:active { border-color: #FFC107; }
 
-.game-icon { font-size: 28px; }
+.game-icon { font-size: 26px; color: #FFC107; }
 
 .game-name {
     color: #ddd;
@@ -634,6 +634,8 @@ footer {
 .mc-front {
     background: #2a2a2a;
     border: 1px solid #444;
+    color: #FFC107;
+    font-size: 22px;
 }
 
 .mc-back {

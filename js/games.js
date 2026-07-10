@@ -82,7 +82,7 @@ function renderMemoryBoard() {
         el.className = 'memory-card';
         el.innerHTML = `
             <div class="mc-inner">
-                <div class="mc-front">🍖</div>
+                <div class="mc-front"><i class="fas fa-drumstick-bite"></i></div>
                 <div class="mc-back"><img src="${card.src}" alt="${card.name}"></div>
             </div>`;
         el.addEventListener('click', () => flipMemoryCard(index, el, card));
@@ -110,7 +110,7 @@ function flipMemoryCard(index, el, card) {
             memoryLocked = false;
             if (memoryMatched === memoryImages.length) {
                 clearInterval(memoryTimer);
-                setTimeout(() => alert('¡Ganaste! 🎉\n' + memoryMoves + ' movimientos en ' + memorySeconds + 's'), 300);
+                setTimeout(() => alert('¡Ganaste!\n' + memoryMoves + ' movimientos en ' + memorySeconds + 's'), 300);
             }
         } else {
             setTimeout(() => {
@@ -306,6 +306,6 @@ function moveTile(pos) {
     renderPuzzle();
 
     if (puzzleSolved()) {
-        setTimeout(() => alert('¡Lo lograste! 🎉\n' + puzzleMoves + ' movimientos'), 200);
+        setTimeout(() => alert('¡Lo lograste!\n' + puzzleMoves + ' movimientos'), 200);
     }
 }
