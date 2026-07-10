@@ -408,35 +408,30 @@ footer {
 }
 
 .menu-nav-wrapper {
-
     position: sticky;
     top: 0;
-
     z-index: 1000;
-
-    display: flex;
-    align-items: center;
-
     background-color: #111111;
-
     border-bottom: 1px solid #333;
 }
 
-.scroll-indicator {
+.menu-nav-wrapper::before,
+.menu-nav-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    z-index: 1;
+    pointer-events: none;
+}
 
-    width: 35px;
+.menu-nav-wrapper::before {
+    left: 0;
+    background: linear-gradient(to right, #111111, transparent);
+}
 
-    display: flex;
-    justify-content: center;
-    align-items: center;
-
-    color: #FFC107;
-
-    font-size: 20px;
-
-    font-weight: bold;
-
-    flex-shrink: 0;
-
-    user-select: none;
+.menu-nav-wrapper::after {
+    right: 0;
+    background: linear-gradient(to left, #111111, transparent);
 }
