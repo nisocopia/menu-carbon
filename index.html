@@ -367,6 +367,26 @@
         <p>© 2026 Todos los derechos reservados</p>
     </footer>
 
+    <!-- TRACKER DE PEDIDO -->
+    <div id="order-tracker" class="order-tracker" style="display:none">
+        <div class="tracker-live">
+            <span class="tracker-live-dot"></span>
+            <span>En preparación</span>
+        </div>
+        <div class="tracker-status">
+            <i id="order-status-icon" class="fas fa-check-circle"></i>
+            <span id="order-status-text">Pedido recibido</span>
+        </div>
+        <div class="tracker-dots">
+            <span class="tracker-dot active"></span>
+            <span class="tracker-dot"></span>
+            <span class="tracker-dot"></span>
+            <span class="tracker-dot"></span>
+            <span class="tracker-dot"></span>
+            <span class="tracker-dot"></span>
+        </div>
+    </div>
+
     <!-- BOTÓN JUEGOS -->
     <button class="games-float-btn" onclick="openGamesHub()"><i class="fas fa-gamepad"></i></button>
 
@@ -442,6 +462,7 @@
 
     <script src="js/script.js"></script>
     <script src="js/games.js"></script>
+    <script src="js/tracker.js"></script>
 
 </body>
    

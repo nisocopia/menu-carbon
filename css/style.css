@@ -436,6 +436,82 @@ footer {
     background: linear-gradient(to left, #111111, transparent);
 }
 
+/* ============ TRACKER ============ */
+
+.order-tracker {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #1a1a1a;
+    border-top: 1px solid #333;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    z-index: 998;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
+}
+
+.tracker-live {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #aaa;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.tracker-live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #2ecc71;
+    animation: pulse-dot 1.5s infinite;
+    flex-shrink: 0;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+.tracker-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 500;
+    flex: 1;
+}
+
+.tracker-status i {
+    color: #FFC107;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.tracker-dots {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.tracker-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #444;
+    transition: background 0.4s;
+}
+
+.tracker-dot.active {
+    background: #FFC107;
+}
+
 /* ============ JUEGOS ============ */
 
 .games-float-btn {
