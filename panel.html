@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0d0d0d">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <meta name="referrer" content="no-referrer">
+    <title>Panel del Gerente</title>
+
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/panel.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body class="panel-body">
+
+    <!-- BLOQUEO POR CLAVE -->
+    <div class="lock-screen" id="lock-screen">
+        <div class="lock-box">
+            <i class="fas fa-lock lock-icon"></i>
+            <h1>Panel del Gerente</h1>
+            <p>Ingresa tu clave para continuar</p>
+            <input type="password" id="pin-input" placeholder="Clave del panel"
+                   autocomplete="current-password" spellcheck="false">
+            <button id="pin-btn">Entrar</button>
+            <p class="lock-error" id="pin-error"></p>
+        </div>
+    </div>
+
+    <!-- PANEL -->
+    <div class="panel-app" id="panel-app" hidden>
+
+        <header class="panel-header">
+            <div>
+                <h1 id="panel-titulo">Panel</h1>
+                <p id="panel-fecha"></p>
+            </div>
+            <div class="panel-header-acciones">
+                <a href="index.html" class="panel-ver-menu"><i class="fas fa-up-right-from-square"></i> Ver menú</a>
+                <button class="panel-ver-menu" id="btn-salir"><i class="fas fa-right-from-bracket"></i> Salir</button>
+            </div>
+        </header>
+
+        <nav class="panel-tabs">
+            <button class="tab activo" data-tab="hoy"><i class="fas fa-bell-concierge"></i> Pedidos</button>
+            <button class="tab" data-tab="menu"><i class="fas fa-pen-to-square"></i> Menú</button>
+            <button class="tab" data-tab="numeros"><i class="fas fa-chart-simple"></i> Números</button>
+            <button class="tab" data-tab="local"><i class="fas fa-store"></i> Local</button>
+        </nav>
+
+        <!-- ===== PEDIDOS ===== -->
+        <section class="panel-vista activa" id="vista-hoy">
+            <div class="resumen-dia" id="resumen-dia"></div>
+
+            <div class="bloque">
+                <div class="bloque-head">
+                    <h2>Pedidos recientes</h2>
+                    <button class="btn-texto peligro" id="btn-limpiar-pedidos">Borrar historial</button>
+                </div>
+                <div id="lista-pedidos"></div>
+            </div>
+        </section>
+
+        <!-- ===== MENÚ ===== -->
+        <section class="panel-vista" id="vista-menu">
+            <p class="ayuda">
+                Toca <strong>Agotado</strong> para sacar un plato del menú al instante, o edita el precio y el nombre.
+                Cuando termines, descarga el archivo actualizado desde abajo.
+            </p>
+            <div id="editor-menu"></div>
+
+            <div class="bloque exportar">
+                <h2>Guardar los cambios de forma permanente</h2>
+                <p class="ayuda">
+                    Los cambios ya están activos en este dispositivo. Para que queden fijos en el
+                    sitio para todos, descarga el archivo y reemplaza <code>js/menu-data.js</code>.
+                </p>
+                <button class="btn-principal" id="btn-exportar"><i class="fas fa-download"></i> Descargar menu-data.js</button>
+                <button class="btn-texto peligro" id="btn-reset">Deshacer todos mis cambios</button>
+            </div>
+        </section>
+
+        <!-- ===== NÚMEROS ===== -->
+        <section class="panel-vista" id="vista-numeros">
+            <div class="kpi-grid" id="kpi-grid"></div>
+
+            <div class="bloque" id="bloque-oportunidad"></div>
+
+            <div class="bloque">
+                <h2>Plato por plato</h2>
+                <p class="ayuda">“Miradas” es cuánta gente vio el plato en el menú. Si tiene muchas miradas y pocas ventas, algo lo está frenando: la foto, el precio o la descripción.</p>
+                <div class="tabla-scroll">
+                    <table class="tabla" id="tabla-platos">
+                        <thead>
+                            <tr><th>Plato</th><th>Miradas</th><th>Vendidos</th><th>Ingreso</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== LOCAL ===== -->
+        <section class="panel-vista" id="vista-local">
+            <div class="bloque">
+                <h2>Datos del restaurante</h2>
+                <div class="form-grid" id="form-local"></div>
+                <button class="btn-principal" id="btn-guardar-local"><i class="fas fa-check"></i> Guardar cambios</button>
+                <p class="guardado" id="aviso-guardado"></p>
+            </div>
+        </section>
+
+    </div>
+
+    <script src="js/menu-data.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/panel.js"></script>
+
+</body>
+
+</html>

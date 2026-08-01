@@ -33,14 +33,11 @@ function startGame(game) {
 }
 
 // ============ MEMORIA ============
-const memoryImages = [
-    { src: 'img/productos/carneasada.png',      name: 'Carne Asada' },
-    { src: 'img/productos/costillaasada.png',   name: 'Costilla' },
-    { src: 'img/productos/polloasado.png',      name: 'Pollo Asado' },
-    { src: 'img/productos/polloap.png',         name: 'Pollo Apanado' },
-    { src: 'img/productos/espagueticamaron.png',name: 'Espagueti' },
-    { src: 'img/productos/pescadoalajillo.png', name: 'Pescado Ajillo' },
-];
+// Las fotos salen del menú real: al cambiar de restaurante no se toca nada aquí.
+const memoryImages = Store.getPlatos()
+    .filter(p => p.img)
+    .slice(0, 6)
+    .map(p => ({ src: p.img, name: p.nombre }));
 
 let memoryCards = [];
 let memoryFlipped = [];
@@ -125,14 +122,10 @@ function flipMemoryCard(index, el, card) {
 
 // ============ RULETA ============
 const ruletaItems = [
-    { name: 'Carne Asada' },
-    { name: 'Costilla' },
-    { name: 'Pollo Asado' },
-    { name: 'Chancho al Horno' },
-    { name: 'Pollo Apanado' },
-    { name: 'Camarón Ajillo' },
-    { name: 'Pescado Apanado' },
-    { name: 'Espagueti Camarón' },
+    ...Store.getPlatos()
+        .filter(p => !p.agotado && p.catId !== 'bebidas' && p.catId !== 'porciones')
+        .slice(0, 8)
+        .map(p => ({ name: p.nombre }))
 ];
 const ruletaColors = ['#c0392b','#e67e22','#d4ac0d','#27ae60','#16a085','#2980b9','#8e44ad','#a93226'];
 
@@ -166,7 +159,7 @@ function drawRuleta(angle) {
         ctx.moveTo(cx, cy);
         ctx.arc(cx, cy, r, start, end);
         ctx.closePath();
-        ctx.fillStyle = ruletaColors[i];
+        ctx.fillStyle = ruletaColors[i % ruletaColors.length];
         ctx.fill();
         ctx.strokeStyle = '#111';
         ctx.lineWidth = 2;
@@ -231,7 +224,7 @@ function spinRuleta() {
 // ============ ROMPECABEZAS ============
 const PSIZE = 3;
 const TSIZE = 95;
-const PUZZLE_IMG = 'img/productos/carneasada.png';
+const PUZZLE_IMG = (Store.getPlatos().find(p => p.img) || {}).img || '';
 
 let puzzleState = [];
 let puzzleMoves = 0;

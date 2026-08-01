@@ -158,11 +158,17 @@ footer {
 }
 
 .product-image {
-    height: 200px;
+    /* Misma proporción que las fotos (4:3) para que el plato se vea
+       completo y no se recorte la ensalada ni la guarnición. */
+    aspect-ratio: 4 / 3;
+    width: 100%;
 
     display: flex;
     justify-content: center;
     align-items: center;
+
+    /* la foto nunca debe salirse ni taparle el botón a la tarjeta */
+    overflow: hidden;
 
     background: linear-gradient(
         135deg,
@@ -175,6 +181,13 @@ footer {
     font-size: 14px;
 
     border-bottom: 1px solid #333;
+}
+
+.product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .product-content {
@@ -787,4 +800,626 @@ footer {
 .puzzle-tile.empty {
     background-color: #111;
     cursor: default;
+}
+
+/* ============================================================
+   PEDIDO EN MESA
+   ============================================================ */
+
+/* --- Botón agregar en la tarjeta --- */
+
+.btn-agregar {
+    width: 100%;
+    margin-top: 4px;
+    padding: 11px;
+    border: none;
+    border-radius: 10px;
+    background: #FFC107;
+    color: #111;
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: transform 0.12s, background 0.2s;
+}
+
+.btn-agregar:active { transform: scale(0.97); }
+
+.btn-agregar.agotado {
+    background: #2a2a2a;
+    color: #777;
+    cursor: not-allowed;
+}
+
+/* --- Sello del más pedido --- */
+
+.product-image { position: relative; }
+
+.badge-destacado {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(255,193,7,0.95);
+    color: #111;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+
+/* --- Agotado --- */
+
+.product-card.is-agotado { opacity: 0.5; }
+.product-card.is-agotado .product-title { text-decoration: line-through; }
+.product-card.is-agotado:hover { transform: none; border-color: #2f2f2f; }
+
+.portion-item.is-agotado { opacity: 0.45; }
+.portion-item.is-agotado .portion-name { text-decoration: line-through; }
+
+/* Plato sin precio definido */
+.product-price.sin-precio,
+.portion-price.sin-precio {
+    color: #999;
+    background: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    font-style: italic;
+    padding: 4px 0;
+}
+
+.lista-agotado {
+    font-size: 0.75rem;
+    color: #888;
+    border: 1px solid #3a3a3a;
+    border-radius: 999px;
+    padding: 4px 10px;
+}
+
+/* --- Filas de lista (porciones y bebidas) --- */
+
+.portion-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-mini {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: none;
+    background: #FFC107;
+    color: #111;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.12s;
+}
+
+.btn-mini:active { transform: scale(0.88); }
+
+/* --- Confirmación visual al agregar --- */
+
+@keyframes pulse-card {
+    0%   { box-shadow: 0 0 0 0 rgba(255,193,7,0.55); }
+    100% { box-shadow: 0 0 0 14px rgba(255,193,7,0); }
+}
+
+.pulse { animation: pulse-card 0.55s ease-out; }
+
+@keyframes bump-bar {
+    0%, 100% { transform: scale(1); }
+    40%      { transform: scale(1.03); }
+}
+
+.cart-bar.bump { animation: bump-bar 0.3s ease; }
+
+/* --- Barra fija del pedido --- */
+
+.cart-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 997;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+    background: #FFC107;
+    color: #111;
+    cursor: pointer;
+    box-shadow: 0 -6px 20px rgba(0,0,0,0.45);
+    transform: translateY(110%);
+    transition: transform 0.28s cubic-bezier(.22,1,.36,1), bottom 0.3s ease;
+}
+
+.cart-bar.visible { transform: translateY(0); }
+
+.tracker-active .cart-bar { bottom: 58px; }
+
+.cart-bar-left,
+.cart-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+}
+
+.cart-bar-left i { font-size: 17px; }
+
+.cart-bar-right span:first-child {
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.cart-bar-cta {
+    font-size: 0.82rem;
+    background: rgba(0,0,0,0.14);
+    padding: 6px 12px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Los botones flotantes se apartan de la barra */
+.cart-active .back-to-top,
+.cart-active .games-float-btn { bottom: 86px; }
+
+.cart-active.tracker-active .back-to-top,
+.cart-active.tracker-active .games-float-btn { bottom: 144px; }
+
+/* ============================================================
+   MODAL DEL PEDIDO
+   ============================================================ */
+
+.cart-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9500;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+}
+
+.cart-overlay.open { opacity: 1; pointer-events: auto; }
+
+.cart-panel {
+    background: #161616;
+    width: 100%;
+    max-width: 520px;
+    max-height: 92vh;
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(.22,1,.36,1);
+}
+
+.cart-overlay.open .cart-panel { transform: translateY(0); }
+
+.cart-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid #282828;
+}
+
+.cart-head h2 {
+    color: #FFC107;
+    font-size: 1.15rem;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.cart-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 6px;
+}
+
+.cart-scroll {
+    overflow-y: auto;
+    padding: 16px 20px;
+    flex: 1;
+}
+
+.cart-vacio {
+    color: #777;
+    text-align: center;
+    padding: 30px 0;
+    font-size: 0.92rem;
+}
+
+.cart-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid #262626;
+}
+
+.cart-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+}
+
+.cart-item-nombre { font-size: 0.95rem; font-weight: 500; }
+.cart-item-precio { color: #FFC107; font-size: 0.88rem; font-weight: 600; }
+
+.cart-qty {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #232323;
+    border-radius: 999px;
+    padding: 4px;
+    flex-shrink: 0;
+}
+
+.cart-qty button {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 50%;
+    background: #333;
+    color: #FFC107;
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cart-qty button:active { background: #FFC107; color: #111; }
+.cart-qty span { min-width: 20px; text-align: center; font-weight: 600; font-size: 0.92rem; }
+
+/* --- Sugerencias (esto es lo que sube el ticket) --- */
+
+.sugerencia-box {
+    margin-top: 18px;
+    padding: 14px;
+    background: rgba(255,193,7,0.07);
+    border: 1px dashed rgba(255,193,7,0.35);
+    border-radius: 12px;
+}
+
+.sugerencia-titulo {
+    color: #FFC107;
+    font-size: 0.86rem;
+    font-weight: 600;
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.sugerencia-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chip-sugerencia {
+    background: #222;
+    border: 1px solid #3a3a3a;
+    color: #ddd;
+    border-radius: 999px;
+    padding: 8px 13px;
+    font-family: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: 0.18s;
+}
+
+.chip-sugerencia strong { color: #FFC107; }
+.chip-sugerencia:active { border-color: #FFC107; background: #2b2b2b; }
+
+/* --- Campos --- */
+
+.campo {
+    display: block;
+    margin-top: 18px;
+}
+
+.campo > span {
+    display: block;
+    color: #aaa;
+    font-size: 0.82rem;
+    margin-bottom: 7px;
+}
+
+.campo em { color: #666; font-style: normal; }
+
+.campo select,
+.campo textarea {
+    width: 100%;
+    background: #1f1f1f;
+    border: 1px solid #333;
+    border-radius: 10px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.95rem;
+    padding: 12px;
+    resize: none;
+}
+
+.campo select:focus,
+.campo textarea:focus { outline: none; border-color: #FFC107; }
+
+.campo select.error {
+    border-color: #e74c3c;
+    animation: shake 0.35s;
+}
+
+@keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25%     { transform: translateX(-5px); }
+    75%     { transform: translateX(5px); }
+}
+
+/* --- Pie del modal --- */
+
+.cart-foot {
+    padding: 14px 20px calc(18px + env(safe-area-inset-bottom));
+    border-top: 1px solid #282828;
+    background: #131313;
+}
+
+.cart-foot-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 1rem;
+}
+
+.cart-foot-total strong { color: #FFC107; font-size: 1.5rem; }
+
+.btn-confirmar {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 12px;
+    background: #FFC107;
+    color: #111;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+}
+
+.btn-confirmar:active { transform: scale(0.985); }
+
+/* ============================================================
+   COMANDA — lo que el mesero lee en la mesa
+   ============================================================ */
+
+.comanda-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9800;
+    background: rgba(0,0,0,0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+}
+
+.comanda-overlay.open { opacity: 1; pointer-events: auto; }
+
+.comanda-wrap {
+    width: 100%;
+    max-width: 380px;
+    margin: auto;
+}
+
+.comanda-aviso {
+    text-align: center;
+    color: #FFC107;
+    font-size: 0.88rem;
+    font-weight: 500;
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* Papel de comanda: fondo claro para leerse de lejos y con poca luz */
+.comanda-papel {
+    background: #fdfcf7;
+    color: #111;
+    border-radius: 10px 10px 0 0;
+    padding: 22px 20px 26px;
+    position: relative;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    transform: scale(0.94);
+    transition: transform 0.3s cubic-bezier(.22,1,.36,1);
+}
+
+.comanda-overlay.open .comanda-papel { transform: scale(1); }
+
+/* Borde dentado abajo, como un ticket de verdad */
+.comanda-papel::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -11px;
+    height: 12px;
+    background: repeating-linear-gradient(
+        -45deg,
+        #fdfcf7 0 8px,
+        transparent 8px 16px
+    );
+}
+
+.comanda-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.comanda-etiqueta {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+}
+
+.comanda-mesa {
+    font-size: 2.1rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.5px;
+}
+
+.comanda-codigo {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #666;
+    white-space: nowrap;
+}
+
+.comanda-hora {
+    color: #777;
+    font-size: 0.8rem;
+    margin-top: 4px;
+}
+
+.comanda-sep {
+    border-top: 2px dashed #ccc;
+    margin: 14px 0;
+}
+
+.comanda-items {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.comanda-items td {
+    padding: 7px 0;
+    vertical-align: top;
+    font-size: 1.05rem;
+}
+
+.comanda-items .c-cant {
+    width: 34px;
+    font-weight: 700;
+    color: #111;
+}
+
+.comanda-items .c-nom { font-weight: 500; }
+
+.comanda-items .c-pre {
+    text-align: right;
+    white-space: nowrap;
+    color: #444;
+    font-variant-numeric: tabular-nums;
+}
+
+.comanda-nota {
+    background: #fff5cc;
+    border-left: 3px solid #FFC107;
+    padding: 9px 11px;
+    font-size: 0.9rem;
+    border-radius: 4px;
+    margin-top: 12px;
+}
+
+.comanda-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.35rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.comanda-acciones {
+    margin-top: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-wa {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    background: #25D366;
+    color: #fff;
+    text-decoration: none;
+    padding: 13px;
+    border-radius: 11px;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.btn-cerrar-comanda {
+    background: none;
+    border: 1px solid #444;
+    color: #bbb;
+    padding: 12px;
+    border-radius: 11px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+/* --- Categoría activa en la navegación --- */
+
+.menu-nav a.activo {
+    background-color: #FFC107;
+    color: #111;
+    font-weight: 600;
+}
+
+.footer-legal {
+    margin-top: 14px;
+    font-size: 0.78rem;
+    color: #666;
+}
+
+/* En pantallas grandes la comanda no necesita ocupar todo */
+@media (min-width: 768px) {
+    .cart-overlay { align-items: center; }
+    .cart-panel { border-radius: 20px; max-height: 88vh; }
 }

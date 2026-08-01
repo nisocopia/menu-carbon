@@ -1,0 +1,6 @@
+# El menú sí queremos que se encuentre en Google.
+# El panel del gerente no.
+
+User-agent: *
+Disallow: /panel.html
+Disallow: /scripts/

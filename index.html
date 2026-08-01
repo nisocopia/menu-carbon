@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carbon Restaurant</title>
+    <meta name="theme-color" content="#111111">
+    <title>Menú</title>
 
     <link rel="stylesheet" href="css/style.css">
 
@@ -17,355 +18,99 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
 </head>
+
 <body>
 
-    <a href="#" class="back-to-top">
-        ↑
-    </a>
-    
+    <a href="#" class="back-to-top" aria-label="Volver arriba">↑</a>
+
     <!-- HEADER -->
     <header class="header">
         <div class="logo-container">
-
+            <h1 id="rest-nombre"></h1>
+            <p id="rest-lema"></p>
         </div>
     </header>
 
     <!-- BANNER -->
     <section class="banner">
-        <img src="img/banner.jpg" alt="Banner Restaurante">
+        <img src="img/banner.webp" alt="Banner del restaurante">
     </section>
 
     <!-- FRASE -->
     <div class="frase-espera">
-        <p>Lo bueno toma su tiempo. Gracias por esperar.</p>
+        <p id="frase-espera"></p>
     </div>
 
     <!-- NAVEGACIÓN -->
     <div class="menu-nav-wrapper">
-        <nav class="menu-nav">
-            <a href="#parrillas"><i class="fas fa-bars"></i> Parrillas</a>
-            <a href="#mixtos"><i class="fas fa-utensils"></i> Mixtos</a>
-            <a href="#horno"><i class="fas fa-fire"></i> Al Horno</a>
-            <a href="#apanados"><i class="fas fa-bars"></i> Apanados</a>
-            <a href="#camarones"><i class="fas fa-shrimp"></i> Camarones</a>
-            <a href="#pescados"><i class="fas fa-fish"></i> Pescados</a>
-            <a href="#espaguetis"><i class="fas fa-utensils"></i> Espaguetis</a>
-            <a href="#porciones"><i class="fas fa-cube"></i> Porciones</a>
-            <a href="#bebidas"><i class="fas fa-wine-glass"></i> Bebidas</a>
-        </nav>
+        <nav class="menu-nav" id="menu-nav"></nav>
     </div>
 
-    <!-- PARRILLAS -->
-    <section id="parrillas">
-        <h2 class="section-title"><i class="fas fa-bars"></i> Parrillas</h2>
-        <p class="section-description">Incluyen arroz, menestra, ensalada y plátano.</p>
-        <div class="products-grid">
-            <div class="product-card">
-                <div class="product-image">
-                    <img src="img/productos/carneasada.png" alt="Carne Asada" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Carne Asada</h3>
-                        <div class="product-price">$3.50</div>
-                    </div>
-                </div>
-            </div>
-            <div class="product-card">
-                <div class="product-image">
-                    <div class="image-placeholder">📷 <span>Próximamente</span></div>
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Chuleta</h3>
-                        <div class="product-price">$4.00</div>
-                    </div>
-                </div>
-            </div>
-            <div class="product-card">
-                <div class="product-image">
-                    <img src="img/productos/costillaasada.png" alt="Costilla Asada" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Costilla</h3>
-                        <div class="product-price">$5.50</div>
-                    </div>
-                </div>
-            </div>
-            <div class="product-card">
-                <div class="product-image">
-                    <div class="image-placeholder">📷 <span>Próximamente</span></div>
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Matambre</h3>
-                        <div class="product-price">$5.00</div>
-                    </div>
-                </div>
-            </div>
-            <div class="product-card">
-                <div class="product-image">
-                    <img src="img/productos/polloasado.png" alt="Pollo Asado" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Pollo Asado</h3>
-                        <div class="product-price">$3.50</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- MIXTOS -->
-    <section id="mixtos">
-        <h2 class="section-title"><i class="fas fa-utensils"></i> Mixtos</h2>
-        <p class="section-description">Incluyen arroz, menestra, ensalada y plátano.</p>
-        <div class="products-grid">
-            <div class="product-card">
-                <div class="product-image">
-                    <div class="image-placeholder">📷 <span>Próximamente</span></div>
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Mixto 2 Carnes</h3>
-                        <div class="product-price">$6.00</div>
-                    </div>
-                    <p class="product-description">Pollo + Carne o Chuleta</p>
-                </div>
-            </div>
-            <div class="product-card">
-                <div class="product-image">
-                    <div class="image-placeholder">📷 <span>Próximamente</span></div>
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Mixto 2 Carnes Especial</h3>
-                        <div class="product-price">$7.00</div>
-                    </div>
-                    <p class="product-description">Costilla o Matambre + Pollo, Carne o Chuleta</p>
-                </div>
-            </div>
-            <div class="product-card">
-                <div class="product-image">
-                    <div class="image-placeholder">📷 <span>Próximamente</span></div>
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Mixto 3 Carnes</h3>
-                        <div class="product-price">$8.00</div>
-                    </div>
-                    <p class="product-description">Pollo + Carne + Chuleta</p>
-                </div>
-            </div>
-            <div class="product-card">
-                <div class="product-image">
-                    <div class="image-placeholder">📷 <span>Próximamente</span></div>
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Mixto 3 Carnes Especial</h3>
-                        <div class="product-price">$10.00</div>
-                    </div>
-                    <p class="product-description">Costilla, Matambre, Pollo, Carne, Chuleta</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- AL HORNO -->
-    <section id="horno">
-        <h2 class="section-title"><i class="fas fa-fire"></i> Al Horno</h2>
-        <p class="section-description">Incluye arroz, ensalada y patacones.</p>
-        <div class="products-grid">
-            <div class="product-card">
-                <div class="product-image">
-                    <img src="img/productos/chanchoalhorno.png" alt="Chancho al Horno" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Chancho al Horno</h3>
-                        <div class="product-price">$5.00</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- APANADOS -->
-    <section id="apanados">
-        <h2 class="section-title"><i class="fas fa-bars"></i> Apanados</h2>
-        <p class="section-description">Incluyen arroz, ensalada y patacones.</p>
-        <div class="products-grid">
-            <div class="product-card">
-                <div class="product-image">
-                    <img src="img/productos/polloap.png" alt="Pollo Apanado" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Pollo Apanado</h3>
-                        <div class="product-price">$5.00</div>
-                    </div>
-                </div>
-            </div>
-            <div class="product-card">
-                    <div class="product-image">
-                        <img src="img/productos/carneap.png" alt="Carne Apanada" style="width: 100%; height: 100%; object-fit: cover;">
-                    </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Carne Apanada</h3>
-                        <div class="product-price">$5.00</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- CAMARONES -->
-    <section id="camarones">
-        <h2 class="section-title"><i class="fas fa-shrimp"></i> Camarones</h2>
-        <p class="section-description">Incluyen arroz, ensalada y patacones.</p>
-        <div class="products-grid">
-            <div class="product-card">
-                <div class="product-image">
-                    <img src="img/productos/camaronap.png" alt="Camarón Apanado" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Camarón Apanado</h3>
-                        <div class="product-price">$6.00</div>
-                    </div>
-                </div>
-            </div>
-            <div class="product-card">
-                    <div class="product-image">
-                        <img src="img/productos/camaronajillo.png" alt="Camarón al Ajillo" style="width: 100%; height: 100%; object-fit: cover;">
-                    </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Camarón al Ajillo</h3>
-                        <div class="product-price">$6.00</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- PESCADOS -->
-    <section id="pescados">
-        <h2 class="section-title"><i class="fas fa-fish"></i> Pescados</h2>
-        <p class="section-description">Incluyen arroz, ensalada y patacones.</p>
-        <div class="products-grid">
-            <div class="product-card">
-                        <div class="product-image">
-                            <img src="img/productos/pescadoap.png" alt="Pescado Apanado" style="width: 100%; height: 100%; object-fit: cover;">
-                        </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Pescado Apanado</h3>
-                        <div class="product-price">$5.00</div>
-                    </div>
-                </div>
-            </div>
-            <div class="product-card">
-                <div class="product-image">
-                    <img src="img/productos/pescadoalajillo.png" alt="Pescado al Ajillo" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Pescado al Ajillo</h3>
-                        <div class="product-price">$6.00</div>
-                    </div>
-                </div>
-            </div>
-            <div class="product-card">
-                <div class="product-image">
-                    <img src="img/productos/pescadoplancha.png" alt="Pescado a la Plancha" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Pescado a la Plancha</h3>
-                        <div class="product-price">$5.00</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ESPAGUETIS -->
-    <section id="espaguetis">
-        <h2 class="section-title"><i class="fas fa-utensils"></i> Espaguetis</h2>
-        <div class="products-grid">
-            <div class="product-card">
-                <div class="product-image">
-                    <div class="image-placeholder">📷 <span>Próximamente</span></div>
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Carbonara</h3>
-                        <div class="product-price">$7.00</div>
-                    </div>
-                </div>
-            </div>
-            <div class="product-card">
-                <div class="product-image">
-                    <img src="img/productos/espagueticamaron.png" alt="Espagueti de Camarón" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="product-content">
-                    <div class="product-header">
-                        <h3 class="product-title">Espagueti de Camarón</h3>
-                        <div class="product-price">$7.00</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- PORCIONES -->
-    <section id="porciones">
-        <h2 class="section-title"><i class="fas fa-cube"></i> Porciones</h2>
-        <div class="portion-list">
-            <div class="portion-item">
-                <span class="portion-name">Arroz</span>
-                <span class="portion-price">$1.50</span>
-            </div>
-            <div class="portion-item">
-                <span class="portion-name">Menestra</span>
-                <span class="portion-price">$1.00</span>
-            </div>
-            <div class="portion-item">
-                <span class="portion-name">Arroz y Menestra</span>
-                <span class="portion-price">$2.00</span>
-            </div>
-            <div class="portion-item">
-                <span class="portion-name">Patacones</span>
-                <span class="portion-price">$2.00</span>
-            </div>
-        </div>
-    </section>
-
-    <!-- BEBIDAS -->
-    <section id="bebidas">
-        <h2 class="section-title"><i class="fas fa-wine-glass"></i> Bebidas</h2>
-        <div class="drink-list">
-            <div class="drink-item">Agua</div>
-            <div class="drink-item">Cola</div>
-            <div class="drink-item">Jugos</div>
-            <div class="drink-item">Cervezas</div>
-        </div>
-    </section>
+    <!-- EL MENÚ SE DIBUJA AQUÍ DESDE js/menu-data.js -->
+    <main id="menu-body"></main>
 
     <!-- FOOTER -->
-    <footer>
-        <h3>Carbon Restaurant</h3>
-        <p>Comida al carbón preparada al momento.</p>
-        <p>🕐 Jue · Vie · Sáb · Dom · Lun &nbsp;|&nbsp; 6:20 pm – 10:30 pm</p>
-        <p>📍 Dirección del restaurante</p>
-        <p>📞 Teléfono</p>
-        <p>© 2026 Todos los derechos reservados</p>
-    </footer>
+    <footer id="footer-info"></footer>
+
+    <!-- BARRA DEL PEDIDO -->
+    <div class="cart-bar" id="cart-bar" role="button" tabindex="0">
+        <div class="cart-bar-left">
+            <i class="fas fa-receipt"></i>
+            <span id="cart-count">0 platos</span>
+        </div>
+        <div class="cart-bar-right">
+            <span id="cart-total">$0.00</span>
+            <span class="cart-bar-cta">Ver pedido <i class="fas fa-chevron-right"></i></span>
+        </div>
+    </div>
+
+    <!-- MODAL DEL PEDIDO -->
+    <div class="cart-overlay" id="cart-modal">
+        <div class="cart-panel">
+            <div class="cart-head">
+                <h2><i class="fas fa-receipt"></i> Tu pedido</h2>
+                <button class="cart-close" id="cart-close" aria-label="Cerrar">✕</button>
+            </div>
+
+            <div class="cart-scroll">
+                <div id="cart-items"></div>
+                <div id="cart-sugerencias"></div>
+
+                <label class="campo">
+                    <span>Nota para la cocina <em>(opcional)</em></span>
+                    <textarea id="pedido-nota" rows="2" placeholder="Ej: sin ensalada, término medio…"></textarea>
+                </label>
+            </div>
+
+            <div class="cart-foot">
+                <div class="cart-foot-total">
+                    <span>Total</span>
+                    <strong id="cart-modal-total">$0.00</strong>
+                </div>
+                <button class="btn-confirmar" id="cart-confirmar">
+                    <i class="fas fa-bell-concierge"></i> Listo, llamar al mesero
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- COMANDA: lo que el mesero lee en la mesa -->
+    <div class="comanda-overlay" id="comanda-modal">
+        <div class="comanda-wrap">
+            <p class="comanda-aviso"><i class="fas fa-hand-point-down"></i> Muéstrale esta pantalla al mesero</p>
+
+            <div class="comanda-papel">
+                <div id="comanda-contenido"></div>
+            </div>
+
+            <div class="comanda-acciones">
+                <a class="btn-wa" id="comanda-whatsapp" target="_blank" rel="noopener">
+                    <i class="fab fa-whatsapp"></i> Enviar por WhatsApp
+                </a>
+                <button class="btn-cerrar-comanda" id="comanda-close">Seguir viendo el menú</button>
+            </div>
+        </div>
+    </div>
 
     <!-- TRACKER DE PEDIDO -->
     <div id="order-tracker" class="order-tracker" style="display:none">
@@ -388,7 +133,7 @@
     </div>
 
     <!-- BOTÓN JUEGOS -->
-    <button class="games-float-btn" onclick="openGamesHub()"><i class="fas fa-gamepad"></i></button>
+    <button class="games-float-btn" onclick="openGamesHub()" aria-label="Juegos"><i class="fas fa-gamepad"></i></button>
 
     <!-- MODAL JUEGOS -->
     <div id="games-modal" class="games-overlay">
@@ -460,10 +205,12 @@
         </div>
     </div>
 
-    <script src="js/script.js"></script>
+    <script src="js/menu-data.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/app.js"></script>
     <script src="js/games.js"></script>
     <script src="js/tracker.js"></script>
 
 </body>
-   
+
 </html>
