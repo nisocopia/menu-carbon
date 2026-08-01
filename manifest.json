@@ -1,0 +1,30 @@
+{
+  "name": "Carbon Restaurant",
+  "short_name": "Carbon",
+  "description": "Menú digital. Mira los platos y pide desde tu mesa.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "img/favicon.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    },
+    {
+      "src": "img/icono-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "img/icono-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

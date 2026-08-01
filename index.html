@@ -5,18 +5,43 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#111111">
-    <title>Menú</title>
 
+    <!-- OJO al montar otro restaurante: cambia el título, la descripción
+         y sobre todo las URL absolutas de abajo por las del nuevo sitio.
+         Los buscadores y WhatsApp no ejecutan JavaScript, así que estos
+         datos tienen que estar escritos aquí, no en menu-data.js. -->
+    <title>Carbon Restaurant — Menú</title>
+    <meta name="description"
+          content="Menú de Carbon Restaurant: parrillas, mixtos, apanados, camarones y pescados. Comida al carbón preparada al momento.">
+    <link rel="canonical" href="https://nisocopia.github.io/menu-carbon/">
+
+    <!-- Vista previa al compartir el link (WhatsApp, Facebook) -->
+    <meta property="og:type"        content="restaurant.menu">
+    <meta property="og:locale"      content="es_EC">
+    <meta property="og:site_name"   content="Carbon Restaurant">
+    <meta property="og:title"       content="Carbon Restaurant — Menú">
+    <meta property="og:description" content="Comida al carbón preparada al momento. Mira el menú y pide desde tu mesa.">
+    <meta property="og:url"         content="https://nisocopia.github.io/menu-carbon/">
+    <meta property="og:image"       content="https://nisocopia.github.io/menu-carbon/img/og-image.jpg">
+    <meta property="og:image:width"  content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card"  content="summary_large_image">
+    <meta name="twitter:image" content="https://nisocopia.github.io/menu-carbon/img/og-image.jpg">
+
+    <!-- Icono de pestaña y de pantalla de inicio -->
+    <link rel="icon" type="image/png" href="img/favicon.png">
+    <link rel="apple-touch-icon" href="img/icono-180.png">
+    <meta name="apple-mobile-web-app-title" content="Carbon">
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Fuente e iconos servidos desde este mismo sitio: el menú carga
+         igual de rápido aunque la señal esté floja o el CDN no responda. -->
+    <link rel="preload" href="fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/poppins-700.woff2" as="font" type="font/woff2" crossorigin>
+
+    <link rel="stylesheet" href="css/fuentes.css">
+    <link rel="stylesheet" href="css/iconos.css">
     <link rel="stylesheet" href="css/style.css">
-
-    <!-- Font Awesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- Fuente -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
 </head>
 
 <body>

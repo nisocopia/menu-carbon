@@ -11,14 +11,39 @@ El sitio completo pesa **1.7 MB**.
 
 ## Cómo venderlo a otro restaurante
 
-Solo se tocan dos cosas:
+1. **`js/menu-data.js`** — nombre del local, horario, WhatsApp, categorías,
+   platos y precios.
+2. **`img/productos/`** — las fotos de los platos, y luego:
+   ```bash
+   python scripts/comprimir-fotos.py
+   ```
+3. **La clave del panel:**
+   ```bash
+   node scripts/generar-clave.js "LaClaveDelCliente"
+   ```
+   y se pegan en `menu-data.js` las dos líneas que imprime.
+4. **La vista previa y los iconos:**
+   ```bash
+   python scripts/generar-imagenes-sociales.py
+   ```
+5. **Las etiquetas de `index.html`** — título, descripción y las URL absolutas
+   de `og:url`, `og:image` y `canonical`. **Esto es lo único que hay que editar
+   a mano**, porque los buscadores y WhatsApp no ejecutan JavaScript y no
+   pueden leer `menu-data.js`. Si se olvida, el link compartido mostrará el
+   nombre del restaurante anterior.
+6. `manifest.json` — nombre y nombre corto de la app.
 
-1. **`js/menu-data.js`** — nombre del local, horario, WhatsApp, número de mesas,
-   categorías, platos y precios.
-2. **`img/productos/`** — las fotos de los platos.
+El resto (carrito, comanda, panel, juegos, tracker) se adapta solo.
 
-Nada más. El resto del sistema (carrito, comanda, panel, juegos, tracker) se
-adapta solo a los datos nuevos.
+### El sitio no depende de nadie
+
+La fuente y los iconos se sirven desde el propio sitio, no desde Google ni
+Cloudflare. Font Awesome completo son ~250 KB; recortado a los 34 iconos que
+este menú usa son 6.9 KB. Ver la primera pantalla del menú cuesta **119 KB**,
+y las fotos bajan solas a medida que el comensal hace scroll.
+
+Si algún día agregas un icono nuevo, hay que volver a generar el recorte —
+si no, no se va a ver.
 
 ### Comprimir las fotos del cliente nuevo
 

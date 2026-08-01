@@ -1,0 +1,66 @@
+/* Font Awesome 6.4.0 recortado a los 34 iconos que usa este menú.
+   Se sirve desde el propio sitio: no depende de ningún servidor externo. */
+
+@font-face {
+    font-family: 'Font Awesome 6 Free';
+    font-style: normal;
+    font-weight: 900;
+    font-display: block;
+    src: url('../fonts/fa-solid-900.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Font Awesome 6 Brands';
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+    src: url('../fonts/fa-brands-400.woff2') format('woff2');
+}
+
+.fas, .fa-solid, .fab, .fa-brands {
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-font-smoothing: antialiased;
+    display: inline-block;
+    font-style: normal;
+    font-variant: normal;
+    line-height: 1;
+    text-rendering: auto;
+}
+
+.fas, .fa-solid  { font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+.fab, .fa-brands { font-family: 'Font Awesome 6 Brands'; font-weight: 400; }
+
+.fa-bell:before{content:"\f0f3"}
+.fa-bell-concierge:before{content:"\f562"}
+.fa-bowl-food:before{content:"\e4c6"}
+.fa-chart-simple:before{content:"\e473"}
+.fa-check:before{content:"\f00c"}
+.fa-check-circle:before{content:"\f058"}
+.fa-chevron-right:before{content:"\f054"}
+.fa-clock:before{content:"\f017"}
+.fa-clone:before{content:"\f24d"}
+.fa-cube:before{content:"\f1b2"}
+.fa-download:before{content:"\f019"}
+.fa-drumstick-bite:before{content:"\f6d7"}
+.fa-fire:before{content:"\f06d"}
+.fa-fire-burner:before{content:"\e4f1"}
+.fa-fish:before{content:"\f578"}
+.fa-gamepad:before{content:"\f11b"}
+.fa-hand-point-down:before{content:"\f0a7"}
+.fa-leaf:before{content:"\f06c"}
+.fa-lightbulb:before{content:"\f0eb"}
+.fa-lock:before{content:"\f023"}
+.fa-note-sticky:before{content:"\f249"}
+.fa-pen-to-square:before{content:"\f044"}
+.fa-plus:before{content:"\2b"}
+.fa-puzzle-piece:before{content:"\f12e"}
+.fa-receipt:before{content:"\f543"}
+.fa-right-from-bracket:before{content:"\f2f5"}
+.fa-shrimp:before{content:"\e448"}
+.fa-star:before{content:"\f005"}
+.fa-store:before{content:"\f54e"}
+.fa-sync-alt:before{content:"\f2f1"}
+.fa-up-right-from-square:before{content:"\f35d"}
+.fa-utensils:before{content:"\f2e7"}
+.fa-wine-glass:before{content:"\f4e3"}
+.fa-whatsapp:before{content:"\f232"}
