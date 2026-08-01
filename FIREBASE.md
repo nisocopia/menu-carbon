@@ -23,7 +23,11 @@ Entra a **console.firebase.google.com** con tu cuenta de Google y pulsa
 
 ### 2. Crear la base de datos
 
-En el menú de la izquierda: **Compilación → Realtime Database → Crear base de datos**.
+En la barra lateral: **Bases de datos y almacenamiento → Realtime Database →
+Crear base de datos**.
+
+> La consola de Firebase cambia de organización cada tanto. Si no ves esa
+> categoría, busca **Realtime Database** en el buscador de productos de arriba.
 
 - Ubicación: **`us-central1`** (la más cercana a Ecuador)
 - Al preguntar por las reglas, elige **"Comenzar en modo bloqueado"**
@@ -56,7 +60,7 @@ Esto es seguridad de verdad: la valida el servidor de Google, no el navegador.
 
 ### 4. Crear la cuenta del gerente
 
-Menú izquierdo: **Compilación → Authentication → Comenzar**.
+Barra lateral: **Seguridad → Authentication → Comenzar**.
 
 - En **Sign-in method**, activa **Correo electrónico/contraseña**
 - En la pestaña **Users**, pulsa **Agregar usuario**
@@ -67,8 +71,8 @@ Firebase la guarda cifrada.
 
 ### 5. Copiar la configuración al menú
 
-En **Configuración del proyecto** (el engranaje, arriba a la izquierda), baja
-hasta **Tus apps** y pulsa el icono **`</>`** (Web). Ponle cualquier nombre y
+En **Configuración** (arriba en la barra lateral, bajo "Descripción general
+del proyecto"), baja hasta **Tus apps** y pulsa el icono **`</>`** (Web). Ponle cualquier nombre y
 registra la app.
 
 Te va a mostrar un bloque con `apiKey`, `databaseURL` y más cosas.
