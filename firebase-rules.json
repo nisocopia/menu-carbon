@@ -1,0 +1,40 @@
+{
+  "rules": {
+    "menu": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+
+    "config": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+
+    "pedidos": {
+      ".read": "auth != null",
+      "$pedido": {
+        ".write": "!data.exists() || auth != null",
+        ".validate": "newData.hasChildren(['id', 'items', 'total', 'creado'])",
+        "total":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 10000" },
+        "creado": { ".validate": "newData.isNumber()" },
+        "nota":   { ".validate": "newData.isString() && newData.val().length < 300" },
+        "codigo": { ".validate": "newData.isString() && newData.val().length < 10" }
+      }
+    },
+
+    "vistas": {
+      ".read": "auth != null",
+      "$vista": {
+        ".write": "!data.exists()",
+        ".validate": "newData.hasChildren(['plato', 'cuando'])",
+        "plato":  { ".validate": "newData.isString() && newData.val().length < 20" },
+        "cuando": { ".validate": "newData.isNumber()" }
+      }
+    },
+
+    "$otro": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

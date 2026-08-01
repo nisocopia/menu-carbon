@@ -4,6 +4,23 @@
    sin depender de nadie.
    ============================================================ */
 
+/*
+   Si por lo que sea sync.js no llegara a cargar, el panel tiene que seguir
+   funcionando sin nube en vez de quedarse en blanco. Este respaldo garantiza
+   que nunca falte nada de lo que el resto del archivo espera encontrar.
+*/
+const Nube = (typeof Sync !== 'undefined') ? Sync : {
+    activo: false,
+    haySesion: () => false,
+    correoSesion: () => null,
+    salir() {},
+    escuchar: () => (() => {}),
+    guardar: async () => false,
+    agregar: async () => false,
+    leer: async () => null,
+    entrar() { throw new Error('sin-configurar'); }
+};
+
 let cfgPanel = {};
 const dinero = n => (cfgPanel.moneda || '$') + Number(n || 0).toFixed(2);
 
@@ -67,10 +84,21 @@ function mostrarError(texto) {
     setTimeout(() => { if (err.textContent === texto) err.textContent = ''; }, 4000);
 }
 
+/** Mensajes de Firebase traducidos a algo que se entienda. */
+const ERRORES_FIREBASE = {
+    EMAIL_NOT_FOUND:           'Ese correo no está registrado',
+    INVALID_PASSWORD:          'Clave incorrecta',
+    INVALID_LOGIN_CREDENTIALS: 'Correo o clave incorrectos',
+    USER_DISABLED:             'Esa cuenta está desactivada',
+    TOO_MANY_ATTEMPTS_TRY_LATER: 'Demasiados intentos. Espera unos minutos.',
+    'sin-configurar':          'Falta configurar Firebase en menu-data.js'
+};
+
 async function intentarEntrar() {
-    const campo = document.getElementById('pin-input');
+    const campoClave = document.getElementById('pin-input');
+    const campoCorreo = document.getElementById('correo-input');
     const boton = document.getElementById('pin-btn');
-    const clave = campo.value;
+    const clave = campoClave.value;
 
     const espera = bloqueoRestante();
     if (espera > 0) {
@@ -83,6 +111,25 @@ async function intentarEntrar() {
     boton.textContent = 'Verificando…';
 
     try {
+        if (Nube.activo) {
+            // Con nube: valida Firebase en su servidor, no el navegador
+            const correo = (campoCorreo.value || '').trim();
+            if (!correo) { mostrarError('Escribe tu correo'); return; }
+
+            try {
+                await Nube.entrar(correo, clave);
+                localStorage.removeItem(INTENTOS);
+                abrirPanel();
+                return;
+            } catch (err) {
+                registrarFallo();
+                const codigo = String(err.message).split(' ')[0];
+                mostrarError(ERRORES_FIREBASE[codigo] || 'No se pudo entrar');
+                return;
+            }
+        }
+
+        // Sin nube: se compara contra la huella guardada en menu-data.js
         const cfg = Store.getConfig();
         const calculada = await huella(clave, cfg.panelSal);
 
@@ -98,28 +145,85 @@ async function intentarEntrar() {
         // crypto.subtle solo existe en HTTPS o en localhost
         mostrarError('Abre el panel por HTTPS para poder validar la clave.');
     } finally {
-        campo.value = '';
+        campoClave.value = '';
         boton.disabled = false;
         boton.textContent = 'Entrar';
     }
 }
 
 function sesionValida() {
+    if (Nube.activo) return Nube.haySesion();
     try {
         const s = JSON.parse(sessionStorage.getItem(SESION));
-        return s && s.hasta > Date.now();
+        return !!(s && s.hasta > Date.now());
     } catch (e) { return false; }
 }
 
 function abrirPanel() {
     document.getElementById('lock-screen').style.display = 'none';
     document.getElementById('panel-app').hidden = false;
-    renderTodo();
+
+    // Si algo del dibujado fallara, la conexión en vivo tiene que arrancar
+    // igual: es lo que hace que los agotados y los pedidos funcionen.
+    try { renderTodo(); } catch (e) { console.error('Error al dibujar el panel:', e); }
+    try { escucharNube(); } catch (e) { console.error('Error al conectar con la nube:', e); }
 }
 
 function cerrarSesion() {
     sessionStorage.removeItem(SESION);
+    if (Nube.activo) Nube.salir();
     location.reload();
+}
+
+/* ============================================================
+   DATOS EN VIVO
+   ============================================================ */
+
+let pedidosNube = {};
+let vistasNube  = {};
+
+function pedidosParaMostrar() {
+    return Nube.activo ? Store.mezclarPedidosRemotos(pedidosNube) : Store.getPedidos();
+}
+
+function statsParaMostrar() {
+    return Nube.activo
+        ? Store.getStats(pedidosParaMostrar(), Store.mezclarVistasRemotas(vistasNube))
+        : Store.getStats();
+}
+
+function escucharNube() {
+    if (!Nube.activo) return;
+
+    marcarEstadoNube('conectando');
+
+    Nube.escuchar('pedidos', datos => {
+        pedidosNube = datos || {};
+        marcarEstadoNube('en-vivo');
+        renderResumenDia();
+        renderPedidos();
+        renderNumeros();
+    }, true);
+
+    Nube.escuchar('vistas', datos => {
+        vistasNube = datos || {};
+        renderNumeros();
+    }, true);
+
+    // Si otro dispositivo del local cambia el menú, este panel se entera
+    Nube.escuchar('menu/overrides', datos => {
+        Store.aplicarOverridesRemotos(datos);
+        renderEditorMenu();
+    });
+}
+
+function marcarEstadoNube(estado) {
+    const el = document.getElementById('estado-nube');
+    if (!el) return;
+    el.className = 'estado-nube ' + estado;
+    el.innerHTML = estado === 'en-vivo'
+        ? '<span class="punto-vivo"></span> En vivo'
+        : '<i class="fas fa-clock"></i> Conectando…';
 }
 
 /* ============================================================
@@ -154,7 +258,7 @@ function esDeHoy(ts) {
 }
 
 function renderResumenDia() {
-    const pedidos = Store.getPedidos().filter(p => esDeHoy(p.creado));
+    const pedidos = pedidosParaMostrar().filter(p => esDeHoy(p.creado));
     const ventas  = pedidos.reduce((s, p) => s + (p.total || 0), 0);
     const platos  = pedidos.reduce((s, p) => s + (p.items || []).reduce((a, i) => a + i.cantidad, 0), 0);
 
@@ -165,7 +269,7 @@ function renderResumenDia() {
 }
 
 function renderPedidos() {
-    const lista = Store.getPedidos();
+    const lista = pedidosParaMostrar();
     const cont = document.getElementById('lista-pedidos');
 
     if (!lista.length) {
@@ -283,7 +387,7 @@ function exportarArchivo() {
    ============================================================ */
 
 function renderNumeros() {
-    const s = Store.getStats();
+    const s = statsParaMostrar();
 
     document.getElementById('kpi-grid').innerHTML = `
         <div class="kpi"><span class="kpi-valor">${s.totalPedidos}</span><span class="kpi-label">Pedidos</span></div>
@@ -373,8 +477,28 @@ function renderCabecera() {
         new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
+/** El texto de ayuda cambia según haya nube o no, para no confundir al dueño. */
+function ajustarTextosSegunNube() {
+    const ayuda = document.getElementById('ayuda-menu');
+    const bloque = document.getElementById('bloque-exportar');
+    if (!ayuda) return;
+
+    if (Nube.activo) {
+        ayuda.innerHTML = 'Toca <strong>Agotado</strong> y el plato desaparece del menú de ' +
+            '<strong>todos los celulares</strong> en segundos. Lo mismo al cambiar un precio. ' +
+            'No hay que hacer nada más.';
+        if (bloque) bloque.hidden = true;
+    } else {
+        ayuda.innerHTML = 'Toca <strong>Agotado</strong> para sacar un plato del menú, o edita ' +
+            'el precio y el nombre. Ojo: estos cambios <strong>solo se ven en este aparato</strong>. ' +
+            'Para que los vean tus clientes, descarga el archivo de abajo y súbelo al sitio.';
+        if (bloque) bloque.hidden = false;
+    }
+}
+
 function renderTodo() {
     cfgPanel = Store.getConfig();
+    ajustarTextosSegunNube();
     renderCabecera();
     renderResumenDia();
     renderPedidos();
@@ -390,6 +514,12 @@ function renderTodo() {
 document.addEventListener('DOMContentLoaded', () => {
     conectarTabs();
     conectarEditor();
+
+    // Con nube se entra con correo y clave; sin nube, solo con la clave
+    if (Nube.activo) {
+        document.getElementById('correo-input').hidden = false;
+        document.getElementById('estado-nube').hidden = false;
+    }
 
     document.getElementById('pin-btn').addEventListener('click', intentarEntrar);
     document.getElementById('pin-input').addEventListener('keydown', e => {
@@ -418,9 +548,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const btn = e.target.closest('[data-estado]');
         if (!btn) return;
         const id = Number(btn.dataset.estado);
-        const pedido = Store.getPedidos().find(p => p.id === id);
+        const pedido = pedidosParaMostrar().find(p => p.id === id);
         if (!pedido) return;
-        Store.setEstadoPedido(id, (ESTADOS[pedido.estado] || ESTADOS.nuevo).siguiente);
+
+        const nuevo = (ESTADOS[pedido.estado] || ESTADOS.nuevo).siguiente;
+        Store.setEstadoPedido(id, nuevo);
+
+        // Si el pedido vino de otro celular, el estado se guarda en la nube
+        // para que cualquier aparato del local lo vea igual.
+        if (Nube.activo && pedido.llaveNube) {
+            pedidosNube[pedido.llaveNube] = Object.assign({}, pedido, { estado: nuevo });
+            Nube.guardar(`pedidos/${pedido.llaveNube}/estado`, nuevo);
+        }
         renderPedidos();
     });
 

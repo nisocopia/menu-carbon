@@ -925,6 +925,31 @@ footer {
 
 .cart-bar.bump { animation: bump-bar 0.3s ease; }
 
+/* --- Aviso cuando algo se agota mientras el comensal mira --- */
+
+.aviso-agotado {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 18px;
+    background: #c0392b;
+    color: #fff;
+    font-size: 0.88rem;
+    font-weight: 500;
+    text-align: center;
+    transform: translateY(-110%);
+    transition: transform 0.3s cubic-bezier(.22,1,.36,1);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.aviso-agotado.visible { transform: translateY(0); }
+
 /* --- Barra fija del pedido --- */
 
 .cart-bar {

@@ -9,10 +9,10 @@
     <meta name="referrer" content="no-referrer">
     <title>Panel del Gerente</title>
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608011538">
-    <link rel="stylesheet" href="css/iconos.css?v=202608011538">
-    <link rel="stylesheet" href="css/style.css?v=202608011538">
-    <link rel="stylesheet" href="css/panel.css?v=202608011538">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608011555">
+    <link rel="stylesheet" href="css/iconos.css?v=202608011555">
+    <link rel="stylesheet" href="css/style.css?v=202608011555">
+    <link rel="stylesheet" href="css/panel.css?v=202608011555">
 </head>
 
 <body class="panel-body">
@@ -22,7 +22,9 @@
         <div class="lock-box">
             <i class="fas fa-lock lock-icon"></i>
             <h1>Panel del Gerente</h1>
-            <p>Ingresa tu clave para continuar</p>
+            <p>Ingresa tus datos para continuar</p>
+            <input type="email" id="correo-input" placeholder="Correo"
+                   autocomplete="username" spellcheck="false" hidden>
             <input type="password" id="pin-input" placeholder="Clave del panel"
                    autocomplete="current-password" spellcheck="false">
             <button id="pin-btn">Entrar</button>
@@ -37,6 +39,7 @@
             <div>
                 <h1 id="panel-titulo">Panel</h1>
                 <p id="panel-fecha"></p>
+                <span class="estado-nube" id="estado-nube" hidden></span>
             </div>
             <div class="panel-header-acciones">
                 <a href="index.html" class="panel-ver-menu"><i class="fas fa-up-right-from-square"></i> Ver menú</a>
@@ -66,13 +69,10 @@
 
         <!-- ===== MENÚ ===== -->
         <section class="panel-vista" id="vista-menu">
-            <p class="ayuda">
-                Toca <strong>Agotado</strong> para sacar un plato del menú al instante, o edita el precio y el nombre.
-                Cuando termines, descarga el archivo actualizado desde abajo.
-            </p>
+            <p class="ayuda" id="ayuda-menu"></p>
             <div id="editor-menu"></div>
 
-            <div class="bloque exportar">
+            <div class="bloque exportar" id="bloque-exportar">
                 <h2>Guardar los cambios de forma permanente</h2>
                 <p class="ayuda">
                     Los cambios ya están activos en este dispositivo. Para que queden fijos en el
@@ -115,9 +115,10 @@
 
     </div>
 
-    <script src="js/menu-data.js?v=202608011538"></script>
-    <script src="js/store.js?v=202608011538"></script>
-    <script src="js/panel.js?v=202608011538"></script>
+    <script src="js/menu-data.js?v=202608011555"></script>
+    <script src="js/sync.js?v=202608011555"></script>
+    <script src="js/store.js?v=202608011555"></script>
+    <script src="js/panel.js?v=202608011555"></script>
 
 </body>
 

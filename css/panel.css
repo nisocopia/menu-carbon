@@ -104,6 +104,46 @@
     text-transform: capitalize;
 }
 
+/* Indicador de conexión con la nube */
+
+.estado-nube {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 0.7rem;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #1e1e1e;
+    color: #888;
+    border: 1px solid #2c2c2c;
+}
+
+.estado-nube.en-vivo { color: #6fcf6f; border-color: #2e5a2e; }
+
+.punto-vivo {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #2ecc71;
+    animation: pulse-dot 1.5s infinite;
+}
+
+#correo-input {
+    width: 100%;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 12px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 1rem;
+    text-align: center;
+    padding: 14px;
+    margin-bottom: 10px;
+}
+
+#correo-input:focus { outline: none; border-color: #FFC107; }
+
 .panel-header-acciones {
     display: flex;
     gap: 8px;

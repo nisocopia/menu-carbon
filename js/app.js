@@ -2,6 +2,23 @@
    APP.JS  —  Dibuja el menú, maneja el pedido y la comanda
    ============================================================ */
 
+/*
+   Si por lo que sea sync.js no llegara a cargar, el menú tiene que seguir
+   mostrándose y aceptando pedidos en vez de quedarse en blanco. Este
+   respaldo garantiza que nunca falte nada de lo que el resto espera.
+*/
+const Nube = (typeof Sync !== 'undefined') ? Sync : {
+    activo: false,
+    haySesion: () => false,
+    correoSesion: () => null,
+    salir() {},
+    escuchar: () => (() => {}),
+    guardar: async () => false,
+    agregar: async () => false,
+    leer: async () => null,
+    entrar() { throw new Error('sin-configurar'); }
+};
+
 let CFG = {};
 let carrito = [];
 
@@ -379,6 +396,58 @@ function conectarEventos() {
     });
 }
 
+/**
+ * Vuelve a dibujar el menú conservando lo que el comensal ya tenía en
+ * el carrito. Se usa cuando el gerente cambia algo desde el panel.
+ */
+function redibujarMenu() {
+    const menu = Store.getMenu();
+    CFG = Store.getConfig();
+
+    renderInfoLocal();
+    renderNav(menu);
+    renderMenu(menu);
+    observarVistas();
+    marcarCategoriaActiva();
+
+    // Si algo del carrito se acaba de agotar, sale y se le avisa
+    const antes = carrito.length;
+    carrito = carrito.filter(i => {
+        const p = Store.findPlato(i.id);
+        return p && !p.agotado;
+    });
+    if (carrito.length !== antes) {
+        Store.saveCarrito(carrito);
+        avisarAgotado();
+    }
+    actualizarBarra();
+    if (document.getElementById('cart-modal').classList.contains('open')) renderCarrito();
+}
+
+function avisarAgotado() {
+    const aviso = document.getElementById('aviso-agotado');
+    if (!aviso) return;
+    aviso.classList.add('visible');
+    clearTimeout(avisarAgotado._t);
+    avisarAgotado._t = setTimeout(() => aviso.classList.remove('visible'), 6000);
+}
+
+/** Se engancha a la nube, si el restaurante la tiene configurada. */
+function escucharCambiosDelLocal() {
+    if (!Nube.activo) return;
+
+    Nube.escuchar('menu/overrides', datos => {
+        Store.aplicarOverridesRemotos(datos);
+        redibujarMenu();
+    });
+
+    Nube.escuchar('config', datos => {
+        Store.aplicarConfigRemota(datos);
+        CFG = Store.getConfig();
+        renderInfoLocal();
+    });
+}
+
 function iniciarApp() {
     CFG = Store.getConfig();
     const menu = Store.getMenu();
@@ -397,6 +466,7 @@ function iniciarApp() {
     actualizarBarra();
     observarVistas();
     marcarCategoriaActiva();
+    escucharCambiosDelLocal();
 }
 
 document.addEventListener('DOMContentLoaded', iniciarApp);

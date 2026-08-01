@@ -27,6 +27,24 @@ const RESTAURANTE = {
 };
 
 /* ------------------------------------------------------------
+   SINCRONIZACIÓN EN VIVO  (opcional)
+
+   Con esto configurado, cuando el gerente marca un plato como agotado
+   desaparece del menú de TODOS los celulares en segundos, y los pedidos
+   le llegan al panel en vivo.
+
+   Si se deja vacío, el menú funciona igual que siempre, pero cada
+   dispositivo guarda lo suyo por separado.
+
+   Los pasos para llenarlo están en FIREBASE.md
+   ------------------------------------------------------------ */
+
+const FIREBASE = {
+    apiKey:      '',
+    databaseURL: ''
+};
+
+/* ------------------------------------------------------------
    CATEGORÍAS Y PLATOS
    - id:        se usa para el enlace del menú (#parrillas)
    - icono:     clase de Font Awesome

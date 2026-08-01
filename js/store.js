@@ -41,7 +41,11 @@ const Store = (() => {
     }
 
     function saveConfig(patch) {
-        write(K.config, Object.assign(read(K.config, {}), patch));
+        const nueva = Object.assign(read(K.config, {}), patch);
+        write(K.config, nueva);
+        if (typeof Sync !== 'undefined' && Sync.activo && Sync.haySesion()) {
+            Sync.guardar('config', nueva);
+        }
     }
 
     /* ---------------- MENÚ CON CAMBIOS APLICADOS ---------------- */
@@ -72,10 +76,31 @@ const Store = (() => {
         const ov = getOverrides();
         ov[platoId] = Object.assign(ov[platoId] || {}, patch);
         write(K.overrides, ov);
+        subirOverrides(ov);
     }
 
     function resetOverrides() {
         localStorage.removeItem(K.overrides);
+        subirOverrides({});
+    }
+
+    /** Publica los cambios para todos los celulares (si hay nube). */
+    function subirOverrides(ov) {
+        if (typeof Sync !== 'undefined' && Sync.activo && Sync.haySesion()) {
+            Sync.guardar('menu/overrides', ov);
+        }
+    }
+
+    /**
+     * Guarda los cambios que llegan de la nube sin volver a subirlos,
+     * para no entrar en un ciclo.
+     */
+    function aplicarOverridesRemotos(ov) {
+        write(K.overrides, ov || {});
+    }
+
+    function aplicarConfigRemota(c) {
+        if (c) write(K.config, c);
     }
 
     function toggleAgotado(platoId) {
@@ -118,7 +143,28 @@ const Store = (() => {
         // Se conservan los últimos 300 pedidos para no llenar el almacenamiento
         write(K.pedidos, lista.slice(0, 300));
         write(K.pedidoAct, registro);
+
+        // Que le llegue al panel del gerente aunque el comensal esté en su
+        // propio celular. Si falla la red, el pedido igual quedó en pantalla.
+        if (typeof Sync !== 'undefined' && Sync.activo) {
+            Sync.agregar('pedidos', registro);
+        }
         return registro;
+    }
+
+    /** Mezcla los pedidos que llegan de la nube con los de este aparato. */
+    function mezclarPedidosRemotos(remotos) {
+        const propios = getPedidos();
+        const porId = new Map(propios.map(p => [p.id, p]));
+
+        Object.entries(remotos || {}).forEach(([llave, ped]) => {
+            if (!ped || !ped.id) return;
+            const previo = porId.get(ped.id);
+            // El estado que puso el gerente manda sobre el que venía del pedido
+            porId.set(ped.id, Object.assign({}, ped, previo ? { estado: previo.estado } : {}, { llaveNube: llave }));
+        });
+
+        return [...porId.values()].sort((a, b) => b.creado - a.creado);
     }
 
     function getPedidoActivo() {
@@ -146,15 +192,31 @@ const Store = (() => {
         const v = read(K.vistas, {});
         v[platoId] = (v[platoId] || 0) + 1;
         write(K.vistas, v);
+        if (typeof Sync !== 'undefined' && Sync.activo) {
+            Sync.agregar('vistas', { plato: platoId, cuando: Date.now() });
+        }
+    }
+
+    /** Suma a las vistas de este aparato las que llegan de la nube. */
+    function mezclarVistasRemotas(remotas) {
+        const total = Object.assign({}, read(K.vistas, {}));
+        Object.values(remotas || {}).forEach(v => {
+            if (v && v.plato) total[v.plato] = (total[v.plato] || 0) + 1;
+        });
+        return total;
     }
 
     function getVistas() { return read(K.vistas, {}); }
 
     /* ---------------- ESTADÍSTICAS ---------------- */
 
-    function getStats() {
-        const pedidos = getPedidos();
-        const vistas  = getVistas();
+    /**
+     * Si se le pasan pedidos y vistas ya mezclados con los de la nube,
+     * calcula sobre esos; si no, sobre los de este aparato.
+     */
+    function getStats(pedidosDados, vistasDadas) {
+        const pedidos = pedidosDados || getPedidos();
+        const vistas  = vistasDadas  || getVistas();
         const platos  = getPlatos();
 
         const vendidos = {};   // platoId -> { cantidad, total }
@@ -259,6 +321,9 @@ const Store = (() => {
         guardarPedido, getPedidos, getPedidoActivo, cerrarPedidoActivo,
         setEstadoPedido, borrarPedidos,
         registrarVista, getVistas,
-        getStats, exportarMenuData
+        getStats, exportarMenuData,
+        // Puentes con la nube
+        aplicarOverridesRemotos, aplicarConfigRemota,
+        mezclarPedidosRemotos, mezclarVistasRemotas
     };
 })();
