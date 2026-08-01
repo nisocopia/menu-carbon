@@ -105,10 +105,16 @@ function renderMenu(menu) {
 }
 
 function renderInfoLocal() {
-    document.getElementById('rest-nombre').textContent  = CFG.nombre;
-    document.getElementById('rest-lema').textContent    = CFG.lema;
     document.getElementById('frase-espera').textContent = CFG.frase;
     document.title = CFG.nombre;
+
+    // El nombre y el lema solo se escriben si la plantilla los tiene: este
+    // menú los quitó de arriba porque ya salen en el banner, pero otro
+    // restaurante puede querer volver a ponerlos.
+    const nombre = document.getElementById('rest-nombre');
+    const lema   = document.getElementById('rest-lema');
+    if (nombre) nombre.textContent = CFG.nombre;
+    if (lema)   lema.textContent   = CFG.lema;
 
     document.getElementById('footer-info').innerHTML = `
         <h3>${CFG.nombre}</h3>
