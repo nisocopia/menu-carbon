@@ -40,8 +40,8 @@ const RESTAURANTE = {
    ------------------------------------------------------------ */
 
 const FIREBASE = {
-    apiKey:      '',
-    databaseURL: ''
+    apiKey:      'AIzaSyCXjLYIY3KkhGeUiXmnijbdubSmi7NyTh4',
+    databaseURL: 'https://menu-carbon-default-rtdb.firebaseio.com'
 };
 
 /* ------------------------------------------------------------
