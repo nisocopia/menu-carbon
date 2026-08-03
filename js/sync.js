@@ -58,7 +58,10 @@ const Sync = (() => {
             idToken: datos.idToken,
             refreshToken: datos.refreshToken,
             expira: Date.now() + (Number(datos.expiresIn) - 60) * 1000,
-            correo: datos.email
+            correo: datos.email,
+            // Quién entró. Sin esto no hay forma de distinguir al gerente
+            // del asador, y las dos cuentas son del mismo local.
+            uid: datos.localId
         });
         return sesion;
     }
@@ -84,7 +87,8 @@ const Sync = (() => {
                 idToken: d.id_token,
                 refreshToken: d.refresh_token,
                 expira: Date.now() + (Number(d.expires_in) - 60) * 1000,
-                correo: sesion.correo
+                correo: sesion.correo,
+                uid: d.user_id || sesion.uid
             });
             return sesion.idToken;
         } catch (e) {
@@ -99,6 +103,16 @@ const Sync = (() => {
 
     function correoSesion() {
         return sesion ? sesion.correo : null;
+    }
+
+    /**
+     * El identificador de quien entro. Las sesiones guardadas antes de
+     * que esto existiera no lo tienen: en ese caso devuelve null y quien
+     * lo consulte debe pedir que entre de nuevo, no dar por bueno.
+     */
+    function uidSesion() {
+        if (!sesion) cargarSesion();
+        return (sesion && sesion.uid) || null;
     }
 
     /* ---------------- LECTURA EN VIVO ---------------- */
@@ -243,7 +257,7 @@ const Sync = (() => {
 
     return {
         activo,
-        entrar, salir, haySesion, correoSesion, token,
+        entrar, salir, haySesion, correoSesion, uidSesion, token,
         escuchar, leer, guardar, agregar,
         ramaViva, desdeUltimoContacto
     };

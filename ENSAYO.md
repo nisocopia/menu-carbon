@@ -122,6 +122,17 @@ desconectada se ve igual de vacía que una sin pedidos. Tiene que gritarlo.
 
 ---
 
+## 10. Que el personal no entre al panel
+
+En el celular del asador, escribe la direccion del panel a mano:
+`.../panel.html`
+
+- [ ] **No lo deja entrar.** Dice que esa cuenta es del local pero no la
+      del gerente
+- [ ] Con tu cuenta si entra
+
+---
+
 ## Dejar limpio
 
 **En el celular del mesero:** `panel.html` → pestaña **Pedidos** → **Vaciar el

@@ -118,6 +118,16 @@ async function intentarEntrar() {
 
             try {
                 await Nube.entrar(correo, clave);
+
+                /* Entró bien, pero puede ser el asador. Que la cuenta sea
+                   del local no la hace la del dueño: se cierra la sesión
+                   para no dejarle abierto lo que no le toca. */
+                if (!esGerente()) {
+                    Nube.salir();
+                    mostrarError('Esa cuenta es del local, pero no es la del gerente.');
+                    return;
+                }
+
                 localStorage.removeItem(INTENTOS);
                 abrirPanel();
                 return;
@@ -151,8 +161,28 @@ async function intentarEntrar() {
     }
 }
 
+/**
+ * ¿La cuenta que entró es la del dueño?
+ *
+ * El asador, la cocina y el mesero tienen cuentas válidas del local:
+ * las necesitan para trabajar el servicio. Pero "tener cuenta" no es
+ * "ser el gerente". Sin esta comprobación, cualquiera de ellos escribía
+ * la dirección del panel y veía la venta del día — o peor, cambiaba los
+ * precios.
+ *
+ * Las sesiones guardadas antes de que esto existiera no tienen el uid.
+ * En ese caso se pide entrar de nuevo, que es lo seguro: dar por bueno
+ * lo que no se puede comprobar es justo el error que se está corrigiendo.
+ */
+function esGerente() {
+    const cfg = Store.getConfig();
+    const uid = Nube.uidSesion ? Nube.uidSesion() : null;
+    if (!uid || !cfg.gerenteUid) return false;
+    return uid === cfg.gerenteUid;
+}
+
 function sesionValida() {
-    if (Nube.activo) return Nube.haySesion();
+    if (Nube.activo) return Nube.haySesion() && esGerente();
     try {
         const s = JSON.parse(sessionStorage.getItem(SESION));
         return !!(s && s.hasta > Date.now());
