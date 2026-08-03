@@ -68,6 +68,11 @@ Cierra con Listo y Enviar.
 
 ## 5. Entregar
 
+**En el asador:** toca **"Ya lo saqué"** en la mesa 3.
+
+- [ ] Sale del tablero del asador y queda plegado abajo
+- [ ] **La cocina lo sigue viendo** — todavia tiene que emplatar
+
 **En la cocina:** toca **ENTREGADO** en la mesa 3.
 
 - [ ] Desaparece de la cocina **y del asador**

@@ -159,9 +159,15 @@ function pintar() {
     // caliente cuando el de la mesa ya está comiendo.
     const esDiferido = c => ESTACION === 'asador' && c.items.every(it => it.llevar);
 
-    const activas   = todas.filter(c => !c.sacado && !esDiferido(c));
-    const diferidas = todas.filter(c => !c.sacado && esDiferido(c));
-    const sacadas   = todas.filter(c => c.sacado);
+    /* "Ya lo saqué" es solo del asador: limpia SU tarjeta cuando la carne
+       sale de la parrilla. La cocina todavía tiene que emplatar y servir,
+       así que su tarjeta se queda hasta que ella misma marque ENTREGADO
+       — eso sí las borra de las dos pantallas, porque el plato ya salió. */
+    const yaLoSaco = c => ESTACION === 'asador' && c.sacado;
+
+    const activas   = todas.filter(c => !yaLoSaco(c) && !esDiferido(c));
+    const diferidas = todas.filter(c => !yaLoSaco(c) && esDiferido(c));
+    const sacadas   = ESTACION === 'asador' ? todas.filter(c => c.sacado) : [];
 
     // Sonar solo por lo que no habíamos visto
     const nuevas = todas.filter(c => !vistas.has(c.id));

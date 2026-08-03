@@ -148,6 +148,13 @@ ilegible. Van escritas debajo, en palabras.
 
 Las bebidas no le llegan a ninguna estación: las sirve el mesero directo.
 
+### Quién borra qué
+
+| Toca | Pasa |
+|---|---|
+| **Asador: "Ya lo saqué"** | Limpia **solo su** tarjeta, y queda plegada abajo por si preguntan. La cocina todavía tiene que emplatar y servir. |
+| **Cocina: ENTREGADO** | El plato salió: desaparece de **las dos** pantallas. |
+
 ### Cosas que se calculan solas
 
 - **Los cubiertos.** Son los platos que se sientan a comer. Si alguien pide dos
