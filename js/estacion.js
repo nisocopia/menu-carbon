@@ -167,7 +167,15 @@ function pintar() {
 
     const activas   = todas.filter(c => !yaLoSaco(c) && !esDiferido(c));
     const diferidas = todas.filter(c => !yaLoSaco(c) && esDiferido(c));
-    const sacadas   = ESTACION === 'asador' ? todas.filter(c => c.sacado) : [];
+    /* Abajo, plegado, lo que ya se resolvió en esta pantalla:
+       en el asador lo que salió de la parrilla, en la cocina lo ya
+       entregado. No estorba el tablero y sirve para responder
+       "¿ya salió la mesa 5?" sin preguntarle a nadie. */
+    const plegadas = ESTACION === 'asador'
+        ? todas.filter(c => c.sacado)
+        : Servicio.comandasDe('cocina', 'entregado')
+                  .sort((a, b) => (b.entregado || 0) - (a.entregado || 0))
+                  .slice(0, 20);
 
     // Sonar solo por lo que no habíamos visto
     const nuevas = todas.filter(c => !vistas.has(c.id));
@@ -200,13 +208,11 @@ function pintar() {
                 </div>` + diferidas.map(tarjeta).join('') : '');
     }
 
-    // Lo que el asador ya sacó se pliega abajo, no se borra: si preguntan
-    // "¿ya saliste con la mesa 3?", ahí está.
     const caja = $('sacadas-caja');
-    if (caja && ESTACION === 'asador') {
-        caja.hidden = !sacadas.length;
-        $('sacadas-n').textContent = sacadas.length;
-        $('sacadas').innerHTML = sacadas.map(tarjeta).join('');
+    if (caja) {
+        caja.hidden = !plegadas.length;
+        $('sacadas-n').textContent = plegadas.length;
+        $('sacadas').innerHTML = plegadas.map(tarjeta).join('');
     }
 }
 
@@ -220,7 +226,7 @@ function tarjeta(c) {
     const urgencia = min >= 25 ? 'roja' : min >= 15 ? 'ambar' : '';
 
     return `
-    <article class="ticket ${urgencia} ${c.sacado ? 'sacada' : ''}" data-id="${c.id}">
+    <article class="ticket ${urgencia} ${apagada(c) ? 'sacada' : ''}" data-id="${c.id}">
         <div class="ticket-top">
             <span class="ticket-mesa">${c.mesa ? 'Mesa ' + c.mesa : 'LLEVAR'}</span>
             <span class="ticket-hora">${hora} · ${min} min</span>
@@ -246,9 +252,20 @@ function tarjeta(c) {
         <button class="ticket-btn" data-accion="${c.id}">
             ${ESTACION === 'asador'
                 ? (c.sacado ? '<i class="fas fa-rotate-left"></i> Devolver' : '<i class="fas fa-check"></i> Ya lo saqué')
-                : '<i class="fas fa-check"></i> ENTREGADO'}
+                : (c.estado === 'entregado'
+                    ? '<i class="fas fa-rotate-left"></i> Devolver'
+                    : '<i class="fas fa-check"></i> ENTREGADO')}
         </button>
     </article>`;
+}
+
+/**
+ * Una tarjeta se ve apagada solo cuando ya se resolvio EN ESTA pantalla.
+ * Que el asador saque la carne no apaga nada en la cocina: alli el plato
+ * todavia esta por emplatar y servir.
+ */
+function apagada(c) {
+    return ESTACION === 'asador' ? !!c.sacado : c.estado === 'entregado';
 }
 
 function itemHtml(it) {
@@ -288,6 +305,10 @@ function accion(id) {
     if (ESTACION === 'asador') {
         Servicio.marcarSacado(id, !c.sacado);
         toast(c.sacado ? 'Vuelve a la parrilla' : Servicio.etiquetaDe(c) + ' sacado');
+    } else if (c.estado === 'entregado') {
+        // Un toque de más se deshace: vuelve al tablero como si nada
+        Servicio.devolverANuevo(id);
+        toast(Servicio.etiquetaDe(c) + ' vuelve a la cola');
     } else {
         Servicio.marcarEntregado(id);
         toast(Servicio.etiquetaDe(c) + ' entregado');

@@ -153,7 +153,12 @@ Las bebidas no le llegan a ninguna estación: las sirve el mesero directo.
 | Toca | Pasa |
 |---|---|
 | **Asador: "Ya lo saqué"** | Limpia **solo su** tarjeta, y queda plegada abajo por si preguntan. La cocina todavía tiene que emplatar y servir. |
-| **Cocina: ENTREGADO** | El plato salió: desaparece de **las dos** pantallas. |
+| **Cocina: ENTREGADO** | El plato salió: desaparece de **las dos** pantallas y queda plegado abajo, en "entregadas". |
+
+Cada pantalla solo atenúa lo que ella misma resolvió: que el asador saque
+la carne no apaga nada en la cocina, donde el plato todavía está por
+emplatar. Y un toque de más se deshace: en lo plegado, el botón dice
+**Devolver** y el pedido vuelve al tablero.
 
 ### Cosas que se calculan solas
 

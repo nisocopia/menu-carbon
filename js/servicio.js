@@ -366,6 +366,9 @@ const Servicio = (() => {
     /** Un solo toque en la cocina: el plato salió y desaparece de todas las pantallas. */
     const marcarEntregado = id => parchearComanda(id, { estado: 'entregado', entregado: Date.now() });
 
+    /** Deshacer un toque de más: vuelve a la cola como si nada. */
+    const devolverANuevo = id => parchearComanda(id, { estado: 'nuevo', entregado: null });
+
     /** El asador limpia su tarjeta sin tocarle nada a la cocina. */
     const marcarSacado = (id, valor) => parchearComanda(id, { sacado: valor !== false });
 
@@ -381,9 +384,9 @@ const Servicio = (() => {
        ninguna: esas las sirve el mesero directo de la nevera.
        ============================================================ */
 
-    function comandasDe(estacion) {
+    function comandasDe(estacion, estado) {
         return Object.values(getComandas())
-            .filter(c => c.estado === 'nuevo')
+            .filter(c => c.estado === (estado || 'nuevo'))
             .map(c => {
                 const items = c.items.filter(it =>
                     estacion === 'cocina' ? it.estacion !== 'barra' : it.estacion === estacion);
@@ -735,7 +738,7 @@ const Servicio = (() => {
         estacionDe, guarnicionDe, categoriaDe, codigoDe, etiquetaDe,
         cubiertosDe, nombreCorto, resumirItems,
         // hacer
-        enviarComanda, marcarEntregado, marcarSacado, anularComanda,
+        enviarComanda, marcarEntregado, devolverANuevo, marcarSacado, anularComanda,
         abrirSesion, cerrarSesion, registrarPago,
         getExtras, guardarExtra,
         // lo que manda el comensal
