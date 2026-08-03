@@ -1068,3 +1068,22 @@ body.desconectado .srv-top {
     opacity: 0.75;
     margin-top: 4px;
 }
+
+/* El navegador no deja sonar hasta que alguien toca la pantalla. Mientras
+   siga bloqueado hay que decirlo: un aviso que no suena y nadie sabe que
+   no suena es peor que no tener aviso. */
+.srv-sonido {
+    display: block;
+    width: 100%;
+    background: #3a2c0d;
+    border: none;
+    border-bottom: 1px solid #5a4413;
+    color: #ffca28;
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 12px 16px;
+    cursor: pointer;
+}
+
+.srv-sonido[hidden] { display: none; }
+.srv-sonido i { margin-right: 8px; }

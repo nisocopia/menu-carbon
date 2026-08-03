@@ -12,6 +12,9 @@ Al final se borra todo lo de la prueba con un botón.
 
 - [ ] Fusionar el PR en GitHub. El sitio se actualiza solo en 1–2 minutos.
 - [ ] Los tres celulares en el **wifi del local**.
+- [ ] **Toca una vez la pantalla** del asador y la cocina al abrirlas. El
+      navegador no deja sonar el aviso hasta que alguien la toca; si
+      sigue bloqueado sale un cartel amarillo diciendolo.
 
 Cada celular abre su dirección y **entra una sola vez** (la sesión dura
 horas). Conviene guardarla en la pantalla de inicio: en Chrome, menú de

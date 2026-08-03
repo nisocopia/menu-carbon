@@ -18,6 +18,7 @@
 let ESTACION = 'cocina';
 let sonido   = true;
 let vistas   = new Set();     // para no volver a sonar por lo mismo
+let abiertoEn = Date.now();   // lo que ya estaba al abrir no suena
 
 const $ = id => document.getElementById(id);
 
@@ -39,12 +40,35 @@ function toast(texto) {
 
 let audio = null;
 
-function pitar() {
-    if (!sonido) return;
+/** ¿El navegador ya nos deja sonar? */
+const audioListo = () => !!audio && audio.state === 'running';
+
+/**
+ * Los navegadores no dejan sonar hasta que alguien toca la pantalla.
+ * Como estas pantallas arrancan solas al abrirlas, el audio se quedaba
+ * bloqueado y el aviso no sonaba nunca — sin que nadie se enterara.
+ *
+ * Por eso se intenta desbloquear en cada toque, y se avisa en pantalla
+ * mientras siga bloqueado.
+ */
+async function prepararAudio() {
     try {
         audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-        if (audio.state === 'suspended') audio.resume();
+        if (audio.state === 'suspended') await audio.resume();
+    } catch (e) { /* el navegador no lo permite todavía */ }
+    pintarAvisoSonido();
+    return audioListo();
+}
 
+async function pitar() {
+    if (!sonido) return;
+
+    // Antes se llamaba a resume() sin esperarlo y las notas se programaban
+    // sobre un audio todavía dormido: no sonaba nada y no fallaba nada.
+    if (!audioListo()) await prepararAudio();
+    if (!audioListo()) return;
+
+    try {
         // Dos notas cortas: se distingue del ruido de la cocina
         [0, 0.18].forEach((retraso, i) => {
             const osc = audio.createOscillator();
@@ -59,6 +83,12 @@ function pitar() {
             osc.stop(audio.currentTime + retraso + 0.18);
         });
     } catch (e) { /* si el navegador no deja sonar, queda el aviso visual */ }
+}
+
+/** Mientras el sonido esté bloqueado hay que decirlo, no callarlo. */
+function pintarAvisoSonido() {
+    const el = $('sin-sonido');
+    if (el) el.hidden = audioListo();
 }
 
 /* ============================================================
@@ -87,8 +117,10 @@ async function entrar() {
 
 function abrirApp() {
     $('lock').hidden = true;
-    // La primera pulsación es la que le da permiso al navegador para sonar
-    pitar();
+    abiertoEn = Date.now();
+    // Si se entro tocando el boton, este es el momento en que el
+    // navegador nos deja empezar a sonar
+    prepararAudio();
     Servicio.limpiarViejo(2);
     Servicio.iniciar(pintar, 'estacion');
     pintar();
@@ -177,9 +209,15 @@ function pintar() {
                   .sort((a, b) => (b.entregado || 0) - (a.entregado || 0))
                   .slice(0, 20);
 
-    // Sonar solo por lo que no habíamos visto
+    /* Suena lo que no habiamos visto, salvo lo que ya estaba al abrir
+       la pantalla.
+
+       Antes la condicion era "y ya habiamos visto algo", asi que si la
+       pantalla abria con el tablero VACIO el primer pedido no sonaba
+       nunca. De ahi que a veces sonara y a veces no. Ahora se mira el
+       reloj: lo que llega pasados unos segundos de abrir, suena. */
     const nuevas = todas.filter(c => !vistas.has(c.id));
-    if (nuevas.length && vistas.size) pitar();
+    if (nuevas.length && Date.now() - abiertoEn > 4000) pitar();
     todas.forEach(c => vistas.add(c.id));
 
     const tablero = $('tablero');
@@ -346,6 +384,15 @@ function iniciarEstacion(cual) {
                 if (motivo) partes.push('', motivo);
                 if (partes.length) alert(partes.join(String.fromCharCode(10)));
             }
+        });
+
+        /* Cualquier toque sirve para desbloquear el sonido. El celular
+           tambien duerme el audio al cambiar de app, asi que se vuelve a
+           intentar al regresar a la pantalla. */
+        ['pointerdown', 'touchstart', 'keydown'].forEach(ev =>
+            window.addEventListener(ev, prepararAudio, { passive: true }));
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) prepararAudio();
         });
 
         // El reloj de cada tarjeta tiene que avanzar aunque no entre nada
