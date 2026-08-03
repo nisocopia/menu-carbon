@@ -1033,3 +1033,38 @@ body.desconectado .srv-top {
 }
 
 .srv-salir i { display: block; font-size: 1rem; margin-bottom: 4px; color: #888; }
+
+/* ============================================================
+   LA BANDA DE ALARMA
+
+   El motivo va a la vista, no detras de un toque: al que esta de pie
+   con la cocina esperando no se le puede pedir que investigue.
+   ============================================================ */
+
+.srv-alarma {
+    background: #c62828;
+    color: #fff;
+    padding: 12px 16px;
+    line-height: 1.4;
+}
+
+.srv-alarma[hidden] { display: none; }
+
+.srv-alarma strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+}
+
+.srv-alarma span {
+    display: block;
+    font-size: 0.85rem;
+    opacity: 0.95;
+}
+
+.srv-alarma small {
+    display: block;
+    font-size: 0.72rem;
+    opacity: 0.75;
+    margin-top: 4px;
+}

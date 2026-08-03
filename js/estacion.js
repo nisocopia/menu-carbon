@@ -107,19 +107,44 @@ function pintarRed() {
     /* Que no esté llegando nada es lo peor que le puede pasar a esta
        pantalla: se ve igual de vacía que cuando no hay pedidos, y el
        cocinero le cree. Por eso manda sobre cualquier otro aviso. */
-    if (!Servicio.recibiendo()) {
+    const recibiendo = Servicio.recibiendo();
+
+    if (!recibiendo) {
         el.className = 'srv-red caido';
         el.innerHTML = `<i class="fas fa-plug-circle-xmark"></i> SIN RECIBIR`;
         document.body.classList.add('desconectado');
-        return;
+    } else {
+        document.body.classList.remove('desconectado');
+        el.className = 'srv-red ' + (faltan ? 'caido' : 'ok');
+        el.innerHTML = faltan
+            ? `<i class="fas fa-triangle-exclamation"></i> ${faltan} sin enviar`
+            : `<i class="fas fa-circle"></i>`;
     }
 
-    document.body.classList.remove('desconectado');
-    el.className = 'srv-red ' + (faltan ? 'caido' : 'ok');
-    el.title = faltan ? Servicio.porQueNoSale() : '';
-    el.innerHTML = faltan
-        ? `<i class="fas fa-triangle-exclamation"></i> ${faltan} sin enviar`
-        : `<i class="fas fa-circle"></i>`;
+    pintarAlarma(recibiendo, faltan);
+}
+
+/**
+ * El motivo va a la vista, no escondido detrás de un toque. En una
+ * cocina nadie va a ponerse a investigar por qué la pantalla está roja.
+ */
+function pintarAlarma(recibiendo, faltan) {
+    const caja = $('alarma');
+    if (!caja) return;
+
+    if (recibiendo && !faltan) { caja.hidden = true; return; }
+
+    const quien = (typeof Sync !== 'undefined' && Sync.correoSesion) ? Sync.correoSesion() : '';
+    const motivo = Servicio.porQueNoSale();
+
+    caja.hidden = false;
+    caja.innerHTML = `
+        <strong><i class="fas fa-triangle-exclamation"></i>
+            ${!recibiendo ? 'No está llegando nada' : faltan + ' sin enviar'}</strong>
+        ${motivo ? `<span>${motivo}</span>` : ''}
+        ${!recibiendo && !motivo
+            ? '<span>No se pudo abrir el canal con la nube. Suele ser el wifi o el permiso de la cuenta.</span>' : ''}
+        ${quien ? `<small>Entraste como ${quien}</small>` : ''}`;
 }
 
 /** Hace cuántos minutos entró el pedido. */

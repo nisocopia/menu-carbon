@@ -132,8 +132,50 @@ const Sync = (() => {
      */
     const estados = {};
 
+    /* Por qué falló lo último. Sin esto la pantalla solo puede decir "no
+       salió", y a las 8 de la noche eso no alcanza para saber si es la
+       red, el permiso o el dato. */
+    let ultimoFallo = '';
+    const fallo = () => ultimoFallo;
+
     /** ¿La rama está recibiendo en este momento? */
     const ramaViva = rama => !!(estados[rama] && estados[rama].abierta);
+
+    /**
+     * Cuando se cae el canal de lectura, EventSource no dice por qué:
+     * solo avisa "error". Así que se pregunta lo mismo por la vía normal,
+     * que sí devuelve el motivo, y se guarda para poder mostrarlo.
+     *
+     * Se hace de tanto en tanto, no en cada reintento, para no llenar la
+     * red de preguntas mientras el wifi está caído.
+     */
+    let ultimaAveriguacion = 0;
+
+    async function averiguarPorQue(rama, conSesion) {
+        if (Date.now() - ultimaAveriguacion < 10000) return;
+        ultimaAveriguacion = Date.now();
+
+        try {
+            let url = `${BD}/${rama}.json?shallow=true`;
+            if (conSesion) {
+                const t = await token();
+                if (!t) {
+                    ultimoFallo = 'No hay sesión válida. Toca Salir y vuelve a entrar.';
+                    return;
+                }
+                url += `&auth=${encodeURIComponent(t)}`;
+            }
+            const r = await fetch(url);
+            if (r.ok) { ultimoFallo = ''; return; }
+
+            const detalle = await r.text().catch(() => '');
+            ultimoFallo = r.status === 401
+                ? `Permiso denegado al leer "${rama}". Revisa las reglas de Firebase.`
+                : `Error ${r.status} al leer "${rama}". ${String(detalle).slice(0, 120)}`;
+        } catch (e) {
+            ultimoFallo = 'Sin conexión con la nube';
+        }
+    }
 
     /** Hace cuánto que no se sabe nada de esa rama, en milisegundos. */
     const desdeUltimoContacto = rama =>
@@ -208,6 +250,7 @@ const Sync = (() => {
             fuente.onerror = () => {
                 estados[rama].abierta = false;
                 fuente.close();
+                averiguarPorQue(rama, conSesion);
                 reintentar();          // se reconecta solo, esperando cada vez un poco más
             };
         }
@@ -236,12 +279,6 @@ const Sync = (() => {
     }
 
     /* ---------------- ESCRITURA ---------------- */
-
-    /* Por qué falló lo último que se intentó mandar. Sin esto, la pantalla
-       solo puede decir "no salió", y a las 8 de la noche eso no alcanza
-       para saber si es la red, el permiso o el dato. */
-    let ultimoFallo = '';
-    const fallo = () => ultimoFallo;
 
     async function escribir(rama, valor, metodo, conSesion) {
         if (!activo) { ultimoFallo = 'Este local no tiene nube configurada'; return false; }

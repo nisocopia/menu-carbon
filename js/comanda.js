@@ -87,11 +87,32 @@ function pintarRed() {
     if (faltan) {
         el.className = 'srv-red caido';
         el.innerHTML = `<i class="fas fa-triangle-exclamation"></i> ${faltan} sin enviar`;
-        el.title = Servicio.porQueNoSale();
     } else {
         el.className = 'srv-red ok';
         el.innerHTML = `<i class="fas fa-circle"></i>`;
     }
+
+    pintarAlarma(faltan);
+}
+
+/**
+ * El motivo va a la vista, no escondido detrás de un toque. Cuando algo
+ * no sale hay que poder leer por qué sin buscarlo: al que está de pie
+ * con la cocina esperando no se le puede pedir que investigue.
+ */
+function pintarAlarma(faltan) {
+    const caja = $('alarma');
+    if (!caja) return;
+
+    if (!faltan) { caja.hidden = true; return; }
+
+    const quien = (typeof Sync !== 'undefined' && Sync.correoSesion) ? Sync.correoSesion() : '';
+    caja.hidden = false;
+    caja.innerHTML = `
+        <strong><i class="fas fa-triangle-exclamation"></i> ${faltan} sin enviar</strong>
+        <span>${Servicio.porQueNoSale() || 'Sin detalle todavía.'}</span>
+        ${quien ? `<small>Entraste como ${quien}</small>` : ''}
+        <small>Lo que anotaste no se pierde: sale solo en cuanto se resuelva.</small>`;
 }
 
 /* ============================================================
