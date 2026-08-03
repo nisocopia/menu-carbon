@@ -2,15 +2,11 @@
   "rules": {
     "menu": {
       ".read": true,
-      ".write": "auth != null && (!root.child('roles').exists() || root.child('roles').child(auth.uid).val() == 'gerente')"
+      ".write": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'"
     },
     "config": {
       ".read": true,
-      ".write": "auth != null && (!root.child('roles').exists() || root.child('roles').child(auth.uid).val() == 'gerente')"
-    },
-    "roles": {
-      ".read": "auth != null",
-      ".write": false
+      ".write": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'"
     },
     "servicio": {
       "comandas": {
@@ -92,7 +88,7 @@
       }
     },
     "pedidos": {
-      ".read": "auth != null && (!root.child('roles').exists() || root.child('roles').child(auth.uid).val() == 'gerente')",
+      ".read": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
       "$pedido": {
         ".write": "!data.exists() || auth != null",
         ".validate": "newData.hasChildren(['id', 'items', 'total', 'creado'])",
@@ -111,7 +107,7 @@
       }
     },
     "vistas": {
-      ".read": "auth != null && (!root.child('roles').exists() || root.child('roles').child(auth.uid).val() == 'gerente')",
+      ".read": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
       "$vista": {
         ".write": "!data.exists()",
         ".validate": "newData.hasChildren(['plato', 'cuando'])",
