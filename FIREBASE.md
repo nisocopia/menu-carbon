@@ -79,21 +79,17 @@ Las claves **no van en el código**: Firebase las guarda cifradas.
 
 #### Que solo el gerente pueda tocar los precios
 
-Tal como quedan, las tres cuentas pueden trabajar el servicio, pero también
-cambiar precios y agotados. Para que eso quede solo en tus manos:
+Tal como quedan las reglas, cualquier cuenta del local podria cambiar
+precios. Para que eso quede solo en manos del dueno:
 
-1. En **Authentication → Users**, copia el **UID** de tu cuenta (la columna de
-   la derecha, una cadena larga)
-2. En **Realtime Database → Datos**, crea a mano una rama `roles` así:
+1. En **Authentication -> Users**, copia el **User UID** de su cuenta
+   (usa el icono de copiar: seleccionar con el mouse corta el texto)
+2. En `firebase-rules.json`, reemplaza el uid que aparece en las cuatro
+   reglas que dicen `auth.uid == '...'`
+3. Vuelve a publicar las reglas
 
-```
-roles
-  └── PEGA_AQUI_TU_UID : "gerente"
-```
-
-Desde que exista esa rama, las demás cuentas siguen tomando pedidos y marcando
-entregados, pero ya no pueden cambiar el menú. Si no la creas, todo funciona
-igual que antes — las reglas están escritas para no dejarte trancado afuera.
+Desde ese momento el personal sigue tomando pedidos y marcando
+entregados, pero ya no puede cambiar el menu ni ver la venta del dia.
 
 ### 5. Copiar la configuración al menú
 
