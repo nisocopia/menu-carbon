@@ -284,18 +284,35 @@ const Sync = (() => {
     }
 
     /** Lectura puntual, sin quedarse escuchando. */
+    /**
+     * Lectura puntual.
+     *
+     * Devuelve `undefined` si no se pudo leer y `null` si se leyó y estaba
+     * vacío. La diferencia importa: si no se distinguen, un fallo de red
+     * se confunde con "no hay nada" y la pantalla borra lo que sí había.
+     */
     async function leer(rama, conSesion) {
-        if (!activo) return null;
+        if (!activo) return undefined;
         let url = `${BD}/${rama}.json`;
         if (conSesion) {
             const t = await token();
-            if (!t) return null;
+            if (!t) { ultimoFallo = 'No hay sesión válida. Toca Salir y vuelve a entrar.'; return undefined; }
             url += `?auth=${encodeURIComponent(t)}`;
         }
         try {
             const r = await pedir(url);
-            return r.ok ? await r.json() : null;
-        } catch (e) { return null; }
+            if (r.ok) { ultimoFallo = ''; return await r.json(); }
+
+            ultimoFallo = r.status === 401
+                ? `Permiso denegado al leer "${rama}". Revisa las reglas de Firebase.`
+                : `Error ${r.status} al leer "${rama}".`;
+            return undefined;
+        } catch (e) {
+            ultimoFallo = (e && e.name === 'AbortError')
+                ? 'La nube no respondió a tiempo. Se reintenta solo.'
+                : 'Sin conexión con la nube';
+            return undefined;
+        }
     }
 
     /* ---------------- ESCRITURA ---------------- */

@@ -144,8 +144,8 @@ const Servicio = (() => {
      */
     function recibiendo() {
         if (!Red.activo) return true;
-        if (Red.ramaViva('servicio')) return true;
-        return Red.desdeUltimoContacto('servicio') < 20000;
+        if (Red.ramaViva('servicio/comandas')) return true;
+        return Red.desdeUltimoContacto('servicio/comandas') < 20000;
     }
 
     // Reintento periódico y al recuperar la red del sistema
@@ -600,21 +600,56 @@ const Servicio = (() => {
         alCambiar();
     }
 
-    function iniciar(cb) {
+    /**
+     * Lo que no necesita ser instantáneo se consulta cada tanto, en vez de
+     * tener su propia conexión abierta. Que una mesa tarde unos segundos
+     * en aparecer abierta no le cambia la vida a nadie; que un pedido no
+     * salga, sí.
+     *
+     * Nunca se borra lo local con una lectura fallida: `leer` devuelve
+     * undefined cuando no pudo, y null cuando de verdad no había nada.
+     */
+    async function refrescarResto() {
+        if (!Red.activo) return;
+
+        const [ses, pag, ent] = await Promise.all([
+            Red.leer('servicio/sesiones',  true),
+            Red.leer('servicio/pagos',     true),
+            Red.leer('servicio/entrantes', true)
+        ]);
+
+        if (ses !== undefined) mezclar(K.sesiones, ses);
+        if (pag !== undefined) mezclar(K.pagos, pag);
+        if (ent !== undefined) entrantes = ent || {};
+
+        alCambiar();
+    }
+
+    function iniciar(cb, modo) {
         alCambiar = cb || (() => {});
         vaciarCola();
 
         if (!Red.activo) return;
 
-        /* UN SOLO CANAL PARA TODO EL SERVICIO.
+        /* UNA SOLA CONEXIÓN PERMANENTE, Y SOLO PARA LAS COMANDAS.
 
-           Antes se abría uno por rama: cinco conexiones permanentes, más
-           la del menú. El navegador solo permite unas seis por servidor,
-           así que no quedaba ninguna libre para ENVIAR: el pedido se
-           quedaba esperando turno hasta agotar el plazo. Recargar la
-           página lo "arreglaba" porque cerraba las conexiones y liberaba
-           un hueco — de ahí lo de tener que actualizar tres veces. */
-        Red.escuchar('servicio', repartir, true);
+           Antes se abría una por rama: cinco, más la del menú. El
+           navegador permite unas seis por servidor, así que no quedaba
+           ninguna libre para ENVIAR y el pedido esperaba turno hasta
+           agotar el plazo. Recargar lo "arreglaba" porque liberaba un
+           hueco — de ahí lo de actualizar tres veces.
+
+           Escuchar "servicio" entero de una vez no sirve: en Firebase el
+           permiso no sube de las hijas al padre, así que pedir la rama
+           completa da permiso denegado aunque cada hija sí se pueda leer. */
+        Red.escuchar('servicio/comandas', datos => { mezclar(K.comandas, datos); alCambiar(); }, true);
+
+        // La parrilla y la cocina no necesitan nada más que las comandas
+        if (modo === 'estacion') return;
+
+        Red.leer('servicio/extras', true).then(x => { if (x) write(K.extras, x); });
+        refrescarResto();
+        setInterval(refrescarResto, 6000);
     }
 
     /* ============================================================

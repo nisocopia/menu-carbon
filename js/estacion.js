@@ -90,7 +90,7 @@ function abrirApp() {
     // La primera pulsación es la que le da permiso al navegador para sonar
     pitar();
     Servicio.limpiarViejo(2);
-    Servicio.iniciar(pintar);
+    Servicio.iniciar(pintar, 'estacion');
     pintar();
 }
 
