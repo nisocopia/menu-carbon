@@ -24,6 +24,26 @@ const Sync = (() => {
 
     let sesion = null;   // { idToken, refreshToken, expira, email }
 
+    /**
+     * Una petición que no responde nunca es peor que una que falla: la
+     * que falla se reintenta, la que se cuelga deja la cola trabada para
+     * siempre y sin un solo mensaje de error. En un celular con wifi
+     * flojo pasa, y el sistema se queda mudo con los pedidos dentro.
+     *
+     * Por eso todo lo que sale de aquí tiene plazo.
+     */
+    const PLAZO = 12000;
+
+    async function pedir(url, opciones) {
+        const corte = new AbortController();
+        const reloj = setTimeout(() => corte.abort(), PLAZO);
+        try {
+            return await fetch(url, Object.assign({ signal: corte.signal }, opciones || {}));
+        } finally {
+            clearTimeout(reloj);
+        }
+    }
+
     /* ---------------- SESIÓN DEL GERENTE ---------------- */
 
     function cargarSesion() {
@@ -42,7 +62,7 @@ const Sync = (() => {
     async function entrar(correo, clave) {
         if (!activo) throw new Error('sin-configurar');
 
-        const r = await fetch(`${LOGIN}?key=${cfg.apiKey}`, {
+        const r = await pedir(`${LOGIN}?key=${cfg.apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: correo, password: clave, returnSecureToken: true })
@@ -75,7 +95,7 @@ const Sync = (() => {
         if (Date.now() < sesion.expira) return sesion.idToken;
 
         try {
-            const r = await fetch(`${RENUEVA}?key=${cfg.apiKey}`, {
+            const r = await pedir(`${RENUEVA}?key=${cfg.apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(sesion.refreshToken)}`
@@ -165,7 +185,7 @@ const Sync = (() => {
                 }
                 url += `&auth=${encodeURIComponent(t)}`;
             }
-            const r = await fetch(url);
+            const r = await pedir(url);
             if (r.ok) { ultimoFallo = ''; return; }
 
             const detalle = await r.text().catch(() => '');
@@ -273,7 +293,7 @@ const Sync = (() => {
             url += `?auth=${encodeURIComponent(t)}`;
         }
         try {
-            const r = await fetch(url);
+            const r = await pedir(url);
             return r.ok ? await r.json() : null;
         } catch (e) { return null; }
     }
@@ -294,7 +314,7 @@ const Sync = (() => {
         }
 
         try {
-            const r = await fetch(url, {
+            const r = await pedir(url, {
                 method: metodo,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(valor)
@@ -308,7 +328,9 @@ const Sync = (() => {
                 : `Error ${r.status} en "${rama}". ${String(detalle).slice(0, 120)}`;
             return false;
         } catch (e) {
-            ultimoFallo = 'Sin conexión con la nube';
+            ultimoFallo = (e && e.name === 'AbortError')
+                ? 'La nube no respondió a tiempo. Se reintenta solo.'
+                : 'Sin conexión con la nube';
             return false;
         }
     }

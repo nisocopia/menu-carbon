@@ -84,10 +84,20 @@ const Servicio = (() => {
     }
 
     let vaciando = false;
+    let vaciandoDesde = 0;
 
     async function vaciarCola() {
-        if (vaciando || !Red.activo) return;
+        if (!Red.activo) return;
+
+        /* Si un intento anterior se quedó colgado, la bandera nunca volvía
+           a bajar y esta función salía por la puerta de atrás para siempre:
+           los pedidos se acumulaban sin que nadie lo intentara de nuevo y
+           sin un solo mensaje de error, porque nunca llegaba a fallar.
+           Pasado un rato se da por perdido y se vuelve a intentar. */
+        if (vaciando && Date.now() - vaciandoDesde < 40000) return;
+
         vaciando = true;
+        vaciandoDesde = Date.now();
 
         try {
             let cola = read(K.cola, []);
