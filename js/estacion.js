@@ -67,17 +67,56 @@ const audioListo = () => !!audio && audio.state === 'running';
  * Por eso se intenta desbloquear en cada toque, y se avisa en pantalla
  * mientras siga bloqueado.
  */
+let salida = null;   // por donde pasa todo antes de llegar al parlante
+
+/**
+ * Entre las notas y el parlante van dos cosas:
+ *
+ *   un filtro   quita los armónicos altísimos de la onda cuadrada. No
+ *               aportan volumen util y son los que suenan a chicharra.
+ *   un limitador impide que la señal se pase de rango. Si entran dos
+ *               pedidos casi juntos, los dos avisos se suman; sin esto
+ *               la suma se recorta y distorsiona, que es lo unico que
+ *               de verdad maltrata un parlante pequeño.
+ */
+function armarSalida() {
+    if (salida || !audio) return;
+
+    const filtro = audio.createBiquadFilter();
+    filtro.type = 'lowpass';
+    filtro.frequency.value = 6500;
+
+    const limite = audio.createDynamicsCompressor();
+    limite.threshold.value = -6;
+    limite.knee.value = 0;
+    limite.ratio.value = 20;
+    limite.attack.value = 0.002;
+    limite.release.value = 0.1;
+
+    filtro.connect(limite).connect(audio.destination);
+    salida = filtro;
+}
+
 async function prepararAudio() {
     try {
         audio = audio || new (window.AudioContext || window.webkitAudioContext)();
         if (audio.state === 'suspended') await audio.resume();
+        armarSalida();
     } catch (e) { /* el navegador no lo permite todavía */ }
     pintarAvisoSonido();
     return audioListo();
 }
 
+let sonandoHasta = 0;
+
 async function pitar() {
     if (!sonido) return;
+
+    /* Un aviso a la vez. Si entran dos pedidos casi juntos, encadenarlos
+       en vez de superponerlos: sumados se pasan de rango y distorsionan,
+       y ademas dos alarmas encima suenan a ruido, no a aviso. */
+    if (Date.now() < sonandoHasta) return;
+    sonandoHasta = Date.now() + 1100;
 
     // Antes se llamaba a resume() sin esperarlo y las notas se programaban
     // sobre un audio todavía dormido: no sonaba nada y no fallaba nada.
@@ -103,7 +142,7 @@ async function pitar() {
             vol.gain.setValueAtTime(VOLUMEN, desde + nota.d - 0.02);
             vol.gain.exponentialRampToValueAtTime(0.0001, desde + nota.d);
 
-            osc.connect(vol).connect(audio.destination);
+            osc.connect(vol).connect(salida || audio.destination);
             osc.start(desde);
             osc.stop(desde + nota.d + 0.02);
         });
