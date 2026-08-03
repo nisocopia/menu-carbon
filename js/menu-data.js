@@ -20,6 +20,18 @@ const RESTAURANTE = {
     // mandar el pedido, porque el QR de la mesa no lleva el número dentro.
     mesas:      11,
 
+    /* Quién es el dueño. Se saca de Firebase → Authentication → Users,
+       columna User UID.
+
+       Hace falta porque todas las cuentas del local (mesero, asador,
+       cocina) son cuentas válidas de Firebase: sin esto, cualquiera de
+       ellas abría el panel y veía la venta del día.
+
+       No es una clave y no sirve para entrar: es solo un nombre. Quien
+       de verdad manda son las reglas de Firebase, que comparan contra
+       el token firmado y no se pueden engañar desde el navegador. */
+    gerenteUid: 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3',
+
     // Clave del panel del gerente. Nunca se escribe aquí en texto plano:
     // se guarda solo su huella. Para cambiarla:
     //     node scripts/generar-clave.js "LaNuevaClave"
