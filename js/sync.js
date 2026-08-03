@@ -104,6 +104,20 @@ const Sync = (() => {
     /* ---------------- LECTURA EN VIVO ---------------- */
 
     /**
+     * En qué anda cada rama que se está escuchando. Sin esto, una
+     * pantalla de cocina cuyo canal se murió se queda mostrando
+     * "Todo al día" y el cocinero le cree.
+     */
+    const estados = {};
+
+    /** ¿La rama está recibiendo en este momento? */
+    const ramaViva = rama => !!(estados[rama] && estados[rama].abierta);
+
+    /** Hace cuánto que no se sabe nada de esa rama, en milisegundos. */
+    const desdeUltimoContacto = rama =>
+        estados[rama] && estados[rama].ultimo ? Date.now() - estados[rama].ultimo : Infinity;
+
+    /**
      * Escucha una rama de la base y avisa cada vez que cambia.
      * Devuelve una función para dejar de escuchar.
      */
@@ -114,41 +128,74 @@ const Sync = (() => {
         let cerrado = false;
         let reintento = 1000;
 
+        /* Se arranca el reloj desde ya, no desde el primer dato: conectar
+           tarda un momento y sin esto la pantalla gritaría "sin recibir"
+           durante los primeros segundos de cada carga. Un aviso que sale
+           cuando todo está bien deja de creerse. */
+        estados[rama] = { abierta: false, ultimo: Date.now() };
+
+        function reintentar() {
+            if (cerrado) return;
+            setTimeout(conectar, reintento);
+            reintento = Math.min(reintento * 2, 30000);
+        }
+
         async function conectar() {
             if (cerrado) return;
 
             let url = `${BD}/${rama}.json`;
             if (conSesion) {
                 const t = await token();
-                if (!t) return;                    // sin permiso: no se intenta
+                if (!t) {
+                    /* No se pudo renovar el token: casi siempre es la red,
+                       no que le hayan quitado el permiso. Antes se dejaba
+                       de escuchar para siempre y la pantalla se quedaba
+                       muda hasta que alguien la recargara — justo lo que
+                       no puede pasar en plena cocina. */
+                    estados[rama].abierta = false;
+                    reintentar();
+                    return;
+                }
                 url += `?auth=${encodeURIComponent(t)}`;
             }
 
             fuente = new EventSource(url);
 
+            const latir = () => {
+                estados[rama].abierta = true;
+                estados[rama].ultimo  = Date.now();
+                reintento = 1000;
+            };
+
+            fuente.onopen = latir;
+
             const aplicar = e => {
+                latir();
                 try {
                     const m = JSON.parse(e.data);
                     // Firebase manda la ruta relativa y el dato nuevo
                     alCambiar(m.data, m.path);
-                    reintento = 1000;
                 } catch (err) { /* mensaje de control, se ignora */ }
             };
 
             fuente.addEventListener('put', aplicar);
             fuente.addEventListener('patch', aplicar);
+            // Firebase manda esto cada tanto solo para decir "sigo aquí"
+            fuente.addEventListener('keep-alive', latir);
 
             fuente.onerror = () => {
+                estados[rama].abierta = false;
                 fuente.close();
-                if (cerrado) return;
-                // Se reconecta solo, esperando cada vez un poco más
-                setTimeout(conectar, reintento);
-                reintento = Math.min(reintento * 2, 30000);
+                reintentar();          // se reconecta solo, esperando cada vez un poco más
             };
         }
 
         conectar();
-        return () => { cerrado = true; if (fuente) fuente.close(); };
+        return () => {
+            cerrado = true;
+            delete estados[rama];
+            if (fuente) fuente.close();
+        };
     }
 
     /** Lectura puntual, sin quedarse escuchando. */
@@ -197,6 +244,7 @@ const Sync = (() => {
     return {
         activo,
         entrar, salir, haySesion, correoSesion, token,
-        escuchar, leer, guardar, agregar
+        escuchar, leer, guardar, agregar,
+        ramaViva, desdeUltimoContacto
     };
 })();
