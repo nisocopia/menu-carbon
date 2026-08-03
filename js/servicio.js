@@ -34,7 +34,8 @@ const Servicio = (() => {
     const Red = (typeof Sync !== 'undefined') ? Sync : {
         activo: false, haySesion: () => false,
         escuchar: () => (() => {}), leer: async () => null,
-        guardar: async () => false, agregar: async () => false
+        guardar: async () => false, agregar: async () => false,
+        ramaViva: () => true, desdeUltimoContacto: () => 0
     };
 
     let alCambiar = () => {};
@@ -117,6 +118,22 @@ const Servicio = (() => {
     /** Cuántas cosas están esperando salir. Si es > 0, se muestra en rojo. */
     const pendientes = () => read(K.cola, []).length;
     const hayLinea   = () => enLinea && pendientes() === 0;
+
+    /**
+     * ¿Está llegando lo que mandan los otros celulares?
+     *
+     * Es distinto de la cola: la cola dice si lo MÍO salió, esto dice si
+     * lo de los DEMÁS entra. Una pantalla de cocina con el canal muerto
+     * no muestra pedidos y parece que no hay ninguno — hay que decirlo.
+     *
+     * Se da un margen antes de alarmar: reconectar tarda unos segundos y
+     * no tiene sentido asustar a nadie por eso.
+     */
+    function recibiendo() {
+        if (!Red.activo) return true;
+        if (Red.ramaViva('servicio/comandas')) return true;
+        return Red.desdeUltimoContacto('servicio/comandas') < 20000;
+    }
 
     // Reintento periódico y al recuperar la red del sistema
     setInterval(vaciarCola, 8000);
@@ -585,6 +602,27 @@ const Servicio = (() => {
        LIMPIEZA DE FIN DE NOCHE
        ============================================================ */
 
+    /**
+     * Borra TODO el servicio, en este celular y en la nube: comandas,
+     * mesas y cobros. Es para dejar limpio después de un ensayo, no
+     * para usar durante el servicio.
+     *
+     * No borra el menú, los precios ni las bebidas aprendidas.
+     */
+    async function vaciarTodo() {
+        write(K.comandas, {});
+        write(K.sesiones, {});
+        write(K.pagos, {});
+        entrantes = {};
+
+        if (!Red.activo) { alCambiar(); return true; }
+
+        const ramas = ['servicio/comandas', 'servicio/sesiones', 'servicio/pagos', 'servicio/entrantes'];
+        const hechos = await Promise.all(ramas.map(r => Red.guardar(r, null)));
+        alCambiar();
+        return hechos.every(Boolean);
+    }
+
     /** Borra lo entregado y pagado de días anteriores para no llenar el celular. */
     function limpiarViejo(dias) {
         const corte = Date.now() - (dias || 2) * 24 * 3600 * 1000;
@@ -617,6 +655,7 @@ const Servicio = (() => {
         // para el panel del gerente
         comandasComoPedidos, sesionesEntre,
         // estado del sistema
-        iniciar, hayLinea, pendientes, vaciarCola, limpiarViejo, nuevoId
+        iniciar, hayLinea, pendientes, recibiendo, vaciarCola,
+        limpiarViejo, vaciarTodo, nuevoId
     };
 })();

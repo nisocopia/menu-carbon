@@ -1,4 +1,4 @@
-/* Font Awesome 6.4.0 recortado a los 51 iconos que usa este menú.
+/* Font Awesome 6.4.0 recortado a los 52 iconos que usa este menú.
    Se sirve desde el propio sitio: no depende de ningún servidor externo. */
 
 @font-face {
@@ -67,6 +67,7 @@
 .fa-note-sticky:before{content:"\f249"}
 .fa-paper-plane:before{content:"\f1d8"}
 .fa-pen-to-square:before{content:"\f044"}
+.fa-plug-circle-xmark:before{content:"\e560"}
 .fa-plus:before{content:"\2b"}
 .fa-puzzle-piece:before{content:"\f12e"}
 .fa-receipt:before{content:"\f543"}

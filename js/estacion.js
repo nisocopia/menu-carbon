@@ -101,7 +101,20 @@ function abrirApp() {
 function pintarRed() {
     const el = $('red');
     if (!el) return;
+
     const faltan = Servicio.pendientes();
+
+    /* Que no esté llegando nada es lo peor que le puede pasar a esta
+       pantalla: se ve igual de vacía que cuando no hay pedidos, y el
+       cocinero le cree. Por eso manda sobre cualquier otro aviso. */
+    if (!Servicio.recibiendo()) {
+        el.className = 'srv-red caido';
+        el.innerHTML = `<i class="fas fa-plug-circle-xmark"></i> SIN RECIBIR`;
+        document.body.classList.add('desconectado');
+        return;
+    }
+
+    document.body.classList.remove('desconectado');
     el.className = 'srv-red ' + (faltan ? 'caido' : 'ok');
     el.innerHTML = faltan
         ? `<i class="fas fa-triangle-exclamation"></i> ${faltan} sin enviar`
@@ -132,10 +145,19 @@ function pintar() {
     const tablero = $('tablero');
 
     if (!activas.length && !diferidas.length) {
-        tablero.innerHTML = `
+        /* "Todo al día" solo se puede decir si de verdad se está
+           escuchando. Si el canal está caído, la pantalla vacía no
+           significa que no haya pedidos: significa que no los vemos. */
+        tablero.innerHTML = Servicio.recibiendo() ? `
             <div class="vacio">
                 <i class="fas fa-check"></i>
                 <p>Todo al día</p>
+            </div>` : `
+            <div class="vacio sin-senal">
+                <i class="fas fa-plug-circle-xmark"></i>
+                <p>No se está recibiendo</p>
+                <small>Puede haber pedidos que esta pantalla no ve.
+                       Pregunta antes de dar por hecho que no hay nada.</small>
             </div>`;
     } else {
         tablero.innerHTML =
@@ -258,6 +280,15 @@ function iniciarEstacion(cual) {
 
         // El reloj de cada tarjeta tiene que avanzar aunque no entre nada
         setInterval(pintar, 20000);
+
+        /* La conexión se vigila aparte y más seguido: si se cae, hay que
+           decirlo en segundos, no esperar al siguiente repintado. */
+        let recibiaAntes = true;
+        setInterval(() => {
+            const ahora = Servicio.recibiendo();
+            if (ahora !== recibiaAntes) { recibiaAntes = ahora; pintar(); }
+            else pintarRed();
+        }, 3000);
 
         if (Sync.activo && Sync.haySesion()) abrirApp();
         else if (!Sync.activo) {

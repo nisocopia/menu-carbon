@@ -989,3 +989,31 @@
 }
 
 .bebida-cuenta .campo-srv { margin-bottom: 10px; }
+
+/* ============================================================
+   CANAL CAIDO
+
+   La pantalla vacia y la pantalla desconectada se ven igual, y esa
+   confusion cuesta pedidos. Cuando no se esta recibiendo, el borde
+   entero de la pantalla lo dice, no solo un puntito arriba.
+   ============================================================ */
+
+body.desconectado {
+    box-shadow: inset 0 0 0 4px #c62828;
+}
+
+body.desconectado .srv-top {
+    background: #3a1414;
+}
+
+.vacio.sin-senal i { color: #f44336; }
+.vacio.sin-senal p { color: #ff8a8a; }
+
+.vacio.sin-senal small {
+    display: block;
+    max-width: 280px;
+    margin: 10px auto 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #8a6a6a;
+}

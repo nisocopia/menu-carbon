@@ -594,17 +594,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('btn-limpiar-pedidos').addEventListener('click', () => {
-        /* Con el sistema de comandas andando, este botón solo limpiaba la
-           copia de este celular: al segundo siguiente la nube la volvía a
-           llenar y parecía que no había pasado nada. Peor todavía, borrar
-           de verdad las comandas del local desde aquí sería borrarle la
-           noche a la cocina. */
+        /* Con el sistema de comandas andando esto borra el servicio del
+           LOCAL ENTERO, no la copia de este celular. Sirve para dejar
+           limpio después de un ensayo. Por eso hay que escribir la
+           palabra: un toque de más en hora pico le borraría la noche a
+           la cocina. */
         if (hayServicio()) {
-            alert('Las comandas del local no se borran desde aquí.\n\n' +
-                  'Las entregadas se limpian solas a los dos días. ' +
-                  'Si una está mal, se anula desde la pantalla de la mesa.');
+            const abiertas = Object.values(Servicio.getSesiones()).filter(s => s.abierta).length;
+
+            const aviso =
+                'Esto borra TODO el servicio del local: las comandas, las mesas\n' +
+                'abiertas y los cobros. En todos los celulares, no solo en este.\n\n' +
+                (abiertas ? `⚠ AHORA MISMO HAY ${abiertas} MESA(S) ABIERTA(S).\n\n` : '') +
+                'El menú, los precios y las bebidas guardadas no se tocan.\n\n' +
+                'Escribe BORRAR para confirmar:';
+
+            if ((prompt(aviso) || '').trim().toUpperCase() !== 'BORRAR') return;
+
+            Servicio.vaciarTodo().then(ok => {
+                renderTodo();
+                avisar(ok ? 'Servicio vaciado' : 'Se vació aquí, pero la nube no respondió');
+            });
             return;
         }
+
         if (confirm('¿Borrar el historial de pedidos? Los números también se reinician.')) {
             Store.borrarPedidos();
             renderTodo();
