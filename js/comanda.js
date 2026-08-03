@@ -87,6 +87,7 @@ function pintarRed() {
     if (faltan) {
         el.className = 'srv-red caido';
         el.innerHTML = `<i class="fas fa-triangle-exclamation"></i> ${faltan} sin enviar`;
+        el.title = Servicio.porQueNoSale();
     } else {
         el.className = 'srv-red ok';
         el.innerHTML = `<i class="fas fa-circle"></i>`;
@@ -652,6 +653,19 @@ function conectarEventos() {
     $('bebida-close').addEventListener('click', () => $('hoja-bebida').classList.remove('open'));
     $('bebida-add').addEventListener('click', agregarBebidaNueva);
     $('bebida-costo').addEventListener('input', calcularPrecioBebida);
+
+    // Tocar el aviso rojo dice por qué no está saliendo
+    $('red').addEventListener('click', () => {
+        if (!Servicio.pendientes()) return;
+        const motivo = Servicio.porQueNoSale() || 'Sin detalle todavía.';
+        alert([
+            'No están saliendo ' + Servicio.pendientes() + ' cosas.',
+            '',
+            motivo,
+            '',
+            'Lo que tomaste NO se pierde: se manda solo en cuanto se resuelva.'
+        ].join('\n'));
+    });
 
     document.addEventListener('click', e => {
         const t = e.target;

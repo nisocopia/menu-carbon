@@ -81,7 +81,15 @@ const Sync = (() => {
                 body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(sesion.refreshToken)}`
             });
             const d = await r.json();
-            if (!r.ok) { salir(); return null; }
+            if (!r.ok) {
+                /* Solo se cierra la sesión si Firebase dice que el permiso
+                   ya no vale. Antes se cerraba ante cualquier fallo — un
+                   parpadeo de red bastaba para dejar el celular sin sesión
+                   y con todos los pedidos atorados, sin avisar de nada. */
+                const motivo = (d.error && (d.error.message || d.error)) || '';
+                if (String(motivo).match(/TOKEN|USER_(NOT_FOUND|DISABLED)|INVALID/i)) salir();
+                return null;
+            }
 
             guardarSesion({
                 idToken: d.id_token,
@@ -229,13 +237,22 @@ const Sync = (() => {
 
     /* ---------------- ESCRITURA ---------------- */
 
+    /* Por qué falló lo último que se intentó mandar. Sin esto, la pantalla
+       solo puede decir "no salió", y a las 8 de la noche eso no alcanza
+       para saber si es la red, el permiso o el dato. */
+    let ultimoFallo = '';
+    const fallo = () => ultimoFallo;
+
     async function escribir(rama, valor, metodo, conSesion) {
-        if (!activo) return false;
+        if (!activo) { ultimoFallo = 'Este local no tiene nube configurada'; return false; }
 
         let url = `${BD}/${rama}.json`;
         if (conSesion !== false) {
             const t = await token();
-            if (!t) return false;
+            if (!t) {
+                ultimoFallo = 'No hay sesión válida. Vuelve a entrar con tu correo y clave.';
+                return false;
+            }
             url += `?auth=${encodeURIComponent(t)}`;
         }
 
@@ -245,8 +262,18 @@ const Sync = (() => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(valor)
             });
-            return r.ok;
-        } catch (e) { return false; }
+
+            if (r.ok) { ultimoFallo = ''; return true; }
+
+            const detalle = await r.text().catch(() => '');
+            ultimoFallo = r.status === 401
+                ? `Permiso denegado en "${rama}". Revisa las reglas de Firebase.`
+                : `Error ${r.status} en "${rama}". ${String(detalle).slice(0, 120)}`;
+            return false;
+        } catch (e) {
+            ultimoFallo = 'Sin conexión con la nube';
+            return false;
+        }
     }
 
     /** Reemplaza el contenido de una rama (requiere ser el gerente). */
@@ -259,6 +286,6 @@ const Sync = (() => {
         activo,
         entrar, salir, haySesion, correoSesion, uidSesion, token,
         escuchar, leer, guardar, agregar,
-        ramaViva, desdeUltimoContacto
+        ramaViva, desdeUltimoContacto, fallo
     };
 })();

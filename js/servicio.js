@@ -35,7 +35,7 @@ const Servicio = (() => {
         activo: false, haySesion: () => false,
         escuchar: () => (() => {}), leer: async () => null,
         guardar: async () => false, agregar: async () => false,
-        ramaViva: () => true, desdeUltimoContacto: () => 0
+        ramaViva: () => true, desdeUltimoContacto: () => 0, fallo: () => ''
     };
 
     let alCambiar = () => {};
@@ -117,6 +117,9 @@ const Servicio = (() => {
 
     /** Cuántas cosas están esperando salir. Si es > 0, se muestra en rojo. */
     const pendientes = () => read(K.cola, []).length;
+
+    /** Por que no salio lo ultimo. Lo muestra la pantalla al tocar el aviso. */
+    const porQueNoSale = () => (Red.fallo && Red.fallo()) || '';
     const hayLinea   = () => enLinea && pendientes() === 0;
 
     /**
@@ -655,7 +658,7 @@ const Servicio = (() => {
         // para el panel del gerente
         comandasComoPedidos, sesionesEntre,
         // estado del sistema
-        iniciar, hayLinea, pendientes, recibiendo, vaciarCola,
+        iniciar, hayLinea, pendientes, porQueNoSale, recibiendo, vaciarCola,
         limpiarViejo, vaciarTodo, nuevoId
     };
 })();

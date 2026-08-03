@@ -116,6 +116,7 @@ function pintarRed() {
 
     document.body.classList.remove('desconectado');
     el.className = 'srv-red ' + (faltan ? 'caido' : 'ok');
+    el.title = faltan ? Servicio.porQueNoSale() : '';
     el.innerHTML = faltan
         ? `<i class="fas fa-triangle-exclamation"></i> ${faltan} sin enviar`
         : `<i class="fas fa-circle"></i>`;
@@ -275,7 +276,17 @@ function iniciarEstacion(cual) {
 
         document.addEventListener('click', e => {
             const btn = e.target.closest('[data-accion]');
-            if (btn) accion(btn.dataset.accion);
+            if (btn) { accion(btn.dataset.accion); return; }
+
+            // Tocar el aviso rojo dice por que no esta saliendo o entrando
+            if (e.target.closest('#red')) {
+                const partes = [];
+                if (!Servicio.recibiendo()) partes.push('No esta llegando lo que mandan los otros celulares.');
+                if (Servicio.pendientes()) partes.push('No salen ' + Servicio.pendientes() + ' cosas de este celular.');
+                const motivo = Servicio.porQueNoSale();
+                if (motivo) partes.push('', motivo);
+                if (partes.length) alert(partes.join(String.fromCharCode(10)));
+            }
         });
 
         // El reloj de cada tarjeta tiene que avanzar aunque no entre nada
