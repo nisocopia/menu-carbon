@@ -274,6 +274,13 @@ function iniciarEstacion(cual) {
         $('lock-entrar').addEventListener('click', entrar);
         $('lock-clave').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
 
+        /* Sin esto no habia forma de cambiar de cuenta ni de recuperarse de
+           una sesion rota: habia que borrar los datos del navegador. */
+        const btnSalir = $('btn-salir');
+        if (btnSalir) btnSalir.addEventListener('click', () => {
+                if (confirm('Cerrar sesion en este celular?')) { Sync.salir(); location.reload(); }
+        });
+
         document.addEventListener('click', e => {
             const btn = e.target.closest('[data-accion]');
             if (btn) { accion(btn.dataset.accion); return; }

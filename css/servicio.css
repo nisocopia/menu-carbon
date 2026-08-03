@@ -1017,3 +1017,19 @@ body.desconectado .srv-top {
     line-height: 1.5;
     color: #8a6a6a;
 }
+
+/* Cerrar sesion: hace falta para cambiar de cuenta y para recuperarse de
+   una sesion rota sin tener que borrar los datos del navegador. */
+.srv-salir {
+    flex: 1;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    color: #999;
+    font-family: inherit;
+    font-size: 0.8rem;
+    padding: 12px 6px;
+    cursor: pointer;
+}
+
+.srv-salir i { display: block; font-size: 1rem; margin-bottom: 4px; color: #888; }

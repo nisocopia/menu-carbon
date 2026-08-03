@@ -642,6 +642,13 @@ function conectarEventos() {
         else verMesas();
     });
 
+    /* Sin esto no habia forma de cambiar de cuenta ni de recuperarse de
+       una sesion rota: habia que borrar los datos del navegador. */
+    const btnSalir = $('btn-salir');
+    if (btnSalir) btnSalir.addEventListener('click', () => {
+        if (confirm('Cerrar sesion en este celular?')) { Sync.salir(); location.reload(); }
+    });
+
     $('btn-llevar').addEventListener('click', () => verMesa(0));
     $('tecleo').addEventListener('input', leerTecleo);
     $('tecleo').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarDesdeTecleo(); } });
