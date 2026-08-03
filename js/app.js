@@ -194,7 +194,7 @@ function actualizarBarra() {
 function sugerencias() {
     // Acompañantes que el cliente todavía no pidió (esto es lo que sube el ticket)
     const yaPedido = new Set(carrito.map(i => i.id));
-    return Store.getMenu()
+    return Store.getMenuPublico()
         .filter(c => c.sugerible)
         .flatMap(c => c.platos)
         .filter(p => !p.agotado && tienePrecio(p) && !yaPedido.has(p.id))
@@ -454,7 +454,7 @@ function conectarEventos() {
  * el carrito. Se usa cuando el gerente cambia algo desde el panel.
  */
 function redibujarMenu() {
-    const menu = Store.getMenu();
+    const menu = Store.getMenuPublico();
     CFG = Store.getConfig();
 
     renderInfoLocal();
@@ -503,7 +503,7 @@ function escucharCambiosDelLocal() {
 
 function iniciarApp() {
     CFG = Store.getConfig();
-    const menu = Store.getMenu();
+    const menu = Store.getMenuPublico();
 
     renderInfoLocal();
     renderNav(menu);

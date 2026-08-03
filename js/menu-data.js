@@ -88,6 +88,9 @@ const GUARNICIONES = {
                 Solo la lleva la parrilla, que es lo que más se pide y lo
                 que el asador lee con las manos ocupadas. El resto sale
                 con su nombre: nadie va a decir "un ka-jota".
+   - soloMesero: la categoria existe y se puede pedir desde la comanda,
+                pero NO aparece en el menu del comensal. Para lo que no
+                se anuncia: el menu de ninos, precios especiales.
    - atajo:     lo que se teclea al tomar el pedido. "3p" = 3 pollos.
    - minutos:   cuánto demora, para decirle la verdad al comensal
    - termino:   true si se le puede pedir el término (solo la carne)
@@ -139,6 +142,11 @@ const MENU = [
         icono: 'fa-child',
         descripcion: 'Porción para niños.',
         estilo: 'lista',
+        /* No sale en el menú del comensal: se pide diciéndoselo al mesero.
+           Es porción de niño y vale menos, así que puesta en la carta un
+           adulto pide el junior — come menos y el local gana menos. Los
+           restaurantes con menú infantil lo manejan igual. */
+        soloMesero: true,
         estacion: 'asador',                 // los de parrilla; los otros lo cambian abajo
         cubierto: true,                     // el niño se sienta a comer: cuenta cubierto
         guarnicion: ['arroz', 'menestra', 'ensalada', 'platano'],

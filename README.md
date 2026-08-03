@@ -115,6 +115,18 @@ asador lee con las manos ocupadas:
 hornada y los apanados no llevan sigla porque no son de parrilla — salen con
 su nombre.
 
+### Lo que no se anuncia
+
+Los **juniors no salen en el menú del comensal**. Son porción de niño y
+valen menos: puestos en la carta, un adulto pide el junior, come menos y el
+local gana menos. Se piden diciéndoselo al mesero, como en cualquier
+restaurante con menú infantil.
+
+Se hace con `soloMesero: true` en la categoría. Esa categoría se puede pedir
+desde la comanda y el gerente le edita el precio en el panel, pero no aparece
+en la carta ni en la ruleta de "¿Qué pido hoy?". Sirve para cualquier cosa que
+exista pero no se anuncie.
+
 Los platos de cocina salen con su nombre (`M6 · 1 Camarón Ajillo`): nadie va a
 decir "un ka-jota" en voz alta.
 
