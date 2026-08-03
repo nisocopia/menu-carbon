@@ -68,6 +68,25 @@ const Store = (() => {
         return getMenu().flatMap(c => c.platos.map(p => ({ ...p, categoria: c.nombre, catId: c.id })));
     }
 
+    /**
+     * Lo que ve el comensal. Deja fuera las categorías marcadas como
+     * `soloMesero`, que existen pero no se anuncian.
+     *
+     * El caso real: los juniors son porción de niño y valen menos. Si
+     * salen en la carta, un adulto pide el junior — come menos y el
+     * local gana menos. Se piden diciéndoselo al mesero, como en
+     * cualquier restaurante con menú infantil.
+     *
+     * El mesero y el gerente sí los ven: ellos usan getMenu().
+     */
+    function getMenuPublico() {
+        return getMenu().filter(c => !c.soloMesero);
+    }
+
+    function getPlatosPublicos() {
+        return getMenuPublico().flatMap(c => c.platos.map(p => ({ ...p, categoria: c.nombre, catId: c.id })));
+    }
+
     function findPlato(id) {
         return getPlatos().find(p => p.id === id) || null;
     }
@@ -300,7 +319,8 @@ const Store = (() => {
                 `        icono: ${JSON.stringify(cat.icono)},`,
                 `        descripcion: ${JSON.stringify(cat.descripcion || '')},`,
                 `        estilo: ${JSON.stringify(cat.estilo)},`,
-                cat.sugerible ? '        sugerible: true,' : null,
+                cat.sugerible  ? '        sugerible: true,'  : null,
+                cat.soloMesero ? '        soloMesero: true,' : null,
                 '        platos: [',
                 platos,
                 '        ]',
@@ -316,6 +336,7 @@ const Store = (() => {
     return {
         getConfig, saveConfig,
         getMenu, getPlatos, findPlato,
+        getMenuPublico, getPlatosPublicos,
         setOverride, resetOverrides, toggleAgotado, getOverrides,
         getCarrito, saveCarrito, limpiarCarrito,
         guardarPedido, getPedidos, getPedidoActivo, cerrarPedidoActivo,
