@@ -182,14 +182,29 @@ function cerrarSesion() {
 let pedidosNube = {};
 let vistasNube  = {};
 
+/** ¿Está andando el sistema de comandas? Si sí, los números salen de ahí. */
+const hayServicio = () => typeof Servicio !== 'undefined' && Nube.activo;
+
+/**
+ * Las comandas que tomó el mesero son la venta real del local. Los
+ * pedidos que manda el comensal desde su celular pasan por la bandeja
+ * y se convierten en comanda al confirmarse, así que contarlos también
+ * sería contarlos dos veces.
+ */
 function pedidosParaMostrar() {
+    if (hayServicio()) return Servicio.comandasComoPedidos();
     return Nube.activo ? Store.mezclarPedidosRemotos(pedidosNube) : Store.getPedidos();
 }
 
 function statsParaMostrar() {
-    return Nube.activo
-        ? Store.getStats(pedidosParaMostrar(), Store.mezclarVistasRemotas(vistasNube))
-        : Store.getStats();
+    const vistas = Nube.activo ? Store.mezclarVistasRemotas(vistasNube) : Store.getVistas();
+    return Store.getStats(pedidosParaMostrar(), vistas);
+}
+
+/** Las mesas atendidas en un rango: una mesa con tres tandas es un cliente. */
+function mesasEntre(desde, hasta) {
+    if (!hayServicio()) return null;
+    return Servicio.sesionesEntre(desde, hasta).length;
 }
 
 function escucharNube() {
@@ -204,6 +219,16 @@ function escucharNube() {
         renderPedidos();
         renderNumeros();
     }, true);
+
+    // Las comandas del mesero: son la venta real del local
+    if (typeof Servicio !== 'undefined') {
+        Servicio.iniciar(() => {
+            marcarEstadoNube('en-vivo');
+            renderResumenDia();
+            renderPedidos();
+            renderNumeros();
+        });
+    }
 
     Nube.escuchar('vistas', datos => {
         vistasNube = datos || {};
@@ -257,13 +282,21 @@ function esDeHoy(ts) {
     return d.toDateString() === h.toDateString();
 }
 
+function inicioDeHoy() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+}
+
 function renderResumenDia() {
     const pedidos = pedidosParaMostrar().filter(p => esDeHoy(p.creado));
     const ventas  = pedidos.reduce((s, p) => s + (p.total || 0), 0);
     const platos  = pedidos.reduce((s, p) => s + (p.items || []).reduce((a, i) => a + i.cantidad, 0), 0);
+    const mesas   = mesasEntre(inicioDeHoy(), Date.now());
 
     document.getElementById('resumen-dia').innerHTML = `
-        <div class="mini-kpi"><span>${pedidos.length}</span><small>pedidos hoy</small></div>
+        <div class="mini-kpi"><span>${mesas != null ? mesas : pedidos.length}</span>
+             <small>${mesas != null ? 'mesas hoy' : 'pedidos hoy'}</small></div>
         <div class="mini-kpi"><span>${dinero(ventas)}</span><small>vendido hoy</small></div>
         <div class="mini-kpi"><span>${platos}</span><small>platos servidos</small></div>`;
 }
@@ -282,17 +315,31 @@ function renderPedidos() {
         const hora = new Date(p.creado).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
         const fecha = esDeHoy(p.creado) ? 'Hoy' : new Date(p.creado).toLocaleDateString('es-EC');
 
+        /* Con el sistema de comandas andando, el estado lo pone la cocina
+           cuando entrega. Que el panel fuera un segundo lugar donde
+           cambiarlo solo serviría para que los dos digan cosas distintas. */
+        const estado = hayServicio()
+            ? `<span class="estado ${est.clase}">${est.texto}</span>`
+            : `<button class="estado ${est.clase}" data-estado="${p.id}">${est.texto}</button>`;
+
         return `
         <div class="pedido-card">
             <div class="pedido-top">
                 <div>
-                    <strong class="pedido-mesa">#${p.codigo}</strong>
+                    <strong class="pedido-mesa">${p.codigo || '#' + p.id}</strong>
                 </div>
-                <button class="estado ${est.clase}" data-estado="${p.id}">${est.texto}</button>
+                ${estado}
             </div>
-            <div class="pedido-hora">${fecha} · ${hora}</div>
+            <div class="pedido-hora">
+                ${fecha} · ${hora}${p.origen === 'cliente' ? ' · pidió desde su celular' : ''}
+            </div>
             <ul class="pedido-items">
-                ${(p.items || []).map(i => `<li><span>${i.cantidad}×</span> ${i.nombre}</li>`).join('')}
+                ${(p.items || []).map(i => `
+                    <li>
+                        <span>${i.cantidad}×</span> ${i.nombre}
+                        ${i.llevar ? ' 🥡' : ''}
+                        ${(i.sin && i.sin.length) ? `<em>sin ${i.sin.map(g => GUARNICIONES[g] || g).join(', ')}</em>` : ''}
+                    </li>`).join('')}
             </ul>
             ${p.nota ? `<div class="pedido-nota"><i class="fas fa-note-sticky"></i> ${p.nota}</div>` : ''}
             <div class="pedido-total">${dinero(p.total)}</div>
@@ -388,12 +435,22 @@ function exportarArchivo() {
 
 function renderNumeros() {
     const s = statsParaMostrar();
+    const pedidos = pedidosParaMostrar();
+
+    /* El ticket se mide por mesa, no por tanda: una mesa que pidió tres
+       veces es un cliente que gastó una vez, no tres clientes chicos.
+       Medirlo por tanda hacía parecer que el ticket bajaba justo cuando
+       la gente pedía más. */
+    const mesas = new Set(pedidos.map(p => p.sesion).filter(Boolean)).size;
+    const porMesa = mesas ? s.ingresos / mesas : s.ticketPromedio;
 
     document.getElementById('kpi-grid').innerHTML = `
-        <div class="kpi"><span class="kpi-valor">${s.totalPedidos}</span><span class="kpi-label">Pedidos</span></div>
+        <div class="kpi"><span class="kpi-valor">${mesas || s.totalPedidos}</span>
+             <span class="kpi-label">${mesas ? 'Mesas atendidas' : 'Pedidos'}</span></div>
         <div class="kpi"><span class="kpi-valor">${dinero(s.ingresos)}</span><span class="kpi-label">Vendido</span></div>
-        <div class="kpi"><span class="kpi-valor">${dinero(s.ticketPromedio)}</span><span class="kpi-label">Ticket promedio</span></div>
-        <div class="kpi"><span class="kpi-valor">${Math.round(s.tasaSugerencia * 100)}%</span><span class="kpi-label">Aceptó un extra</span></div>`;
+        <div class="kpi"><span class="kpi-valor">${dinero(porMesa)}</span>
+             <span class="kpi-label">${mesas ? 'Ticket por mesa' : 'Ticket promedio'}</span></div>
+        <div class="kpi"><span class="kpi-valor">${s.totalPedidos}</span><span class="kpi-label">Tandas</span></div>`;
 
     // La joya del panel: platos con mucho interés y pocas ventas
     const oportunidades = s.ranking
@@ -537,6 +594,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('btn-limpiar-pedidos').addEventListener('click', () => {
+        /* Con el sistema de comandas andando, este botón solo limpiaba la
+           copia de este celular: al segundo siguiente la nube la volvía a
+           llenar y parecía que no había pasado nada. Peor todavía, borrar
+           de verdad las comandas del local desde aquí sería borrarle la
+           noche a la cocina. */
+        if (hayServicio()) {
+            alert('Las comandas del local no se borran desde aquí.\n\n' +
+                  'Las entregadas se limpian solas a los dos días. ' +
+                  'Si una está mal, se anula desde la pantalla de la mesa.');
+            return;
+        }
         if (confirm('¿Borrar el historial de pedidos? Los números también se reinician.')) {
             Store.borrarPedidos();
             renderTodo();

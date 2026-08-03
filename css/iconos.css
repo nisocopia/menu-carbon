@@ -1,4 +1,4 @@
-/* Font Awesome 6.4.0 recortado a los 34 iconos que usa este menú.
+/* Font Awesome 6.4.0 recortado a los 51 iconos que usa este menú.
    Se sirve desde el propio sitio: no depende de ningún servidor externo. */
 
 @font-face {
@@ -30,13 +30,21 @@
 .fas, .fa-solid  { font-family: 'Font Awesome 6 Free'; font-weight: 900; }
 .fab, .fa-brands { font-family: 'Font Awesome 6 Brands'; font-weight: 400; }
 
+.fa-bacon:before{content:"\f7e5"}
+.fa-bag-shopping:before{content:"\f290"}
 .fa-bell:before{content:"\f0f3"}
 .fa-bell-concierge:before{content:"\f562"}
 .fa-bowl-food:before{content:"\e4c6"}
+.fa-cash-register:before{content:"\f788"}
 .fa-chart-simple:before{content:"\e473"}
 .fa-check:before{content:"\f00c"}
 .fa-check-circle:before{content:"\f058"}
+.fa-check-double:before{content:"\f560"}
+.fa-chevron-left:before{content:"\f053"}
 .fa-chevron-right:before{content:"\f054"}
+.fa-child:before{content:"\f1ae"}
+.fa-circle:before{content:"\f111"}
+.fa-circle-exclamation:before{content:"\f06a"}
 .fa-clock:before{content:"\f017"}
 .fa-clone:before{content:"\f24d"}
 .fa-cube:before{content:"\f1b2"}
@@ -46,20 +54,29 @@
 .fa-fire-burner:before{content:"\e4f1"}
 .fa-fish:before{content:"\f578"}
 .fa-gamepad:before{content:"\f11b"}
+.fa-hand:before{content:"\f256"}
 .fa-hand-point-down:before{content:"\f0a7"}
+.fa-kitchen-set:before{content:"\e51a"}
 .fa-leaf:before{content:"\f06c"}
 .fa-lightbulb:before{content:"\f0eb"}
+.fa-list:before{content:"\f03a"}
+.fa-location-dot:before{content:"\f3c5"}
 .fa-lock:before{content:"\f023"}
+.fa-mobile-screen:before{content:"\f3cf"}
+.fa-money-bill:before{content:"\f0d6"}
 .fa-note-sticky:before{content:"\f249"}
+.fa-paper-plane:before{content:"\f1d8"}
 .fa-pen-to-square:before{content:"\f044"}
 .fa-plus:before{content:"\2b"}
 .fa-puzzle-piece:before{content:"\f12e"}
 .fa-receipt:before{content:"\f543"}
 .fa-right-from-bracket:before{content:"\f2f5"}
+.fa-rotate-left:before{content:"\f2ea"}
 .fa-shrimp:before{content:"\e448"}
 .fa-star:before{content:"\f005"}
 .fa-store:before{content:"\f54e"}
 .fa-sync-alt:before{content:"\f2f1"}
+.fa-triangle-exclamation:before{content:"\f071"}
 .fa-up-right-from-square:before{content:"\f35d"}
 .fa-utensils:before{content:"\f2e7"}
 .fa-wine-glass:before{content:"\f4e3"}

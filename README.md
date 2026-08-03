@@ -69,44 +69,166 @@ orillas, que es justo lo que se cortaba antes.
 | Archivo | Para qué sirve |
 |---|---|
 | `index.html` | El menú. Se dibuja solo desde los datos. |
+| `comanda.html` | **Tomar pedido y cobrar.** El celular del mesero. |
+| `parrilla.html` | Lo que ve el asador: solo proteínas. |
+| `cocina.html` | Lo que ve la cocina: el pedido entero y los cubiertos. |
 | `panel.html` | Panel privado del dueño. |
 | `js/menu-data.js` | **Lo único que se edita por restaurante.** |
-| `js/store.js` | Guarda pedidos, cambios de precio y estadísticas. |
-| `js/app.js` | Dibuja el menú, el carrito y la comanda. |
+| `js/servicio.js` | El sistema de comandas: mesas, tandas, códigos, cuenta. |
+| `js/comanda.js` | Lógica de la pantalla de tomar pedido. |
+| `js/estacion.js` | Lógica compartida de la parrilla y la cocina. |
+| `js/store.js` | Guarda cambios de precio y estadísticas. |
+| `js/app.js` | Dibuja el menú y el carrito del comensal. |
 | `js/panel.js` | Lógica del panel del gerente. |
 | `js/tracker.js` | Aviso de "tu pedido va en camino". |
 | `js/games.js` | Juegos para la espera. |
 
 ---
 
-## El flujo del pedido
+## El sistema de comandas
+
+Reemplaza el cuaderno y los dos papeles (el del asador y el de la cocina).
+Lo que se escribe una vez sale al mismo tiempo a las tres pantallas.
+
+### El código del pedido
+
+```
+   M3 · 2PO 1CA
+   │    └──────┴─  lo que se pidió
+   └───────────── mesa 3
+
+   se lee: "mesa tres, dos pollo, una carne"
+```
+
+Solo la parrilla lleva abreviatura, que es lo que más se pide y lo que el
+asador lee con las manos ocupadas:
+
+```
+   PO  Pollo asado      X2   Mixto 2 carnes      JPO  Junior de pollo
+   CA  Carne asada      X2E  Mixto 2 especial    JCA  Junior de carne
+   CH  Chuleta          X3   Mixto 3 carnes      JCH  Junior de chuleta
+   CO  Costilla         X3E  Mixto 3 especial
+   MA  Matambre
+```
+
+`M3 · 2PO 2JPO` es una familia: dos pollos y dos juniors. El junior de
+hornada y los apanados no llevan sigla porque no son de parrilla — salen con
+su nombre.
+
+Los platos de cocina salen con su nombre (`M6 · 1 Camarón Ajillo`): nadie va a
+decir "un ka-jota" en voz alta.
+
+**Cada tanda tiene su código**, igual que cada renglón nuevo del cuaderno. La
+primera de la mesa 3 es `M3`, la segunda `M3b`, la tercera `M3c`. Todas se
+suman a la misma cuenta. Así el código nunca queda mintiendo cuando el pedido
+crece a mitad de comida.
+
+Las modificaciones **no** van dentro del código — comprimirlas lo volvería
+ilegible. Van escritas debajo, en palabras.
+
+### Quién ve qué
+
+| Pantalla | Ve |
+|---|---|
+| **Parrilla** | Solo proteínas. El término y el "para llevar". Nada de guarniciones: no cambian nada en la parrilla. |
+| **Cocina** | El pedido entero, los cubiertos en grande y lo que se le quitó al plato. Esta pantalla también la lee el que sirve. |
+| **Comanda** | Todo, más la cuenta. |
+
+Las bebidas no le llegan a ninguna estación: las sirve el mesero directo.
+
+### Cosas que se calculan solas
+
+- **Los cubiertos.** Son los platos que se sientan a comer. Si alguien pide dos
+  pollos y uno es para llevar, es **un** cubierto.
+- **La mesa se abre y se cierra sola.** Se abre con la primera tanda y se libera
+  cuando el saldo llega a cero.
+- **El "para llevar" se atrasa.** En la parrilla, un pedido que es solo para
+  llevar baja a una sección aparte, para que salga caliente cuando el de la
+  mesa ya está comiendo.
+
+### Tomar el pedido
+
+Se escribe, no se toca: `3p 2c` son 3 pollos y 2 carnes. Rayar eso en el
+cuaderno y teclearlo cuestan lo mismo — pero teclearlo ya llegó al asador y a
+la cocina. Los atajos de cada plato están en `menu-data.js`, campo `atajo`.
+
+Tocar botones también funciona, pero es el camino lento.
+
+### Cobrar
+
+Siempre por lo que comió cada uno, nunca en partes iguales. Se tocan los platos
+de esa persona, se cobra en efectivo o transferencia, y lo que falta se queda
+abierto en la mesa.
+
+Las bebidas que no están en la lista (las de la tienda de al lado) se agregan
+con **"Otra bebida"**. Como el precio sale de preguntar el costo en la tienda y
+subirle 25 o 50 centavos, se escribe lo que costó y el precio de venta sale
+solo. Queda guardada, así que la segunda vez ya es un toque.
+
+---
+
+## El flujo del comensal
 
 1. El cliente arma su pedido desde la mesa.
 2. Antes de cerrar, el menú le sugiere acompañantes (**esto sube el ticket**).
-3. Confirma.
-4. Aparece una **comanda en pantalla** con el código del pedido (#A47), los
+3. Toca **en qué mesa está** — el QR no lleva el número dentro.
+4. Aparece una **comanda en pantalla** con el código (`M3 · 2PO 1CA`), los
    platos y el total, en letra grande y fondo claro para leerse de lejos.
-5. El mesero se acerca, la lee y la anota.
+5. El pedido cae en la **bandeja del mesero**, que lo confirma de un toque.
+   Recién ahí sale a la parrilla y a la cocina.
 6. Al cliente le queda corriendo el aviso de progreso de su plato.
 
-No se le pregunta el número de mesa: el mesero ya está parado frente a ella
-cuando lee la pantalla, así que era fricción de más.
+Ese paso 5 no es burocracia: el celular del comensal no tiene cuenta del local,
+y si pudiera escribir directo en las comandas, cualquiera que abra el menú
+podría meterle 20 platos falsos a la parrilla.
 
 Si el restaurante configura un número de WhatsApp en `menu-data.js`,
 además aparece un botón para enviar el pedido ya escrito.
 
 ---
 
+## Límite importante que hay que saber
+
+**El sistema de comandas necesita Firebase.** Sin él, cada celular trabajaría
+con su propia copia y la cocina nunca vería lo que escribe el mesero — que es
+justamente el problema que este sistema resuelve. Los pasos están en
+[FIREBASE.md](FIREBASE.md) y es gratis en este volumen.
+
+El menú del comensal sí sigue funcionando sin Firebase, como antes.
+
+### Si se cae el internet a mitad del servicio
+
+Nada se para. Cada celular guarda lo suyo y lo reenvía solo cuando vuelve la
+señal. Pero como eso puede tardar, el sistema lo dice sin rodeos:
+
+- Arriba a la derecha aparece en rojo **"N sin enviar"**, parpadeando
+- El aviso al mandar una comanda cambia a **"anotado — SIN RED, la cocina
+  todavía no lo ve"**
+
+Nunca dice "enviado" cuando no salió. Si el rojo no se apaga, hay que ir a
+decirlo a mano o sacar el cuaderno.
+
+---
+
 ## El panel del gerente
 
-Se entra en `panel.html` con la clave definida en `pinPanel`.
+Se entra en `panel.html` con la cuenta del dueño.
 
-- **Pedidos** — pedidos del día con su estado (Nuevo → En cocina → Entregado).
+- **Pedidos** — las comandas del local, con su código, su mesa y su estado.
+  Es de solo lectura: el estado lo pone la cocina cuando entrega, y tener un
+  segundo lugar donde cambiarlo solo serviría para que los dos digan cosas
+  distintas.
 - **Menú** — cambiar precios y nombres, marcar **Agotado** de un toque,
-  destacar el plato estrella. Los cambios se aplican al instante.
-- **Números** — pedidos, vendido, ticket promedio, y el dato que más vale:
-  **qué platos mira mucha gente pero nadie pide** (casi siempre les falta foto).
+  destacar el plato estrella. Los cambios se aplican al instante en todos los
+  celulares.
+- **Números** — mesas atendidas, vendido, **ticket por mesa** y tandas. Más el
+  dato que más vale: **qué platos mira mucha gente pero nadie pide** (casi
+  siempre les falta foto).
 - **Local** — nombre, horario, dirección, WhatsApp, mesas, clave.
+
+El ticket se mide **por mesa, no por tanda**. Una mesa que pidió tres veces es
+un cliente que gastó una vez, no tres clientes chicos: medirlo por tanda hacía
+parecer que el ticket bajaba justo cuando la gente pedía más.
 
 ### Para dejar los cambios fijos
 
@@ -115,22 +237,6 @@ Se reemplaza `js/menu-data.js` en el sitio y los cambios quedan permanentes
 para todos los clientes.
 
 ---
-
-## Límite importante que hay que saber
-
-Todo se guarda en el navegador de cada dispositivo (`localStorage`). Eso es lo
-que permite que no haya servidor ni costo mensual, pero significa que:
-
-- Los **agotados y precios** que el dueño cambia en el panel se ven en **su**
-  dispositivo. Para que los vean todos los clientes hay que descargar
-  `menu-data.js` y reemplazarlo en el sitio.
-- Los **pedidos que hacen los clientes en sus propios celulares** no llegan
-  al panel del dueño. Por eso el flujo es que el mesero lee la comanda en la
-  mesa, que es como funciona de verdad en un local pequeño.
-
-Si un cliente quiere que los agotados se actualicen solos en todos los celulares
-y que los pedidos lleguen a una pantalla en cocina, se conecta una base de datos
-gratuita (Firebase free tier alcanza de sobra) y se cobra como plan superior.
 
 ## La clave del panel
 
