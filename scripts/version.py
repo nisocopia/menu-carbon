@@ -14,12 +14,21 @@ zoom, botones encima de las fotos). Cambiar el ?v= hace que la dirección
 del archivo sea distinta, así que el navegador está obligado a bajarlo.
 """
 
+import glob
 import os
 import re
 import time
 
-PROY   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PAGINAS = ["index.html", "panel.html"]
+PROY = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Todas las páginas del proyecto, no una lista escrita a mano.
+#
+# Antes eran solo index.html y panel.html. Al agregar las pantallas de
+# comanda, parrilla y cocina, sus CSS y JS dejaron de marcarse: el
+# servidor tenía lo nuevo pero los celulares seguían usando lo viejo
+# guardado, y el fallo parecía del sistema y no del caché. Buscarlas
+# solas evita que vuelva a pasar con la próxima página que se agregue.
+PAGINAS = sorted(os.path.basename(p) for p in glob.glob(os.path.join(PROY, "*.html")))
 
 # Marca de tiempo: siempre distinta y además dice cuándo se publicó
 VERSION = time.strftime("%Y%m%d%H%M")
