@@ -1,4 +1,4 @@
-/* Font Awesome 6.4.0 recortado a los 53 iconos que usa este menú.
+/* Font Awesome 6.4.0 recortado a los 54 iconos que usa este menú.
    Se sirve desde el propio sitio: no depende de ningún servidor externo. */
 
 @font-face {
@@ -80,6 +80,7 @@
 .fa-triangle-exclamation:before{content:"\f071"}
 .fa-up-right-from-square:before{content:"\f35d"}
 .fa-utensils:before{content:"\f2e7"}
+.fa-volume-high:before{content:"\f028"}
 .fa-volume-xmark:before{content:"\f6a9"}
 .fa-wine-glass:before{content:"\f4e3"}
 .fa-whatsapp:before{content:"\f232"}

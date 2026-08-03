@@ -40,6 +40,22 @@ function toast(texto) {
 
 let audio = null;
 
+/**
+ * El aviso tiene que ganarle al ruido de una cocina: campana, extractor,
+ * gente hablando. Ese ruido es sobre todo grave, así que el pitido va
+ * agudo — cerca de donde el oído es más sensible — y alternando dos
+ * tonos, que se reconoce como alarma y no se confunde con el ambiente.
+ */
+const PATRON = [
+    { f: 2600, t: 0.00, d: 0.14 },
+    { f: 1950, t: 0.17, d: 0.14 },
+    { f: 2600, t: 0.34, d: 0.14 },
+    { f: 1950, t: 0.51, d: 0.14 },
+    { f: 2600, t: 0.68, d: 0.26 }
+];
+
+const VOLUMEN = 0.85;
+
 /** ¿El navegador ya nos deja sonar? */
 const audioListo = () => !!audio && audio.state === 'running';
 
@@ -69,26 +85,43 @@ async function pitar() {
     if (!audioListo()) return;
 
     try {
-        // Dos notas cortas: se distingue del ruido de la cocina
-        [0, 0.18].forEach((retraso, i) => {
+        const ahora = audio.currentTime;
+
+        PATRON.forEach(nota => {
             const osc = audio.createOscillator();
             const vol = audio.createGain();
-            osc.type = 'sine';
-            osc.frequency.value = i ? 1046 : 784;
-            vol.gain.setValueAtTime(0.0001, audio.currentTime + retraso);
-            vol.gain.exponentialRampToValueAtTime(0.35, audio.currentTime + retraso + 0.02);
-            vol.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + retraso + 0.16);
+
+            /* Onda cuadrada y no senoidal: tiene armónicos, y son los
+               armónicos los que atraviesan el ruido de una cocina. A igual
+               volumen se oye mucho más que un pitido suave. */
+            osc.type = 'square';
+            osc.frequency.value = nota.f;
+
+            const desde = ahora + nota.t;
+            vol.gain.setValueAtTime(0.0001, desde);
+            vol.gain.exponentialRampToValueAtTime(VOLUMEN, desde + 0.008);
+            vol.gain.setValueAtTime(VOLUMEN, desde + nota.d - 0.02);
+            vol.gain.exponentialRampToValueAtTime(0.0001, desde + nota.d);
+
             osc.connect(vol).connect(audio.destination);
-            osc.start(audio.currentTime + retraso);
-            osc.stop(audio.currentTime + retraso + 0.18);
+            osc.start(desde);
+            osc.stop(desde + nota.d + 0.02);
         });
     } catch (e) { /* si el navegador no deja sonar, queda el aviso visual */ }
+
+    // Si el celular está en el bolsillo o boca abajo, la vibración avisa igual
+    try { if (navigator.vibrate) navigator.vibrate([220, 90, 220, 90, 320]); } catch (e) {}
 }
 
 /** Mientras el sonido esté bloqueado hay que decirlo, no callarlo. */
 function pintarAvisoSonido() {
     const el = $('sin-sonido');
     if (el) el.hidden = audioListo();
+}
+
+/** Tocar el cartel amarillo activa el sonido y lo hace sonar de muestra. */
+function activarSonido() {
+    prepararAudio().then(listo => { if (listo) pitar(); });
 }
 
 /* ============================================================
@@ -366,6 +399,15 @@ function iniciarEstacion(cual) {
 
         /* Sin esto no habia forma de cambiar de cuenta ni de recuperarse de
            una sesion rota: habia que borrar los datos del navegador. */
+            const btnProbar = $('btn-probar-sonido');
+        if (btnProbar) btnProbar.addEventListener('click', async () => {
+            // Sirve para dos cosas: desbloquear el audio y comprobar que
+            // se oye por encima del ruido, sin esperar a que entre un pedido
+            await prepararAudio();
+            if (audioListo()) { pitar(); toast('Así va a sonar'); }
+            else toast('El navegador todavía no deja sonar. Toca la pantalla otra vez.');
+        });
+
         const btnSalir = $('btn-salir');
         if (btnSalir) btnSalir.addEventListener('click', () => {
                 if (confirm('Cerrar sesion en este celular?')) { Sync.salir(); location.reload(); }
@@ -391,6 +433,9 @@ function iniciarEstacion(cual) {
            intentar al regresar a la pantalla. */
         ['pointerdown', 'touchstart', 'keydown'].forEach(ev =>
             window.addEventListener(ev, prepararAudio, { passive: true }));
+
+        const cartel = $('sin-sonido');
+        if (cartel) cartel.addEventListener('click', activarSonido);
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) prepararAudio();
         });
