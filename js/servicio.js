@@ -552,52 +552,40 @@ const Servicio = (() => {
         write(clave, Object.assign({}, propios, remotos));
     }
 
-    /** Dónde guarda cada rama del servicio lo que llega de la nube. */
-    function guardarRama(rama, datos) {
-        if (rama === 'comandas') mezclar(K.comandas, datos);
-        else if (rama === 'pagos')    mezclar(K.pagos, datos);
-        else if (rama === 'sesiones') mezclar(K.sesiones, datos);
-        else if (rama === 'extras')   { if (datos) write(K.extras, datos); }
-        // La bandeja de los comensales no se guarda en este celular:
-        // vive solo mientras el mesero la tiene en pantalla.
-        else if (rama === 'entrantes') entrantes = datos || {};
-    }
-
-    /** Mete un solo registro en su sitio, o lo borra si vino vacío. */
-    function guardarUno(rama, llave, dato) {
-        if (rama === 'entrantes') {
-            if (dato) entrantes[llave] = dato; else delete entrantes[llave];
-            return;
-        }
-        const clave = rama === 'comandas' ? K.comandas
-                    : rama === 'pagos'    ? K.pagos
-                    : rama === 'sesiones' ? K.sesiones : null;
-        if (!clave) return;
-
-        const todo = read(clave, {});
-        if (dato) todo[llave] = dato; else delete todo[llave];
-        write(clave, todo);
-    }
-
     /**
-     * Reparte lo que llega por el canal según de qué rama venga.
-     * Firebase manda la ruta relativa: '/' la primera vez con todo,
-     * '/comandas/abc123' cuando cambia una sola comanda.
+     * Guarda lo que llega del canal en vivo.
+     *
+     * Firebase avisa de dos formas y hay que tratarlas distinto:
+     *
+     *   ruta "/"          al conectar, con TODAS las comandas de una vez
+     *   ruta "/abc123"    despues, con la UNA que acaba de cambiar
+     *   ruta "/abc123/estado"  cuando solo cambio un campo
+     *
+     * Antes se ignoraba la ruta y las tres se metian igual. La primera
+     * salia bien y las otras dos metian los campos sueltos de la comanda
+     * en la raiz del almacen, asi que el pedido nuevo no aparecia por
+     * ningun lado: solo se veia al recargar, que es cuando vuelve a
+     * llegar la ruta "/" con todo. De ahi lo de tener que actualizar en
+     * la cocina.
      */
-    function repartir(datos, ruta) {
+    function aplicarEnRuta(clave, ruta, dato) {
         const partes = String(ruta || '/').split('/').filter(Boolean);
 
-        if (!partes.length) {
-            const todo = datos || {};
-            ['comandas', 'pagos', 'sesiones', 'extras', 'entrantes']
-                .forEach(r => guardarRama(r, todo[r]));
-        } else if (partes.length === 1) {
-            guardarRama(partes[0], datos);
-        } else {
-            guardarUno(partes[0], partes[1], datos);
+        // Llego la rama entera
+        if (!partes.length) { mezclar(clave, dato); return; }
+
+        const todo = read(clave, {});
+        let nodo = todo;
+        for (let i = 0; i < partes.length - 1; i++) {
+            if (!nodo[partes[i]] || typeof nodo[partes[i]] !== 'object') nodo[partes[i]] = {};
+            nodo = nodo[partes[i]];
         }
 
-        alCambiar();
+        const ultima = partes[partes.length - 1];
+        if (dato === null || dato === undefined) delete nodo[ultima];
+        else nodo[ultima] = dato;
+
+        write(clave, todo);
     }
 
     /**
@@ -642,7 +630,10 @@ const Servicio = (() => {
            Escuchar "servicio" entero de una vez no sirve: en Firebase el
            permiso no sube de las hijas al padre, así que pedir la rama
            completa da permiso denegado aunque cada hija sí se pueda leer. */
-        Red.escuchar('servicio/comandas', datos => { mezclar(K.comandas, datos); alCambiar(); }, true);
+        Red.escuchar('servicio/comandas', (datos, ruta) => {
+            aplicarEnRuta(K.comandas, ruta, datos);
+            alCambiar();
+        }, true);
 
         // La parrilla y la cocina no necesitan nada más que las comandas
         if (modo === 'estacion') return;
