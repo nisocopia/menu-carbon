@@ -58,42 +58,16 @@ Esas reglas hacen que:
 
 Esto es seguridad de verdad: la valida el servidor de Google, no el navegador.
 
-### 4. Crear las cuentas del local
+### 4. Crear la cuenta del gerente
 
 Barra lateral: **Seguridad → Authentication → Comenzar**.
 
 - En **Sign-in method**, activa **Correo electrónico/contraseña**
 - En la pestaña **Users**, pulsa **Agregar usuario**
+- Pon el correo del dueño y una clave
 
-Crea **una cuenta por celular**, no una compartida. Así, si alguien se va del
-local, se le borra la suya y nadie más tiene que cambiar de clave:
-
-| Celular | Correo de ejemplo | Entra a |
-|---|---|---|
-| El tuyo | `gerente@carbon.local` | `comanda.html` y `panel.html` |
-| El del asador | `asador@carbon.local` | `parrilla.html` y `comanda.html` |
-| El de la cocina | `cocina@carbon.local` | `cocina.html` |
-
-Los correos no tienen que existir de verdad; Firebase no manda ningún mensaje.
-Las claves **no van en el código**: Firebase las guarda cifradas.
-
-#### Que solo el gerente pueda tocar los precios
-
-Tal como quedan, las tres cuentas pueden trabajar el servicio, pero también
-cambiar precios y agotados. Para que eso quede solo en tus manos:
-
-1. En **Authentication → Users**, copia el **UID** de tu cuenta (la columna de
-   la derecha, una cadena larga)
-2. En **Realtime Database → Datos**, crea a mano una rama `roles` así:
-
-```
-roles
-  └── PEGA_AQUI_TU_UID : "gerente"
-```
-
-Desde que exista esa rama, las demás cuentas siguen tomando pedidos y marcando
-entregados, pero ya no pueden cambiar el menú. Si no la creas, todo funciona
-igual que antes — las reglas están escritas para no dejarte trancado afuera.
+Esa es la clave con la que entrará al panel. **No hay que ponerla en el código**:
+Firebase la guarda cifrada.
 
 ### 5. Copiar la configuración al menú
 
@@ -140,13 +114,6 @@ Si eso pasa, está listo.
 El menú sigue funcionando: muestra los platos y deja pedir, porque todo está
 guardado en el celular. Solo deja de actualizarse en vivo hasta que vuelva la
 señal, y se reconecta solo.
-
-En las pantallas de servicio (comanda, parrilla, cocina) pasa lo mismo pero con
-un aviso: puedes seguir tomando pedidos, se guardan en tu celular y se mandan
-solos cuando vuelve la señal. Mientras tanto, arriba a la derecha aparece en
-rojo **"N sin enviar"** y el aviso al mandar una comanda dice *"anotado — SIN
-RED, la cocina todavía no lo ve"*, para que sepas que tienes que ir a decirlo
-a mano. Si el rojo no se apaga, saca el cuaderno.
 
 **¿Cuánto cuesta?**
 Nada en este volumen. El plan gratuito de Firebase da 1 GB de almacenamiento y

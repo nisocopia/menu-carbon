@@ -2,73 +2,12 @@
   "rules": {
     "menu": {
       ".read": true,
-      ".write": "auth != null && (!root.child('roles').exists() || root.child('roles').child(auth.uid).val() == 'gerente')"
+      ".write": "auth != null"
     },
 
     "config": {
       ".read": true,
-      ".write": "auth != null && (!root.child('roles').exists() || root.child('roles').child(auth.uid).val() == 'gerente')"
-    },
-
-    "roles": {
-      ".read": "auth != null",
-      ".write": false
-    },
-
-    "servicio": {
-      "comandas": {
-        ".read": "auth != null",
-        ".write": "auth != null",
-        "$comanda": {
-          ".validate": "newData.hasChildren(['id', 'items', 'creado', 'estado'])",
-          "mesa":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99" },
-          "creado": { ".validate": "newData.isNumber()" },
-          "estado": { ".validate": "newData.isString() && newData.val().length < 20" },
-          "codigo": { ".validate": "newData.isString() && newData.val().length < 90" },
-          "nota":   { ".validate": "newData.isString() && newData.val().length < 300" }
-        }
-      },
-
-      "sesiones": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      },
-
-      "pagos": {
-        ".read": "auth != null",
-        ".write": "auth != null",
-        "$pago": {
-          ".validate": "newData.hasChildren(['monto', 'cuando'])",
-          "monto":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 10000" },
-          "cuando": { ".validate": "newData.isNumber()" },
-          "forma":  { ".validate": "newData.isString() && newData.val().length < 20" }
-        }
-      },
-
-      "extras": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      },
-
-      "entrantes": {
-        ".read": "auth != null",
-        "$entrante": {
-          ".write": "!data.exists() || auth != null",
-          ".validate": "newData.hasChildren(['items', 'creado'])",
-          "mesa":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99" },
-          "creado": { ".validate": "newData.isNumber()" },
-          "nota":   { ".validate": "newData.isString() && newData.val().length < 300" },
-          "items": {
-            ".validate": "newData.hasChildren()",
-            "$item": {
-              ".validate": "newData.hasChildren(['nombre', 'cantidad'])",
-              "cantidad": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 50" },
-              "precio":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000" },
-              "nombre":   { ".validate": "newData.isString() && newData.val().length < 80" }
-            }
-          }
-        }
-      }
+      ".write": "auth != null"
     },
 
     "pedidos": {
@@ -79,7 +18,7 @@
         "total":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 10000" },
         "creado": { ".validate": "newData.isNumber()" },
         "nota":   { ".validate": "newData.isString() && newData.val().length < 300" },
-        "codigo": { ".validate": "newData.isString() && newData.val().length < 90" }
+        "codigo": { ".validate": "newData.isString() && newData.val().length < 10" }
       }
     },
 
