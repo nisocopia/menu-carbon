@@ -144,8 +144,8 @@ const Servicio = (() => {
      */
     function recibiendo() {
         if (!Red.activo) return true;
-        if (Red.ramaViva('servicio/comandas')) return true;
-        return Red.desdeUltimoContacto('servicio/comandas') < 20000;
+        if (Red.ramaViva('servicio')) return true;
+        return Red.desdeUltimoContacto('servicio') < 20000;
     }
 
     // Reintento periódico y al recuperar la red del sistema
@@ -552,20 +552,69 @@ const Servicio = (() => {
         write(clave, Object.assign({}, propios, remotos));
     }
 
+    /** Dónde guarda cada rama del servicio lo que llega de la nube. */
+    function guardarRama(rama, datos) {
+        if (rama === 'comandas') mezclar(K.comandas, datos);
+        else if (rama === 'pagos')    mezclar(K.pagos, datos);
+        else if (rama === 'sesiones') mezclar(K.sesiones, datos);
+        else if (rama === 'extras')   { if (datos) write(K.extras, datos); }
+        // La bandeja de los comensales no se guarda en este celular:
+        // vive solo mientras el mesero la tiene en pantalla.
+        else if (rama === 'entrantes') entrantes = datos || {};
+    }
+
+    /** Mete un solo registro en su sitio, o lo borra si vino vacío. */
+    function guardarUno(rama, llave, dato) {
+        if (rama === 'entrantes') {
+            if (dato) entrantes[llave] = dato; else delete entrantes[llave];
+            return;
+        }
+        const clave = rama === 'comandas' ? K.comandas
+                    : rama === 'pagos'    ? K.pagos
+                    : rama === 'sesiones' ? K.sesiones : null;
+        if (!clave) return;
+
+        const todo = read(clave, {});
+        if (dato) todo[llave] = dato; else delete todo[llave];
+        write(clave, todo);
+    }
+
+    /**
+     * Reparte lo que llega por el canal según de qué rama venga.
+     * Firebase manda la ruta relativa: '/' la primera vez con todo,
+     * '/comandas/abc123' cuando cambia una sola comanda.
+     */
+    function repartir(datos, ruta) {
+        const partes = String(ruta || '/').split('/').filter(Boolean);
+
+        if (!partes.length) {
+            const todo = datos || {};
+            ['comandas', 'pagos', 'sesiones', 'extras', 'entrantes']
+                .forEach(r => guardarRama(r, todo[r]));
+        } else if (partes.length === 1) {
+            guardarRama(partes[0], datos);
+        } else {
+            guardarUno(partes[0], partes[1], datos);
+        }
+
+        alCambiar();
+    }
+
     function iniciar(cb) {
         alCambiar = cb || (() => {});
         vaciarCola();
 
         if (!Red.activo) return;
 
-        Red.escuchar('servicio/comandas', datos => { mezclar(K.comandas, datos); alCambiar(); }, true);
-        Red.escuchar('servicio/pagos',    datos => { mezclar(K.pagos, datos);    alCambiar(); }, true);
-        Red.escuchar('servicio/sesiones', datos => { mezclar(K.sesiones, datos); alCambiar(); }, true);
-        Red.escuchar('servicio/extras',   datos => { if (datos) write(K.extras, datos); }, true);
+        /* UN SOLO CANAL PARA TODO EL SERVICIO.
 
-        // La bandeja de lo que mandan los comensales no se guarda en este
-        // celular: vive solo mientras el mesero la tiene en pantalla.
-        Red.escuchar('servicio/entrantes', datos => { entrantes = datos || {}; alCambiar(); }, true);
+           Antes se abría uno por rama: cinco conexiones permanentes, más
+           la del menú. El navegador solo permite unas seis por servidor,
+           así que no quedaba ninguna libre para ENVIAR: el pedido se
+           quedaba esperando turno hasta agotar el plazo. Recargar la
+           página lo "arreglaba" porque cerraba las conexiones y liberaba
+           un hueco — de ahí lo de tener que actualizar tres veces. */
+        Red.escuchar('servicio', repartir, true);
     }
 
     /* ============================================================
