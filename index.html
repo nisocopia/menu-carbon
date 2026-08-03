@@ -39,9 +39,9 @@
     <link rel="preload" href="fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/poppins-700.woff2" as="font" type="font/woff2" crossorigin>
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608011633">
-    <link rel="stylesheet" href="css/iconos.css?v=202608011633">
-    <link rel="stylesheet" href="css/style.css?v=202608011633">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608031224">
+    <link rel="stylesheet" href="css/iconos.css?v=202608031224">
+    <link rel="stylesheet" href="css/style.css?v=202608031224">
 </head>
 
 <body>
@@ -117,6 +117,19 @@
                     <i class="fas fa-bell-concierge"></i> Listo, llamar al mesero
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- ¿EN QUÉ MESA ESTÁS?
+         El QR de la mesa manda al menú pero no lleva el número dentro,
+         así que se pregunta aquí. Es un solo toque y evita el error que
+         más cuesta: mandar la comida a la mesa equivocada. -->
+    <div class="mesa-overlay" id="mesa-modal">
+        <div class="mesa-panel">
+            <h2><i class="fas fa-location-dot"></i> ¿En qué mesa estás?</h2>
+            <p>Para que tu pedido llegue a tu mesa y no a otra.</p>
+            <div class="mesa-botones" id="mesa-botones"></div>
+            <button class="mesa-cancelar" id="mesa-cancelar">Volver</button>
         </div>
     </div>
 
@@ -231,12 +244,13 @@
         </div>
     </div>
 
-    <script src="js/menu-data.js?v=202608011633"></script>
-    <script src="js/sync.js?v=202608011633"></script>
-    <script src="js/store.js?v=202608011633"></script>
-    <script src="js/app.js?v=202608011633"></script>
-    <script src="js/games.js?v=202608011633"></script>
-    <script src="js/tracker.js?v=202608011633"></script>
+    <script src="js/menu-data.js?v=202608031224"></script>
+    <script src="js/sync.js?v=202608031224"></script>
+    <script src="js/store.js?v=202608031224"></script>
+    <script src="js/servicio.js?v=202608031224"></script>
+    <script src="js/app.js?v=202608031224"></script>
+    <script src="js/games.js?v=202608031224"></script>
+    <script src="js/tracker.js?v=202608031224"></script>
 
 </body>
 

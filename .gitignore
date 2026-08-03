@@ -1,0 +1,9 @@
+# Datos del local que NO deben subirse al repositorio.
+# El sitio se publica en GitHub Pages y el repositorio es público:
+# los correos y los UID de las cuentas se quedan en esta computadora.
+CUENTAS.md
+
+# Basura del sistema
+Thumbs.db
+.DS_Store
+desktop.ini

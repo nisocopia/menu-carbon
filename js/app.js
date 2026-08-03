@@ -194,7 +194,7 @@ function actualizarBarra() {
 function sugerencias() {
     // Acompañantes que el cliente todavía no pidió (esto es lo que sube el ticket)
     const yaPedido = new Set(carrito.map(i => i.id));
-    return Store.getMenu()
+    return Store.getMenuPublico()
         .filter(c => c.sugerible)
         .flatMap(c => c.platos)
         .filter(p => !p.agotado && tienePrecio(p) && !yaPedido.has(p.id))
@@ -256,15 +256,54 @@ function cerrarCarrito() {
 
 let sugerenciaAceptada = false;
 
+/**
+ * Antes de mandar nada hay que saber la mesa. El QR pega en la mesa
+ * pero manda al menú sin decir cuál es, así que se pregunta con un
+ * toque. Sin esto la comida puede terminar en la mesa equivocada.
+ */
 function confirmarPedido() {
     if (!carrito.length) return;
 
+    const total = Number(CFG.mesas) || 11;
+    document.getElementById('mesa-botones').innerHTML =
+        Array.from({ length: total }, (_, i) => i + 1)
+             .map(n => `<button class="mesa-btn" data-mesa="${n}">${n}</button>`).join('');
+
+    document.getElementById('mesa-modal').classList.add('open');
+}
+
+function cerrarMesaModal() {
+    document.getElementById('mesa-modal').classList.remove('open');
+}
+
+function enviarPedido(mesa) {
+    if (!carrito.length) return;
+    cerrarMesaModal();
+
+    const nota = document.getElementById('pedido-nota').value.trim();
+    const items = carrito.map(i => ({ ...i, platoId: i.id }));
+
+    /* El pedido no entra directo a la cocina: cae en la bandeja del
+       mesero, que lo confirma de un toque. Así nadie puede meterle
+       platos falsos a la parrilla desde el celular. */
+    if (typeof Servicio !== 'undefined') {
+        Servicio.enviarEntrante({ mesa, items, nota });
+    }
+
+    // Se guarda también aquí para el aviso de progreso y las estadísticas
     const pedido = Store.guardarPedido({
         items: carrito.map(i => ({ ...i })),
         total: totalCarrito(),
-        nota: document.getElementById('pedido-nota').value.trim(),
+        mesa,
+        nota,
         aceptoSugerencia: sugerenciaAceptada
     });
+
+    // El código se arma con lo que el comensal ya sabe: su mesa y sus
+    // platos. "M3 · 2PO 1CA" se lee en voz alta tal cual.
+    pedido.codigo = (typeof Servicio !== 'undefined')
+        ? Servicio.codigoDe({ mesa, tanda: 0, items })
+        : pedido.codigo;
 
     carrito = [];
     Store.limpiarCarrito();
@@ -284,8 +323,8 @@ function mostrarComanda(pedido) {
     cont.innerHTML = `
         <div class="comanda-top">
             <div>
-                <div class="comanda-etiqueta">Pedido</div>
-                <div class="comanda-mesa">#${pedido.codigo}</div>
+                <div class="comanda-etiqueta">${pedido.mesa ? 'Mesa ' + pedido.mesa : 'Pedido'}</div>
+                <div class="comanda-mesa">${pedido.codigo}</div>
             </div>
             <div class="comanda-codigo">${hora}</div>
         </div>
@@ -390,6 +429,14 @@ function conectarEventos() {
             renderCarrito();
             return;
         }
+
+        const mesa = e.target.closest('[data-mesa]');
+        if (mesa) { enviarPedido(Number(mesa.dataset.mesa)); return; }
+    });
+
+    document.getElementById('mesa-cancelar').addEventListener('click', cerrarMesaModal);
+    document.getElementById('mesa-modal').addEventListener('click', e => {
+        if (e.target.id === 'mesa-modal') cerrarMesaModal();
     });
 
     document.getElementById('cart-bar').addEventListener('click', abrirCarrito);
@@ -407,7 +454,7 @@ function conectarEventos() {
  * el carrito. Se usa cuando el gerente cambia algo desde el panel.
  */
 function redibujarMenu() {
-    const menu = Store.getMenu();
+    const menu = Store.getMenuPublico();
     CFG = Store.getConfig();
 
     renderInfoLocal();
@@ -456,7 +503,7 @@ function escucharCambiosDelLocal() {
 
 function iniciarApp() {
     CFG = Store.getConfig();
-    const menu = Store.getMenu();
+    const menu = Store.getMenuPublico();
 
     renderInfoLocal();
     renderNav(menu);

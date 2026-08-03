@@ -34,7 +34,7 @@ function startGame(game) {
 
 // ============ MEMORIA ============
 // Las fotos salen del menú real: al cambiar de restaurante no se toca nada aquí.
-const memoryImages = Store.getPlatos()
+const memoryImages = Store.getPlatosPublicos()
     .filter(p => p.img)
     .slice(0, 6)
     .map(p => ({ src: p.img, name: p.nombre }));
@@ -122,7 +122,7 @@ function flipMemoryCard(index, el, card) {
 
 // ============ RULETA ============
 const ruletaItems = [
-    ...Store.getPlatos()
+    ...Store.getPlatosPublicos()
         .filter(p => !p.agotado && p.catId !== 'bebidas' && p.catId !== 'porciones')
         .slice(0, 8)
         .map(p => ({ name: p.nombre }))
@@ -224,7 +224,7 @@ function spinRuleta() {
 // ============ ROMPECABEZAS ============
 const PSIZE = 3;
 const TSIZE = 95;
-const PUZZLE_IMG = (Store.getPlatos().find(p => p.img) || {}).img || '';
+const PUZZLE_IMG = (Store.getPlatosPublicos().find(p => p.img) || {}).img || '';
 
 let puzzleState = [];
 let puzzleMoves = 0;
