@@ -16,9 +16,31 @@
    ============================================================ */
 
 let ESTACION = 'cocina';
-let sonido   = true;
-let vistas   = new Set();     // para no volver a sonar por lo mismo
-let abiertoEn = Date.now();   // lo que ya estaba al abrir no suena
+
+/* ------------------------------------------------------------
+   QUÉ SE HA AVISADO Y QUÉ NO
+
+   Son DOS listas y no una, y esa es la corrección más importante de
+   todas. Antes había una sola —"las que ya vi"— y se rellenaba justo
+   después de mandar el pitido, mirara o no si el pitido había sonado.
+   Como el navegador puede negarse a sonar sin avisar de nada, un
+   pedido se daba por anunciado sin que nadie lo hubiera oído, y ya no
+   volvía a intentarse nunca. Cualquier tropiezo de un segundo se
+   convertía en un pedido perdido para toda la noche.
+
+   Ahora lo pendiente sigue pendiente hasta que de verdad suene.
+
+   La marca guardada es la hora de la última corrección: si el mesero
+   cambia un pollo por una chuleta, la marca cambia y vuelve a sonar.
+   Un pedido corregido es un aviso nuevo, no el mismo de antes.       */
+
+let avisadas = new Map();    // id -> marca ya anunciada
+let porAvisar = new Map();   // id -> marca esperando sonar
+
+/** Con qué marca se conoce un pedido. Cambia al corregirlo. */
+const marcaDe = c => c.editado || 0;
+
+const TITULO = document.title;
 
 /* ¿Esta cuenta manda en esta pantalla o solo la está mirando?
    La cocina puede ver cómo va la parrilla y la parrilla cómo va la
@@ -110,64 +132,306 @@ async function prepararAudio() {
         if (audio.state === 'suspended') await audio.resume();
         armarSalida();
     } catch (e) { /* el navegador no lo permite todavía */ }
+    prepararRespaldo();
     pintarAvisoSonido();
     return audioListo();
 }
 
-let sonandoHasta = 0;
+/**
+ * Un toque en la pantalla. Es la única ocasión en que el navegador deja
+ * abrir el audio, así que también es el momento de saldar lo que se
+ * quedó sin sonar mientras estaba cerrado.
+ *
+ * Se reintenta SIEMPRE que haya algo esperando, sin mirar antes si el
+ * contexto se abrió: hay dos vías para sonar y la segunda puede
+ * funcionar cuando la primera no. Quien sabe si se pudo o no es el que
+ * lo intenta, no el que abre la puerta.
+ */
+async function desbloquear() {
+    const listo = await prepararAudio();
+    if (porAvisar.size) await intentarAvisar();
+    return listo;
+}
 
-async function pitar() {
-    if (!sonido) return;
+/* ------------------------------------------------------------
+   SEGUNDA VÍA POR SI LA PRIMERA NO ABRE
 
-    /* Un aviso a la vez. Si entran dos pedidos casi juntos, encadenarlos
-       en vez de superponerlos: sumados se pasan de rango y distorsionan,
-       y ademas dos alarmas encima suenan a ruido, no a aviso. */
-    if (Date.now() < sonandoHasta) return;
-    sonandoHasta = Date.now() + 1100;
+   El AudioContext es lo que mejor suena, pero el navegador lo puede
+   dejar dormido y desde el código no hay forma de despertarlo. Un
+   elemento <audio> se bloquea por reglas parecidas, pero no siempre a
+   la vez: en Android el contexto se duerme al cambiar de aplicación y
+   el elemento, una vez soltado, sigue sonando.
 
-    // Antes se llamaba a resume() sin esperarlo y las notas se programaban
-    // sobre un audio todavía dormido: no sonaba nada y no fallaba nada.
-    if (!audioListo()) await prepararAudio();
-    if (!audioListo()) return;
+   Tener las dos vías es la diferencia entre "no sonó" y "sonó por la
+   otra". El archivo se fabrica aquí mismo, igual que el tono, porque
+   la pantalla tiene que sonar aunque no haya red para descargar nada.
+   ------------------------------------------------------------ */
 
+let respaldo = null;
+
+function fabricarWav() {
+    const HZ = 44100;
+    const n = Math.floor(HZ * 1.05);
+    const buf = new ArrayBuffer(44 + n * 2);
+    const v = new DataView(buf);
+    const texto = (pos, s) => { for (let i = 0; i < s.length; i++) v.setUint8(pos + i, s.charCodeAt(i)); };
+
+    texto(0, 'RIFF');      v.setUint32(4, 36 + n * 2, true);
+    texto(8, 'WAVEfmt ');  v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true);         // PCM sin comprimir
+    v.setUint16(22, 1, true);         // mono
+    v.setUint32(24, HZ, true);
+    v.setUint32(28, HZ * 2, true);
+    v.setUint16(32, 2, true);
+    v.setUint16(34, 16, true);
+    texto(36, 'data');     v.setUint32(40, n * 2, true);
+
+    for (let i = 0; i < n; i++) {
+        const t = i / HZ;
+        const nota = PATRON.find(p => t >= p.t && t < p.t + p.d);
+        let m = 0;
+        if (nota) {
+            /* Los bordes se suben y se bajan en unos milisegundos. Cortar
+               una onda cuadrada en seco mete un chasquido que se oye más
+               que la propia nota. */
+            const dentro = t - nota.t;
+            const sobre = Math.min(1, dentro / 0.006, (nota.d - dentro) / 0.006);
+            m = (Math.sin(2 * Math.PI * nota.f * t) >= 0 ? 1 : -1) * VOLUMEN * sobre;
+        }
+        v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, m)) * 32767, true);
+    }
+
+    return new Blob([buf], { type: 'audio/wav' });
+}
+
+function prepararRespaldo() {
+    if (respaldo) return;
     try {
-        const ahora = audio.currentTime;
+        respaldo = new Audio(URL.createObjectURL(fabricarWav()));
+        respaldo.preload = 'auto';
+    } catch (e) { respaldo = null; }
+}
 
-        PATRON.forEach(nota => {
-            const osc = audio.createOscillator();
-            const vol = audio.createGain();
+function sonarRespaldo() {
+    if (!respaldo) return Promise.resolve(false);
+    try {
+        respaldo.currentTime = 0;
+        const p = respaldo.play();
+        return (p && p.then) ? p.then(() => true, () => false) : Promise.resolve(true);
+    } catch (e) { return Promise.resolve(false); }
+}
 
-            /* Onda cuadrada y no senoidal: tiene armónicos, y son los
-               armónicos los que atraviesan el ruido de una cocina. A igual
-               volumen se oye mucho más que un pitido suave. */
-            osc.type = 'square';
-            osc.frequency.value = nota.f;
+/* Si alguna vez se consiguió sonar, el navegador ya nos deja y el cartel
+   de "toca para activar" sobra — aunque el contexto se haya vuelto a
+   dormir por un cambio de aplicación. */
+let yaSono = false;
+const puedeSonar = () => audioListo() || yaSono;
 
-            const desde = ahora + nota.t;
-            vol.gain.setValueAtTime(0.0001, desde);
-            vol.gain.exponentialRampToValueAtTime(VOLUMEN, desde + 0.008);
-            vol.gain.setValueAtTime(VOLUMEN, desde + nota.d - 0.02);
-            vol.gain.exponentialRampToValueAtTime(0.0001, desde + nota.d);
+/**
+ * Suelta el tono por donde se pueda. Devuelve si de verdad sonó — no si
+ * se intentó. Esa diferencia es la que decide si el pedido se da por
+ * anunciado o sigue esperando.
+ */
+async function sonar() {
+    if (!audioListo()) await prepararAudio();
 
-            osc.connect(vol).connect(salida || audio.destination);
-            osc.start(desde);
-            osc.stop(desde + nota.d + 0.02);
-        });
-    } catch (e) { /* si el navegador no deja sonar, queda el aviso visual */ }
+    if (audioListo()) {
+        try {
+            /* Un pelín de margen y no `currentTime` a secas: programar una
+               nota para el instante exacto en que se pide deja al navegador
+               sin tiempo de prepararla y el primer golpe sale recortado. */
+            const ahora = audio.currentTime + 0.05;
 
-    // Si el celular está en el bolsillo o boca abajo, la vibración avisa igual
+            PATRON.forEach(nota => {
+                const osc = audio.createOscillator();
+                const vol = audio.createGain();
+
+                /* Onda cuadrada y no senoidal: tiene armónicos, y son los
+                   armónicos los que atraviesan el ruido de una cocina. A igual
+                   volumen se oye mucho más que un pitido suave. */
+                osc.type = 'square';
+                osc.frequency.value = nota.f;
+
+                const desde = ahora + nota.t;
+                vol.gain.setValueAtTime(0.0001, desde);
+                vol.gain.exponentialRampToValueAtTime(VOLUMEN, desde + 0.008);
+                vol.gain.setValueAtTime(VOLUMEN, desde + nota.d - 0.02);
+                vol.gain.exponentialRampToValueAtTime(0.0001, desde + nota.d);
+
+                osc.connect(vol).connect(salida || audio.destination);
+                osc.start(desde);
+                osc.stop(desde + nota.d + 0.02);
+            });
+            yaSono = true;
+            return true;
+        } catch (e) { /* se prueba por la otra vía */ }
+    }
+
+    const sono = await sonarRespaldo();
+    if (sono) yaSono = true;
+    return sono;
+}
+
+/** Si el celular está en el bolsillo o boca abajo, la vibración avisa igual. */
+function vibrar() {
     try { if (navigator.vibrate) navigator.vibrate([220, 90, 220, 90, 320]); } catch (e) {}
+}
+
+/* ------------------------------------------------------------
+   DAR EL AVISO
+
+   Las tres vías —ver, vibrar y sonar— van POR SEPARADO, y antes iban
+   una detrás de otra. Como la vibración estaba después del sonido, en
+   cuanto el navegador no dejaba sonar se saltaba también la vibración:
+   la pantalla se quedaba muda, quieta y sin decir nada. Ahora lo que se
+   puede hacer se hace, y lo que no se pudo queda pendiente.
+   ------------------------------------------------------------ */
+
+const PAUSA = 1200;          // entre una alarma y la siguiente
+
+let sonandoHasta = 0;
+let avisando = false;
+let reintento = null;
+
+function volverAIntentar(dentroDe) {
+    clearTimeout(reintento);
+    reintento = setTimeout(intentarAvisar, Math.max(300, dentroDe));
+}
+
+async function intentarAvisar() {
+    if (!porAvisar.size) return;
+
+    /* Lo que ningún permiso del navegador puede apagar va primero y
+       siempre, incluso si ya se está anunciando otra cosa: el borde
+       tiene que encenderse en el momento, no cuando acabe el tono. */
+    pintarPendiente();
+
+    if (avisando) return;
+    vibrar();
+
+    /* Dos alarmas encima suenan a ruido, no a aviso, así que hay una
+       pausa entre una y otra. Pero esperar no es descartar: antes aquí
+       había un `return` y el segundo pedido de una tanda doble no sonaba
+       nunca. Lo pendiente sigue en la lista y se reintenta al terminar. */
+    if (Date.now() < sonandoHasta) { volverAIntentar(sonandoHasta - Date.now()); return; }
+
+    /* Se aparta ANTES de sonar lo que este pitido va a cubrir.
+
+       Sonar tarda, y en ese rato puede entrar otro pedido. Si al
+       terminar se diera por avisado todo lo que hay en la lista, el
+       que entró a mitad quedaría anunciado por un pitido que sonó
+       antes de que existiera — y volveríamos a perder pedidos
+       exactamente igual que antes, solo que por otra puerta. */
+    const anunciando = [...porAvisar];
+
+    avisando = true;
+    let sono = false;
+    try { sono = await sonar(); } finally { avisando = false; }
+
+    /* No sonó: casi siempre es que todavía nadie ha tocado la pantalla.
+       No se da nada por avisado y se vuelve a probar solo — en cuanto
+       alguien la toque, sonará lo que quedó esperando. */
+    if (!sono) { volverAIntentar(3000); return; }
+
+    sonandoHasta = Date.now() + PAUSA;
+
+    anunciando.forEach(([id, marca]) => {
+        // Si lo corrigieron mientras sonaba, la marca ya no es la misma
+        // y sigue pendiente: esa corrección todavía no la ha oído nadie.
+        if (porAvisar.get(id) === marca) {
+            avisadas.set(id, marca);
+            porAvisar.delete(id);
+        }
+    });
+
+    pintarPendiente();
+    if (porAvisar.size) volverAIntentar(PAUSA);
+}
+
+/**
+ * Lo que llegó y todavía no se ha anunciado.
+ *
+ * Se compara contra lo ya avisado en vez de mirar el reloj. Antes había
+ * un plazo —"lo que llegue en los primeros cuatro segundos no suena"—
+ * para que al abrir la pantalla no sonara todo lo que ya estaba; el
+ * problema es que un pedido que entrara justo en esos cuatro segundos
+ * desaparecía sin dejar rastro.
+ */
+function revisarNovedades() {
+    Servicio.comandasDe(ESTACION).forEach(c => {
+        const marca = marcaDe(c);
+        if (avisadas.get(c.id) !== marca) porAvisar.set(c.id, marca);
+    });
+    return porAvisar.size ? intentarAvisar() : Promise.resolve();
+}
+
+/**
+ * El aviso que no depende de nada.
+ *
+ * Mientras quede algo sin anunciar, la pantalla lo dice y no se calla.
+ * Es la única vía que el navegador no puede bloquear, así que es la que
+ * tiene que sobrevivir cuando fallan las otras dos.
+ */
+function pintarPendiente() {
+    const n = porAvisar.size;
+    document.body.classList.toggle('hay-nuevo', n > 0);
+    document.title = n ? `(${n}) ${TITULO}` : TITULO;
+    pintarAvisoSonido();
 }
 
 /** Mientras el sonido esté bloqueado hay que decirlo, no callarlo. */
 function pintarAvisoSonido() {
     const el = $('sin-sonido');
-    if (el) el.hidden = audioListo();
+    if (!el) return;
+
+    const n = porAvisar.size;
+    const puede = puedeSonar();
+
+    // El cartel solo estorba cuando no hace falta
+    el.hidden = puede && !n;
+    if (el.hidden) return;
+
+    const cuantos = `${n} pedido${n > 1 ? 's' : ''} nuevo${n > 1 ? 's' : ''}`;
+
+    /* "No suena" es una molestia. "No suena y tienes tres pedidos
+       esperando" es otra cosa, y hay que decirlo con el número. */
+    el.innerHTML = !puede
+        ? `<i class="fas fa-volume-xmark"></i> ${n
+              ? `${cuantos} — el navegador no deja sonar. TOCA AQUÍ`
+              : 'Toca aquí para activar el aviso sonoro'}`
+        : `<i class="fas fa-bell"></i> ${cuantos}`;
 }
 
-/** Tocar el cartel amarillo activa el sonido y lo hace sonar de muestra. */
-function activarSonido() {
-    prepararAudio().then(listo => { if (listo) pitar(); });
+/** Tocar el cartel activa el sonido y suelta lo que estuviera esperando. */
+async function activarSonido() {
+    if (porAvisar.size) { await desbloquear(); return; }
+
+    await prepararAudio();
+    if (await sonar()) toast('Aviso activado');
+    else toast('El navegador todavía no deja sonar. Toca la pantalla otra vez.');
+}
+
+/* ------------------------------------------------------------
+   QUE LA PANTALLA NO SE DUERMA
+
+   Una tablet apoyada en la repisa apaga la pantalla al minuto, y con
+   la pantalla apagada no hay aviso que valga: el navegador duerme el
+   audio y congela los relojes. Se le pide al sistema que la mantenga
+   encendida mientras esta pantalla esté a la vista.
+
+   El sistema suelta el permiso solo al cambiar de aplicación, así que
+   se vuelve a pedir al regresar. Si el navegador no sabe hacer esto,
+   no pasa nada: todo sigue funcionando igual que antes.
+   ------------------------------------------------------------ */
+
+let candado = null;
+
+async function mantenerPantallaViva() {
+    if (!navigator.wakeLock || document.hidden || candado) return;
+    try {
+        candado = await navigator.wakeLock.request('screen');
+        candado.addEventListener('release', () => { candado = null; });
+    } catch (e) { candado = null; }
 }
 
 /* ============================================================
@@ -214,14 +478,35 @@ function abrirApp() {
     PUEDE = permiso === 'todo';
 
     $('lock').hidden = true;
-    abiertoEn = Date.now();
+
+    /* Lo que ya estaba aquí al abrir no es nuevo: es lo de antes, y se
+       da por avisado sin sonar. Tiene que hacerse ANTES de ponerse a
+       escuchar, o el primer envío de la nube llegaría como si fueran
+       todos pedidos recién entrados. */
+    Servicio.comandasDe(ESTACION).forEach(c => avisadas.set(c.id, marcaDe(c)));
+
     // Si se entro tocando el boton, este es el momento en que el
     // navegador nos deja empezar a sonar
-    prepararAudio();
+    desbloquear();
+    mantenerPantallaViva();
     ajustarSegunPermiso();
     Servicio.limpiarViejo(2);
-    Servicio.iniciar(pintar, 'estacion');
+    Servicio.iniciar(alLlegarDatos, 'estacion');
     pintar();
+}
+
+/**
+ * Llega algo de la nube.
+ *
+ * Primero el aviso y después el dibujo, no al revés. El aviso vivía
+ * dentro de `pintar()` y a mitad de camino, así que cualquier fallo
+ * dibujando el tablero se llevaba la alarma por delante sin que nadie
+ * se enterara. Avisar no puede depender de que el dibujo salga bien.
+ */
+function alLlegarDatos() {
+    const aviso = revisarNovedades();
+    pintar();
+    return aviso;
 }
 
 /**
@@ -360,17 +645,6 @@ function pintar() {
         : Servicio.comandasDe('cocina', 'entregado')
                   .sort((a, b) => (b.entregado || 0) - (a.entregado || 0))
                   .slice(0, 20);
-
-    /* Suena lo que no habiamos visto, salvo lo que ya estaba al abrir
-       la pantalla.
-
-       Antes la condicion era "y ya habiamos visto algo", asi que si la
-       pantalla abria con el tablero VACIO el primer pedido no sonaba
-       nunca. De ahi que a veces sonara y a veces no. Ahora se mira el
-       reloj: lo que llega pasados unos segundos de abrir, suena. */
-    const nuevas = todas.filter(c => !vistas.has(c.id));
-    if (nuevas.length && Date.now() - abiertoEn > 4000) pitar();
-    todas.forEach(c => vistas.add(c.id));
 
     pintarArroz();
 
@@ -760,7 +1034,7 @@ function iniciarEstacion(cual) {
             // Sirve para dos cosas: desbloquear el audio y comprobar que
             // se oye por encima del ruido, sin esperar a que entre un pedido
             await prepararAudio();
-            if (audioListo()) { pitar(); toast('Así va a sonar'); }
+            if (await sonar()) toast('Así va a sonar');
             else toast('El navegador todavía no deja sonar. Toca la pantalla otra vez.');
         });
 
@@ -804,27 +1078,32 @@ function iniciarEstacion(cual) {
             }
         });
 
-        /* Cualquier toque sirve para desbloquear el sonido. El celular
-           tambien duerme el audio al cambiar de app, asi que se vuelve a
-           intentar al regresar a la pantalla. */
+        /* Cualquier toque sirve para desbloquear el sonido, y al
+           desbloquearlo suena lo que se hubiera quedado esperando. El
+           celular tambien duerme el audio al cambiar de app, asi que se
+           vuelve a intentar al regresar a la pantalla. */
         ['pointerdown', 'touchstart', 'keydown'].forEach(ev =>
-            window.addEventListener(ev, prepararAudio, { passive: true }));
+            window.addEventListener(ev, desbloquear, { passive: true }));
 
         const cartel = $('sin-sonido');
         if (cartel) cartel.addEventListener('click', activarSonido);
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) prepararAudio();
+            if (document.hidden) return;
+            desbloquear();
+            mantenerPantallaViva();
         });
 
-        // El reloj de cada tarjeta tiene que avanzar aunque no entre nada
-        setInterval(pintar, 20000);
+        /* El reloj de cada tarjeta tiene que avanzar aunque no entre nada.
+           De paso se revisa si quedó algo sin anunciar: si el canal se
+           cayó y volvió sin avisar a nadie, esta es la red de seguridad. */
+        setInterval(alLlegarDatos, 20000);
 
         /* La conexión se vigila aparte y más seguido: si se cae, hay que
            decirlo en segundos, no esperar al siguiente repintado. */
         let recibiaAntes = true;
         setInterval(() => {
             const ahora = Servicio.recibiendo();
-            if (ahora !== recibiaAntes) { recibiaAntes = ahora; pintar(); }
+            if (ahora !== recibiaAntes) { recibiaAntes = ahora; alLlegarDatos(); }
             else pintarRed();
         }, 3000);
 

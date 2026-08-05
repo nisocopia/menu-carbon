@@ -1457,6 +1457,40 @@ body.desconectado .srv-top {
     background: #3a1414;
 }
 
+/* ============================================================
+   HAY ALGO SIN ANUNCIAR
+
+   El borde late mientras quede un pedido que no se ha podido avisar.
+   Es la unica via que ningun permiso del navegador puede apagar: si el
+   celular no deja sonar ni vibrar, esto se sigue viendo desde la
+   puerta. Se apaga solo en cuanto el aviso suena de verdad.
+
+   Va en un ::after y no en el box-shadow del body para que pueda
+   convivir con el borde rojo del canal caido: las dos cosas pueden ser
+   ciertas a la vez y las dos hay que decirlas.
+   ============================================================ */
+
+body.hay-nuevo::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    pointer-events: none;      /* es un aviso, no una capa que estorbe */
+    border: 6px solid #ffd24a;
+    animation: latido-nuevo 0.9s ease-in-out infinite;
+}
+
+@keyframes latido-nuevo {
+    0%, 100% { opacity: 0.15; }
+    50%      { opacity: 1; }
+}
+
+/* Con el movimiento reducido el borde se queda encendido y quieto: el
+   aviso sigue estando, solo deja de parpadear. */
+@media (prefers-reduced-motion: reduce) {
+    body.hay-nuevo::after { animation: none; opacity: 1; }
+}
+
 .vacio.sin-senal i { color: #f44336; }
 .vacio.sin-senal p { color: #ff8a8a; }
 
