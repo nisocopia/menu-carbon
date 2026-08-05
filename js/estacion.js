@@ -371,6 +371,8 @@ function pintar() {
     if (nuevas.length && Date.now() - abiertoEn > 4000) pitar();
     todas.forEach(c => vistas.add(c.id));
 
+    pintarArroz();
+
     const tablero = $('tablero');
 
     if (!activas.length && !diferidas.length) {
@@ -406,6 +408,31 @@ function pintar() {
         // Lo ya resuelto no lleva número: ahí el orden ya no importa
         $('sacadas').innerHTML = plegadas.map(c => tarjeta(c, 0)).join('');
     }
+}
+
+/**
+ * El arroz que hay pedido y todavía no ha salido.
+ *
+ * El problema no era contar, era enterarse tarde: las proteínas salían
+ * y el arroz seguía crudo. Nadie sabe cuánto rinde una olla, así que
+ * decir "quedan tres porciones" sería inventárselo. Lo que sí es un
+ * hecho es cuánto está pedido y sin servir, y ese número sube en el
+ * momento exacto en que entra el pedido grande — que es cuando hay que
+ * poner la olla, no cuando ya falta.
+ *
+ * Solo en la cocina: la parrilla no sirve arroz.
+ */
+function pintarArroz() {
+    const el = $('arroz');
+    if (!el) return;
+
+    const n = Servicio.arrozPendiente();
+    el.hidden = !n;
+    if (!n) return;
+
+    el.innerHTML = `<i class="fas fa-bowl-rice"></i>
+        <b>${n}</b> ${n === 1 ? 'porción de arroz pedida' : 'porciones de arroz pedidas'}
+        <span>sin servir todavía</span>`;
 }
 
 /* ---------- Una tarjeta ----------

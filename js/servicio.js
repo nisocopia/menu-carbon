@@ -326,6 +326,33 @@ const Servicio = (() => {
         return (cat && cat.guarnicion) || [];
     }
 
+    /* ------------------------------------------------------------
+       CUÁNTO ARROZ HAY QUE TENER LISTO
+
+       El problema de siempre: las proteínas salen y el arroz sigue
+       crudo. Nadie sabe cuánto rinde una olla, así que no se puede
+       avisar "quedan tres porciones" sin inventárselo.
+
+       Lo que sí es un hecho: cuántas porciones están pedidas y todavía
+       no han salido. Eso no hay que estimarlo, se cuenta. Sube cuando
+       entra un pedido grande —que es justo cuando hay que poner la
+       olla— y baja cuando la cocina marca entregado.
+
+       Se cuenta por la guarnición que ya declara cada categoría en
+       menu-data.js, así que un plato pedido "sin arroz" no cuenta, y el
+       arroz suelto de porciones sí.
+       ------------------------------------------------------------ */
+
+    const llevaArroz = it =>
+        guarnicionDe(it.platoId).includes('arroz') && !(it.sin || []).includes('arroz');
+
+    function arrozPendiente() {
+        return Object.values(getComandas())
+            .filter(c => c.estado === 'nuevo')
+            .reduce((total, c) => total + (c.items || [])
+                .reduce((n, it) => n + (llevaArroz(it) ? it.cantidad : 0), 0), 0);
+    }
+
     /** Nombre corto para el código: "Camarón al Ajillo" → "Camarón Ajillo". */
     function nombreCorto(nombre) {
         return String(nombre || '').replace(/\s+(al|a la|de|con)\s+/gi, ' ');
@@ -1394,7 +1421,7 @@ const Servicio = (() => {
         // consultar
         getComandas, getSesiones, getPagos, comandasDe, comandasDeSesion, comandasDeMesa,
         sesionDeMesa, sesionesAbiertasDeMesa, cuentaDeSesion, cuentaDeMesa, pagosDeSesion,
-        estacionDe, guarnicionDe, categoriaDe, codigoDe, etiquetaDe,
+        estacionDe, guarnicionDe, arrozPendiente, categoriaDe, codigoDe, etiquetaDe,
         cubiertosDe, nombreCorto, resumirItems,
         // una cuenta: una mesa o un pedido para llevar
         sesionesDe, tandasDe, cuentaDe, nombreDeCuenta, llevarAbiertos, llevarPorNombre,

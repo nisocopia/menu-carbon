@@ -1008,6 +1008,70 @@ function probarTableroParrilla() {
         ['sin arroz', 'sin plátano']);
 }
 
+/* ============================================================
+   EL ARROZ PEDIDO Y SIN SERVIR
+
+   Las proteínas salían y el arroz seguía crudo. Nadie sabe cuánto
+   rinde una olla, así que "quedan tres porciones" sería inventárselo;
+   lo que sí es un hecho es cuánto está pedido y sin servir.
+
+   Lo delicado es contarlo bien: un plato pedido SIN arroz no gasta
+   olla, y una porción suelta sí. Si el número miente una vez, deja de
+   mirarse.
+   ============================================================ */
+
+function probarArrozPendiente() {
+    console.log('\n--- Cuánto arroz hay pedido y sin servir ---');
+    nubeLimpia();
+    const { corre } = celular('cocina');
+
+    const pedir = (nombre, comanda) =>
+        corre(`(() => {
+            const t = Servicio.getComandas();
+            t['${nombre}'] = ${JSON.stringify(comanda)};
+            localStorage.setItem('srv_comandas', JSON.stringify(t));
+        })()`);
+
+    const arroz = () => corre(`Servicio.arrozPendiente()`);
+
+    comprobar('sin pedidos, no hay arroz que contar', arroz(), 0);
+
+    // Los platos fuertes llevan arroz por la guarnición de su categoría
+    pedir('n1', { id: 'n1', sesion: 's1', mesa: 3, creado: 1, estado: 'nuevo', items: [
+        { uid: 'a', platoId: 'p5', nombre: 'Pollo Asado', cantidad: 2, precio: 3.5, estacion: 'asador' },
+        { uid: 'b', platoId: 'p2', nombre: 'Chuleta',     cantidad: 1, precio: 4,   estacion: 'asador' }
+    ]});
+    comprobar('tres platos fuertes son tres arroces', arroz(), 3);
+
+    // Lo que se pide sin arroz no gasta olla
+    pedir('n2', { id: 'n2', sesion: 's2', mesa: 4, creado: 2, estado: 'nuevo', items: [
+        { uid: 'c', platoId: 'p2', nombre: 'Chuleta', cantidad: 2, precio: 4,
+          estacion: 'asador', sin: ['arroz'] }
+    ]});
+    comprobar('dos chuletas sin arroz no suman', arroz(), 3);
+
+    // Una porción suelta sí, y "arroz y menestra" también
+    pedir('n3', { id: 'n3', sesion: 's3', mesa: 5, creado: 3, estado: 'nuevo', items: [
+        { uid: 'd', platoId: 'r1', nombre: 'Arroz',            cantidad: 2, precio: 1.5, estacion: 'cocina' },
+        { uid: 'e', platoId: 'r3', nombre: 'Arroz y Menestra', cantidad: 1, precio: 2,   estacion: 'cocina' },
+        { uid: 'f', platoId: 'r2', nombre: 'Menestra',         cantidad: 4, precio: 1,   estacion: 'cocina' }
+    ]});
+    comprobar('las porciones sueltas de arroz también cuentan', arroz(), 6);
+
+    // Una bebida no gasta olla
+    pedir('n4', { id: 'n4', sesion: 's4', mesa: 6, creado: 4, estado: 'nuevo', items: [
+        { uid: 'g', platoId: 'b3', nombre: 'Cola', cantidad: 5, precio: 0.5, estacion: 'barra' }
+    ]});
+    comprobar('las bebidas no', arroz(), 6);
+
+    // Al entregar, baja: lo servido ya no está pendiente
+    corre(`Servicio.marcarEntregado('n1')`);
+    comprobar('lo entregado deja de contar', arroz(), 3);
+
+    corre(`Servicio.anularComanda('n3', 'prueba')`);
+    comprobar('y lo anulado tampoco', arroz(), 0);
+}
+
 function probarEscaleraDeTurnos() {
     console.log('\n--- El orden se ve de lejos, sin leer el número ---');
     const { corre } = pantallaEstacion('asador');
@@ -1148,6 +1212,7 @@ async function main() {
     probarEcoDeLaNube();
     await probarEnviosJuntos();
     probarTableroParrilla();
+    probarArrozPendiente();
     probarEscaleraDeTurnos();
     probarTomarPedido();
 

@@ -1528,6 +1528,31 @@ body.desconectado .srv-top {
 .srv-solover[hidden] { display: none; }
 .srv-solover i { margin-right: 8px; color: #7ec8ff; }
 
+/* ------------------------------------------------------------
+   EL ARROZ PEDIDO Y SIN SERVIR
+
+   No compite con las tarjetas: no es una alarma ni hay nada que
+   tocar. Es un dato que tiene que estar a la vista al levantar la
+   cabeza, y el número se lee desde el otro lado de la cocina.
+   ------------------------------------------------------------ */
+
+.srv-arroz {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    background: #2a2416;
+    border-bottom: 1px solid #6b5a24;
+    color: #f0e2b0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 8px 16px;
+}
+
+.srv-arroz[hidden] { display: none; }
+.srv-arroz i { color: #e8c34a; }
+.srv-arroz b { font-size: 1.6rem; line-height: 1; color: #ffd75e; }
+.srv-arroz span { color: #b9a97a; font-weight: 500; }
+
 /* El navegador no deja sonar hasta que alguien toca la pantalla. Mientras
    siga bloqueado hay que decirlo: un aviso que no suena y nadie sabe que
    no suena es peor que no tener aviso. */
