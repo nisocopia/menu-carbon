@@ -65,6 +65,35 @@ Esto es seguridad de verdad: la valida el servidor de Google, no el navegador.
 > lleva los de este local. Para otro restaurante hay que reemplazarlos —
 > ver el paso 4.
 
+> **No le metas comentarios a ese archivo.** Firebase no lo lee como un
+> texto con notas: **cada clave es el nombre de una rama de la base**. Una
+> línea como `"//": "explicación"` no es un comentario, es una rama que se
+> llama `//`, y la consola rechaza el archivo entero con
+> `Expected '{'` señalando una línea que no dice nada. Las explicaciones
+> van aquí, en este archivo.
+
+#### Qué hace cada rama
+
+| Rama | Quién lee | Quién escribe |
+|---|---|---|
+| `menu`, `config` | cualquiera | solo el gerente |
+| `servicio/comandas` | cualquier cuenta del local | cada pantalla **solo su campo** |
+| `servicio/pagos` | gerente y mesero | gerente y mesero |
+| `servicio/entrantes` | cuentas del local | el comensal solo puede **crear** |
+| `servicio/tomados` | cuentas del local | solo si no existe ya (un ganador) |
+| `avisos` | **solo el gerente** | cualquier cuenta, solo la suya |
+| `pedidos`, `vistas` | solo el gerente | solo el gerente |
+
+`avisos` es donde cada celular queda apuntado para recibir los avisos que
+suenan con la aplicación cerrada. **Solo el gerente la lee**, porque leerla
+es saber a qué aparatos se puede hacer sonar — y con esa cuenta entra
+justamente quien los manda.
+
+Escribir sí puede cualquier cuenta del local, pero solo la suya: el nombre
+del sitio donde se apunta sale de la propia dirección del buzón, que solo
+conoce ese aparato. Y como es el **único sitio donde escribe alguien que no
+es el gerente**, no entra ni un campo que no esté en la lista.
+
 ### 4. Crear las cuentas del local
 
 Barra lateral: **Seguridad → Authentication → Comenzar**.
