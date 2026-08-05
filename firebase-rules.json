@@ -152,6 +152,33 @@
       }
     },
 
+    "//": "AVISOS QUE DESPIERTAN EL CELULAR. Cada aparato se apunta aquí bajo el papel de quien entró, para poder avisar solo a la cocina o solo a la parrilla.",
+    "avisos": {
+      "//": "Solo el gerente los lee: leerlos es saber a qué aparatos se puede hacer sonar. Quien manda los avisos entra con esta cuenta.",
+      ".read": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
+
+      "$rol": {
+        "$aparato": {
+          "//": "Cualquier cuenta del local apunta la suya. El nombre del sitio sale de la propia dirección del buzón, que solo conoce ese aparato: no se puede pisar el de otro sin tenerla.",
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['endpoint', 'p256dh', 'auth', 'creado'])",
+
+          "endpoint": {
+            ".validate": "newData.isString() && newData.val().length < 600 && newData.val().beginsWith('https://')"
+          },
+          "p256dh":  { ".validate": "newData.isString() && newData.val().length < 200" },
+          "auth":    { ".validate": "newData.isString() && newData.val().length < 100" },
+          "rol":     { ".validate": "newData.isString() && newData.val().length < 20" },
+          "correo":  { ".validate": "newData.isString() && newData.val().length < 90" },
+          "aparato": { ".validate": "newData.isString() && newData.val().length < 60" },
+          "creado":  { ".validate": "newData.isNumber()" },
+
+          "//2": "Nada más. Un campo que no está en la lista no entra: este es el único sitio donde escribe una cuenta que no es la del gerente.",
+          "$otro": { ".validate": false }
+        }
+      }
+    },
+
     "pedidos": {
       ".read": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
       ".write": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'"

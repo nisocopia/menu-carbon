@@ -20,9 +20,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Parrilla">
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608051718">
-    <link rel="stylesheet" href="css/iconos.css?v=202608051718">
-    <link rel="stylesheet" href="css/servicio.css?v=202608051718">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608051744">
+    <link rel="stylesheet" href="css/iconos.css?v=202608051744">
+    <link rel="stylesheet" href="css/servicio.css?v=202608051744">
 </head>
 
 <body class="srv-body estacion">
@@ -64,6 +64,12 @@
         <div id="sacadas"></div>
     </details>
 
+    <!-- Que el celular avise aunque esté guardado. Se pide desde un
+         toque a propósito: una página que pregunta sola al abrirse
+         recibe un "no" automático en Chrome, y ese "no" ya no se puede
+         deshacer sin ir a los ajustes del sistema. -->
+    <button class="srv-avisos" id="btn-avisos" hidden></button>
+
     <!-- Solo sale cuando el navegador de verdad puede instalarla. Un
          botón que a veces no hace nada es peor que no tenerlo. -->
     <button class="srv-instalar" id="btn-instalar" hidden>
@@ -81,12 +87,13 @@
 
     <div class="srv-toast" id="toast"></div>
 
-    <script src="js/menu-data.js?v=202608051718"></script>
-    <script src="js/sync.js?v=202608051718"></script>
-    <script src="js/store.js?v=202608051718"></script>
-    <script src="js/servicio.js?v=202608051718"></script>
-    <script src="js/estacion.js?v=202608051718"></script>
-    <script src="js/pwa.js?v=202608051718"></script>
+    <script src="js/menu-data.js?v=202608051744"></script>
+    <script src="js/sync.js?v=202608051744"></script>
+    <script src="js/store.js?v=202608051744"></script>
+    <script src="js/servicio.js?v=202608051744"></script>
+    <script src="js/estacion.js?v=202608051744"></script>
+    <script src="js/pwa.js?v=202608051744"></script>
+    <script src="js/aviso.js?v=202608051744"></script>
     <script>iniciarEstacion('asador');</script>
 
 </body>

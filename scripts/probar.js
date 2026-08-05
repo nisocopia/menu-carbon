@@ -1336,6 +1336,10 @@ async function probarAvisoDePedidoNuevo() {
      3. Que los iconos que promete el manifiesto existan de verdad.
    ============================================================ */
 
+/** La marca que lleva ahora el ayudante. */
+const versionDelAyudante = () =>
+    (fuente('sw.js').match(/const VERSION = '([^']+)'/) || [])[1];
+
 /** Carga sw.js con un navegador de mentira y devuelve sus oyentes. */
 function ayudante() {
     const oyentes = {};
@@ -1353,17 +1357,33 @@ function ayudante() {
 
     const pedidas = [];
 
+    /* El service worker es lo único del sitio que corre con la
+       aplicación cerrada: cuando llega un aviso, Android lo arranca, le
+       entrega el mensaje y lo vuelve a apagar. Aquí se le da un
+       registro y unas ventanas de mentira para poder mirar qué enseña. */
+    const registro = { showNotification: () => Promise.resolve() };
+    const clientes = [];
+    const abiertasNuevas = [];
+
     const ctx = vm.createContext({
-        console, Promise, URL, Map, Set, Object, RegExp, String,
+        console, Promise, URL, Map, Set, Object, RegExp, String, Array,
         location: { origin: 'https://nisocopia.github.io' },
         self: {
             addEventListener: (ev, fn) => { oyentes[ev] = fn; },
             skipWaiting() {},
-            clients: { claim: async () => {} }
+            registration: registro,
+            clients: {
+                claim: async () => {},
+                matchAll: async () => clientes,
+                openWindow: async u => { abiertasNuevas.push(u); return { url: u }; }
+            }
         },
         caches: {
             open: async () => caja,
-            keys: async () => ['carbon-vieja', 'carbon-202608051718'],
+            /* La caja de ahora se saca del propio sw.js. Escrita a mano
+               aquí, esta prueba se rompía cada vez que se publicaba —y
+               una prueba que falla por costumbre deja de leerse. */
+            keys: async () => ['carbon-vieja', 'carbon-' + versionDelAyudante()],
             delete: async n => { pedidas.push(n); return true; }
         },
         fetch: async req => respuesta('red:' + String(req.url || req))
@@ -1379,7 +1399,8 @@ function ayudante() {
         return atendido ? { atendido: true, r: await atendido } : { atendido: false };
     };
 
-    return { oyentes, pedir, caja, guardado, borradas: pedidas, respuesta };
+    return { oyentes, pedir, caja, guardado, borradas: pedidas, respuesta,
+             registro, clientes, abiertasNuevas };
 }
 
 async function probarAyudante() {
@@ -1488,6 +1509,172 @@ function probarInstalable() {
     const enSw = (fuente('sw.js').match(/const VERSION = '([^']+)'/) || [])[1];
     const enHtml = (fuente('cocina.html').match(/\?v=(\d+)/) || [])[1];
     comprobar('la caja del ayudante va a la par de las páginas', enSw, enHtml);
+}
+
+/* ============================================================
+   LOS AVISOS QUE DESPIERTAN EL CELULAR
+
+   Aquí no se puede comprobar que suene un celular: eso solo se ve con
+   el celular en la mano. Lo que sí se comprueba es lo que, si está
+   mal, hace que NO suene y no dé ningún error que ayude:
+
+     - que el cifrado sea el del estándar, byte por byte. Si se
+       desviara, Google acepta el aviso, contesta 201, y el celular lo
+       tira en silencio porque no lo puede descifrar. No hay forma de
+       enterarse mirando.
+     - que el service worker enseñe algo pase lo que pase. Si un aviso
+       llegara sin mostrarse, el navegador deja de repartirlos — sin
+       decir por qué.
+     - que la nube no deje escribir cualquier cosa en los apuntes.
+   ============================================================ */
+
+function probarCifradoDeAvisos() {
+    console.log('\n--- El aviso va cifrado como manda el estándar ---');
+
+    const { cifrar, firmar, b64u } = require('./avisar.js');
+
+    /* El ejemplo oficial del RFC 8291. Con la sal y la clave de un solo
+       uso fijadas, el resultado tiene que salir idéntico byte por byte.
+
+       Esta es LA prueba de todo esto: si el cifrado se desvía aunque sea
+       un byte, Google acepta el aviso y contesta que todo bien, pero el
+       celular no lo puede abrir y lo tira sin decir nada. Un fallo así
+       no se descubre probando: se descubre cuando la cocina lleva una
+       semana sin enterarse de los pedidos. */
+    const destino = {
+        p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4',
+        auth:   'BTBZMqHH6r4Tts7J_aSIgg'
+    };
+    const fijas = {
+        privada: 'yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw',
+        sal:     'DGv6ra1nlYgDCS1FRnbzlw'
+    };
+
+    comprobar('coincide con el ejemplo oficial, byte por byte',
+        b64u(cifrar(destino, 'When I grow up, I want to be a watermelon', fijas)),
+        'DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27ml' +
+        'mlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPT' +
+        'pK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN');
+
+    // Sin sal fija, dos avisos iguales no pueden salir iguales
+    const uno = b64u(cifrar(destino, 'hola'));
+    const dos = b64u(cifrar(destino, 'hola'));
+    comprobar('dos avisos iguales se cifran distinto', uno === dos, false);
+
+    console.log('\n--- Y va firmado, para que Google lo reparta ---');
+
+    const f = firmar('https://fcm.googleapis.com/fcm/send/abc',
+                     'yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw',
+                     'mailto:x@y.z');
+
+    const [cabeza, cuerpo, firma] = f.jwt.split('.');
+    comprobar('la firma es ES256', JSON.parse(Buffer.from(cabeza, 'base64url')).alg, 'ES256');
+
+    /* El destinatario es SOLO el servidor, sin la ruta. Si se colara la
+       dirección entera, Google devuelve 401 y no dice cuál de las diez
+       cosas del encabezado está mal. */
+    const d = JSON.parse(Buffer.from(cuerpo, 'base64url'));
+    comprobar('va dirigida al servidor y no a la ruta', d.aud, 'https://fcm.googleapis.com');
+    comprobar('y caduca dentro de las 12 horas que se aceptan',
+        d.exp - Math.floor(Date.now() / 1000) <= 12 * 3600 + 5, true);
+
+    /* En crudo y no en DER. Es la diferencia entre que salga y que
+       rebote con un 401 que no explica nada. */
+    comprobar('la firma va en crudo: 64 bytes',
+        Buffer.from(firma, 'base64url').length, 64);
+
+    comprobar('la clave pública que se manda son 65 bytes',
+        Buffer.from(f.publica, 'base64url').length, 65);
+}
+
+async function probarRecepcionDeAvisos() {
+    console.log('\n--- El celular siempre enseña lo que le llega ---');
+
+    const a = ayudante();
+
+    const mostradas = [];
+    const abiertas = [];
+    a.registro.showNotification = (titulo, op) => {
+        mostradas.push({ titulo, ...op });
+        return Promise.resolve();
+    };
+    a.clientes.push({ url: 'https://nisocopia.github.io/menu-carbon/cocina.html', focus() { abiertas.push('enfocada'); } });
+
+    const empujar = async datos => {
+        mostradas.length = 0;
+        let esperando;
+        a.oyentes.push({
+            data: datos === undefined ? null : { json: () => datos },
+            waitUntil: p => { esperando = p; }
+        });
+        await esperando;
+        return mostradas[0];
+    };
+
+    const normal = await empujar({ titulo: 'Cocina', cuerpo: 'M4 · 2PO', destino: 'cocina.html' });
+    comprobar('enseña el título que le mandan', normal.titulo, 'Cocina');
+    comprobar('y el texto', normal.body, 'M4 · 2PO');
+
+    /* LO IMPORTANTE. Al aceptar los avisos se prometió enseñar TODOS.
+       Un aviso que llegue vacío o roto no puede quedarse sin mostrar: si
+       se incumple, el navegador deja de repartirlos y no dice por qué. */
+    const vacio = await empujar(undefined);
+    comprobar('un aviso vacío también se enseña', !!vacio, true);
+    comprobar('con un texto que sirva de algo', /pedido/i.test(vacio.titulo + vacio.body), true);
+
+    /* Seis mesas seguidas no pueden ser seis avisos apilados: taparían
+       la pantalla y el celular tardaría medio minuto en callarse. */
+    comprobar('los avisos del mismo tipo se pisan en vez de apilarse', normal.tag, 'pedido');
+    comprobar('pero vuelve a sonar en cada uno', normal.renotify, true);
+
+    /* Un aviso que se desvanece a los cinco segundos mientras la cocina
+       tiene las manos en la plancha no lo ve nadie. */
+    comprobar('no se va solo: espera a que alguien lo toque', normal.requireInteraction, true);
+    comprobar('y vibra', Array.isArray(normal.vibrate), true);
+
+    console.log('\n--- Y al tocarlo abre la pantalla que toca ---');
+
+    let cerrada = false;
+    let esperando;
+    a.oyentes.notificationclick({
+        notification: { close: () => { cerrada = true; }, data: { destino: 'cocina.html' } },
+        waitUntil: p => { esperando = p; }
+    });
+    await esperando;
+
+    comprobar('el aviso se cierra al tocarlo', cerrada, true);
+    /* Si ya está abierta se trae al frente. Dos pestañas de la misma
+       cocina son dos tableros que mirar, y el pedido está en el otro. */
+    comprobar('trae al frente la que ya estaba abierta', abiertas, ['enfocada']);
+    comprobar('sin abrir una segunda', a.abiertasNuevas, []);
+}
+
+function probarPermisosDeAvisos() {
+    console.log('\n--- La nube solo deja apuntar lo que es ---');
+
+    const reglas = JSON.parse(fuente('firebase-rules.json').replace(/^\s*"\/\/[^"]*":\s*"[^"]*",?\s*$/gm, ''));
+    const avisos = reglas.rules.avisos;
+    const aparato = avisos.$rol.$aparato;
+
+    comprobar('existe la rama de los avisos', !!avisos, true);
+
+    /* Leerlos es saber a qué aparatos se puede hacer sonar. Solo el
+       gerente, que es con quien entra el que los manda. */
+    comprobar('solo el gerente los lee',
+        /auth\.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'/.test(avisos['.read']), true);
+
+    // Cualquier cuenta del local apunta la suya, pero solo la suya:
+    // el nombre del sitio sale de la direccion del buzon, que no se sabe.
+    comprobar('cualquier cuenta del local apunta la suya', aparato['.write'], 'auth != null');
+
+    comprobar('un apunte sin buzón no entra',
+        /hasChildren\(\['endpoint', 'p256dh', 'auth', 'creado'\]\)/.test(aparato['.validate']), true);
+    comprobar('el buzón tiene que ser una dirección segura',
+        /beginsWith\('https:\/\/'\)/.test(aparato.endpoint['.validate']), true);
+
+    /* Este es el único sitio donde escribe una cuenta que no es la del
+       gerente, así que no puede entrar nada que no esté en la lista. */
+    comprobar('un campo que no está en la lista no entra', aparato.$otro['.validate'], false);
 }
 
 /**
@@ -1723,6 +1910,9 @@ async function main() {
     await probarAvisoIndependienteDelDibujo();
     await probarAyudante();
     probarInstalable();
+    probarCifradoDeAvisos();
+    await probarRecepcionDeAvisos();
+    probarPermisosDeAvisos();
 
     console.log(fallos ? `\n${fallos} comprobación(es) FALLARON. No subas todavía.` : '\nTodo bien.');
     process.exit(fallos ? 1 : 0);

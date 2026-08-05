@@ -89,6 +89,39 @@ const FIREBASE = {
 };
 
 /* ------------------------------------------------------------
+   AVISOS QUE DESPIERTAN EL CELULAR
+
+   El aviso sonoro de las pantallas solo suena con la pantalla
+   encendida y la aplicación a la vista. Con el celular en el bolsillo
+   o la tablet apagada no suena nada, y no hay forma de arreglarlo
+   desde la página: si el sistema congela la aplicación, no queda nada
+   corriendo que pueda sonar.
+
+   Lo único que despierta un celular dormido es un aviso que llegue de
+   fuera. Eso lo reparte Google, y para que no lo pueda usar cualquiera
+   va firmado con una clave que es de este local.
+
+   CÓMO SE LLENA:
+
+       node scripts/generar-clave-push.js
+
+   imprime dos claves. La PÚBLICA se pega aquí abajo. La PRIVADA NO va
+   al repositorio: se guarda aparte y solo la tiene quien manda los
+   avisos.
+
+   SI SE DEJA VACÍO no pasa nada: las pantallas siguen sonando como
+   hasta ahora, solo que sin avisar con el celular guardado.
+   ------------------------------------------------------------ */
+
+const PUSH = {
+    clave: '',
+
+    /* A quién escribirle si un aviso da problemas. Lo exige el estándar
+       y lo lee una persona de Google, no un programa. */
+    contacto: 'mailto:eduardolino78@gmail.com'
+};
+
+/* ------------------------------------------------------------
    GUARNICIONES QUE SE PUEDEN QUITAR
 
    El comensal pide "una carne solo con plátano y ensalada". El precio

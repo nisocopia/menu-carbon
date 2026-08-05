@@ -1504,6 +1504,73 @@ body.hay-nuevo::after {
 }
 
 /* ============================================================
+   AVISOS QUE DESPIERTAN EL CELULAR
+
+   El aviso sonoro solo suena con la pantalla encendida y la aplicacion
+   a la vista. Esto es lo otro: lo que suena con el celular guardado en
+   el bolsillo. Por eso se ofrece en grande y no escondido — es la
+   diferencia entre enterarse y no enterarse.
+   ============================================================ */
+
+.srv-avisos {
+    display: block;
+    width: calc(100% - 32px);
+    margin: 20px 16px 0;
+    border-radius: 14px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: left;
+    padding: 14px 16px;
+    cursor: pointer;
+}
+
+.srv-avisos[hidden] { display: none; }
+.srv-avisos i { margin-right: 8px; }
+
+.srv-avisos span {
+    display: block;
+    margin-top: 3px;
+    font-size: 0.78rem;
+    font-weight: 400;
+}
+
+/* Todavia no estan puestos: es lo unico de esta pantalla que hace falta
+   tocar, asi que se ve como algo que hay que tocar. */
+.srv-avisos.ofrece {
+    background: #1f1a0d;
+    border: 1px solid #c9a227;
+    color: #ffe9a8;
+}
+
+.srv-avisos.ofrece i    { color: #FFC107; }
+.srv-avisos.ofrece span { color: #b39a5e; }
+
+/* Ya estan. Se queda a la vista pero sin llamar la atencion: sirve para
+   saber que este aparato SI va a sonar, que es justo lo que uno quiere
+   comprobar antes de guardarse el celular. */
+.srv-avisos.puesto {
+    background: #12210f;
+    border: 1px solid #2f5c26;
+    color: #cfe9c6;
+}
+
+.srv-avisos.puesto i    { color: #6abf59; }
+.srv-avisos.puesto span { color: #7d9b76; }
+
+/* Se dijo que no. Desde la pagina ya no se puede volver a preguntar, asi
+   que el boton no se toca: lo unico util es decir donde se arregla. */
+.srv-avisos.trabado {
+    background: #2a1414;
+    border: 1px solid #6b2020;
+    color: #ffc9c9;
+    cursor: default;
+}
+
+.srv-avisos.trabado i    { color: #ff6b6b; }
+.srv-avisos.trabado span { color: #b38080; }
+
+/* ============================================================
    INSTALAR LA PANTALLA
 
    Se ofrece una sola vez por aparato y luego no se vuelve a ver, asi
