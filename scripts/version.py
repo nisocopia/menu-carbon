@@ -48,6 +48,37 @@ def versionar(html):
     return re.sub(r'\b(href|src)="([^"]+)"', cambiar, html)
 
 
+def versionar_ayudante():
+    """
+    Marca también sw.js, el ayudante que guarda los archivos.
+
+    Guarda lo que se baja en una caja con nombre. Al cambiar el nombre,
+    la caja anterior se tira entera en cuanto el ayudante nuevo arranca.
+    Sin esto la caja se llamaría siempre igual y una tablet podría
+    quedarse con el JavaScript de hace tres semanas dentro, sirviéndolo
+    con toda confianza: exactamente el problema que este script existe
+    para evitar, pero más difícil de ver porque ya no se arregla
+    recargando.
+    """
+    ruta = os.path.join(PROY, "sw.js")
+    if not os.path.exists(ruta):
+        return
+
+    with open(ruta, encoding="utf-8") as f:
+        original = f.read()
+
+    nuevo, cuantos = re.subn(r"(const VERSION = ')[^']*(')",
+                             rf"\g<1>{VERSION}\g<2>", original, count=1)
+    if not cuantos:
+        print("  sw.js          AVISO: no encontré la línea de VERSION")
+        return
+
+    if nuevo != original:
+        with open(ruta, "w", encoding="utf-8") as f:
+            f.write(nuevo)
+    print(f"  {'sw.js':14} caja marcada")
+
+
 def main():
     total = 0
     for pagina in PAGINAS:
@@ -66,6 +97,8 @@ def main():
         marcados = len(re.findall(rf"\?v={VERSION}", nuevo))
         total += marcados
         print(f"  {pagina:14} {marcados} archivos marcados")
+
+    versionar_ayudante()
 
     print(f"\nVersión: {VERSION}   ({total} referencias)")
     print("Ahora sí puedes hacer commit y push: los celulares bajarán lo nuevo.")

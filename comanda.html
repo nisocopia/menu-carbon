@@ -9,14 +9,20 @@
 
     <title>Comanda</title>
 
+    <!-- Cada pantalla es su propia aplicación: instalar "Comanda" tiene
+         que abrir la comanda, no el menú del comensal. Por eso hay un
+         manifiesto por pantalla y no uno solo para todo el sitio. -->
+    <link rel="manifest" href="manifest-comanda.json">
+
     <link rel="icon" type="image/png" href="img/favicon.png">
-    <link rel="apple-touch-icon" href="img/icono-180.png">
+    <link rel="apple-touch-icon" href="img/app/comanda-192.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Comanda">
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608051701">
-    <link rel="stylesheet" href="css/iconos.css?v=202608051701">
-    <link rel="stylesheet" href="css/servicio.css?v=202608051701">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608051718">
+    <link rel="stylesheet" href="css/iconos.css?v=202608051718">
+    <link rel="stylesheet" href="css/servicio.css?v=202608051718">
 </head>
 
 <body class="srv-body">
@@ -61,7 +67,15 @@
              responder "¿el de Carlos ya salió?" sin ir a la cocina. -->
         <div id="llevar-abiertos"></div>
 
-        <nav class="srv-links">
+        <!-- Solo sale cuando el navegador de verdad puede instalarla. Un
+         botón que a veces no hace nada es peor que no tenerlo. -->
+    <button class="srv-instalar" id="btn-instalar" hidden>
+        <i class="fas fa-download"></i>
+        Instalar la comanda en este aparato
+        <span>Se abre de un toque y no se pierde entre las pestañas</span>
+    </button>
+
+    <nav class="srv-links">
             <a href="parrilla.html"><i class="fas fa-fire"></i> Parrilla</a>
             <a href="cocina.html"><i class="fas fa-kitchen-set"></i> Cocina</a>
             <a href="panel.html"><i class="fas fa-chart-simple"></i> Panel</a>
@@ -202,11 +216,12 @@
 
     <div class="srv-toast" id="toast"></div>
 
-    <script src="js/menu-data.js?v=202608051701"></script>
-    <script src="js/sync.js?v=202608051701"></script>
-    <script src="js/store.js?v=202608051701"></script>
-    <script src="js/servicio.js?v=202608051701"></script>
-    <script src="js/comanda.js?v=202608051701"></script>
+    <script src="js/menu-data.js?v=202608051718"></script>
+    <script src="js/sync.js?v=202608051718"></script>
+    <script src="js/store.js?v=202608051718"></script>
+    <script src="js/servicio.js?v=202608051718"></script>
+    <script src="js/comanda.js?v=202608051718"></script>
+    <script src="js/pwa.js?v=202608051718"></script>
 
 </body>
 

@@ -24,6 +24,7 @@ const path = require('path');
 
 const RAIZ = path.join(__dirname, '..');
 const fuente = f => fs.readFileSync(path.join(RAIZ, f), 'utf8');
+const existe = f => fs.existsSync(path.join(RAIZ, f));
 
 let fallos = 0;
 function comprobar(titulo, real, esperado) {
@@ -1320,6 +1321,175 @@ async function probarAvisoDePedidoNuevo() {
     comprobar('deshacer un entregado NO suena como pedido nuevo', p.sonadas(), 4);
 }
 
+/* ============================================================
+   INSTALAR LA PANTALLA COMO APLICACIÓN
+
+   Lo que se comprueba aquí no es que "se pueda instalar" —eso lo
+   decide Chrome y se ve en el celular—, sino las tres cosas que se
+   rompen en silencio y no se notan hasta que ya están publicadas:
+
+     1. Que el ayudante NO se meta con Firebase. Si lo hiciera, la
+        cocina dejaría de recibir pedidos sin un solo mensaje de error.
+     2. Que cada pantalla instale LA SUYA. Un manifiesto copiado y a
+        medio cambiar hace que el icono de la cocina abra la comanda,
+        y eso solo se descubre instalándolo.
+     3. Que los iconos que promete el manifiesto existan de verdad.
+   ============================================================ */
+
+/** Carga sw.js con un navegador de mentira y devuelve sus oyentes. */
+function ayudante() {
+    const oyentes = {};
+    const guardado = new Map();
+
+    const caja = {
+        match: async req => guardado.get(String(req.url || req)),
+        put: async (req, r) => { guardado.set(String(req.url || req), r); }
+    };
+
+    const respuesta = de => ({
+        ok: true, status: 200, type: 'basic', de,
+        clone() { return this; }
+    });
+
+    const pedidas = [];
+
+    const ctx = vm.createContext({
+        console, Promise, URL, Map, Set, Object, RegExp, String,
+        location: { origin: 'https://nisocopia.github.io' },
+        self: {
+            addEventListener: (ev, fn) => { oyentes[ev] = fn; },
+            skipWaiting() {},
+            clients: { claim: async () => {} }
+        },
+        caches: {
+            open: async () => caja,
+            keys: async () => ['carbon-vieja', 'carbon-202608051718'],
+            delete: async n => { pedidas.push(n); return true; }
+        },
+        fetch: async req => respuesta('red:' + String(req.url || req))
+    });
+
+    vm.runInContext(fuente('sw.js'), ctx);
+
+    /** Lanza un fetch contra el ayudante y dice si lo interceptó. */
+    const pedir = async (url, opciones) => {
+        const req = Object.assign({ url, method: 'GET', mode: 'no-cors' }, opciones || {});
+        let atendido = null;
+        oyentes.fetch({ request: req, respondWith: p => { atendido = p; } });
+        return atendido ? { atendido: true, r: await atendido } : { atendido: false };
+    };
+
+    return { oyentes, pedir, caja, guardado, borradas: pedidas, respuesta };
+}
+
+async function probarAyudante() {
+    console.log('\n--- El ayudante no se mete con los pedidos ---');
+    const a = ayudante();
+
+    /* LO MÁS IMPORTANTE DE TODO EL ARCHIVO.
+
+       El canal de las comandas es una conexión que se abre y se queda
+       abierta horas. Un ayudante que intentara guardarla se quedaría
+       esperando un final que no llega, y la cocina dejaría de recibir
+       pedidos sin que saltara un solo error. */
+    const canal = await a.pedir(
+        'https://menu-carbon-default-rtdb.firebaseio.com/servicio/comandas.json?auth=xxx');
+    comprobar('el canal de las comandas pasa sin que lo toquen', canal.atendido, false);
+
+    const login = await a.pedir(
+        'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=x',
+        { method: 'POST' });
+    comprobar('entrar con correo y clave, tampoco', login.atendido, false);
+
+    const mandar = await a.pedir(
+        'https://menu-carbon-default-rtdb.firebaseio.com/servicio/comandas/abc.json',
+        { method: 'PUT' });
+    comprobar('mandar un pedido, tampoco', mandar.atendido, false);
+
+    // Y lo que sí es suyo, sí
+    const pagina = await a.pedir('https://nisocopia.github.io/menu-carbon/cocina.html');
+    comprobar('la pantalla de la cocina sí la atiende', pagina.atendido, true);
+
+    console.log('\n--- Y guarda cada cosa como le toca ---');
+
+    /* El HTML SIEMPRE por red: una tablet de cocina con el código de
+       hace tres semanas es peor que una que tarda medio segundo más. */
+    comprobar('la página se pide a la red', pagina.r.de,
+        'red:https://nisocopia.github.io/menu-carbon/cocina.html');
+
+    // Lo marcado con ?v= no puede cambiar sin cambiar de dirección
+    const js = 'https://nisocopia.github.io/menu-carbon/js/estacion.js?v=202608051718';
+    await a.pedir(js);
+    a.guardado.set(js, a.respuesta('guardado'));
+    const segunda = await a.pedir(js);
+    comprobar('el javascript marcado se sirve de lo guardado', segunda.r.de, 'guardado');
+
+    /* Una foto guardada se sirve al momento, pero por detrás se baja la
+       nueva: así el gerente cambia la foto de un plato y se ve, sin que
+       el comensal pague medio mega en cada carga. */
+    const foto = 'https://nisocopia.github.io/menu-carbon/img/productos/polloasado.webp';
+    a.guardado.set(foto, a.respuesta('guardado'));
+    const conFoto = await a.pedir(foto);
+    comprobar('la foto sale de lo guardado, sin esperar', conFoto.r.de, 'guardado');
+    await respirar();
+    comprobar('y por detrás se baja la nueva', a.guardado.get(foto).de, 'red:' + foto);
+
+    // Al cambiar de versión, la caja anterior se tira entera
+    await new Promise(r => a.oyentes.activate({ waitUntil: p => p.then(r, r) }));
+    comprobar('al publicar, se tira la caja vieja', a.borradas, ['carbon-vieja']);
+}
+
+function probarInstalable() {
+    console.log('\n--- Cada pantalla instala la suya ---');
+
+    const PANTALLAS = ['cocina', 'parrilla', 'comanda'];
+
+    PANTALLAS.forEach(n => {
+        const m = JSON.parse(fuente(`manifest-${n}.json`));
+        const html = fuente(`${n}.html`);
+
+        comprobar(`${n}: abre su propia pantalla`, m.start_url, `${n}.html`);
+        comprobar(`${n}: la página enlaza su manifiesto`,
+            html.includes(`<link rel="manifest" href="manifest-${n}.json">`), true);
+
+        /* Chrome no ofrece instalar nada sin un icono de 192 y otro de
+           512. Es la comprobación aburrida que, si falla, hace que el
+           botón de instalar no salga nunca y nadie sepa por qué. */
+        const medidas = m.icons.map(i => i.sizes).sort();
+        comprobar(`${n}: trae los dos tamaños que Chrome exige`,
+            medidas.includes('192x192') && medidas.includes('512x512'), true);
+
+        // Un icono prometido que no existe deja la instalación a medias
+        const faltan = m.icons.map(i => i.src).filter(src => !existe(src));
+        comprobar(`${n}: todos sus iconos existen`, faltan, []);
+
+        comprobar(`${n}: se abre sin barra de navegador`, m.display, 'standalone');
+
+        /* El color de la barra de arriba tiene que ser el mismo que el
+           de la página, o al abrirla se ve una franja de otro color. */
+        const enLaPagina = (html.match(/name="theme-color" content="([^"]+)"/) || [])[1];
+        comprobar(`${n}: el color de la barra coincide con la página`,
+            m.theme_color, enLaPagina);
+    });
+
+    // Dos pantallas no pueden compartir icono: en la pantalla de inicio
+    // serían tres aplicaciones idénticas y no habría forma de acertar.
+    const iconos = PANTALLAS.map(n => JSON.parse(fuente(`manifest-${n}.json`)).icons[0].src);
+    comprobar('ninguna repite el icono de otra', iconos.length, new Set(iconos).size);
+
+    console.log('\n--- Y todas registran el ayudante ---');
+    ['cocina', 'parrilla', 'comanda', 'index', 'panel'].forEach(n =>
+        comprobar(`${n}.html lo registra`, /src="js\/pwa\.js/.test(fuente(`${n}.html`)), true));
+
+    /* La caja del ayudante lleva la misma marca que los archivos de las
+       páginas. Si se descuadraran, la caja no se tiraría al publicar y
+       una tablet podría quedarse con el javascript viejo dentro —y eso
+       ya no se arregla recargando. */
+    const enSw = (fuente('sw.js').match(/const VERSION = '([^']+)'/) || [])[1];
+    const enHtml = (fuente('cocina.html').match(/\?v=(\d+)/) || [])[1];
+    comprobar('la caja del ayudante va a la par de las páginas', enSw, enHtml);
+}
+
 /**
  * Sonar tarda, y en ese rato puede entrar otro pedido.
  *
@@ -1551,6 +1721,8 @@ async function main() {
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();
     await probarAvisoIndependienteDelDibujo();
+    await probarAyudante();
+    probarInstalable();
 
     console.log(fallos ? `\n${fallos} comprobación(es) FALLARON. No subas todavía.` : '\nTodo bien.');
     process.exit(fallos ? 1 : 0);

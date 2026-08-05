@@ -31,7 +31,8 @@ El sitio completo pesa **1.7 MB**.
    a mano**, porque los buscadores y WhatsApp no ejecutan JavaScript y no
    pueden leer `menu-data.js`. Si se olvida, el link compartido mostrará el
    nombre del restaurante anterior.
-6. `manifest.json` — nombre y nombre corto de la app.
+6. `manifest.json` y los `manifest-*.json` — nombre y nombre corto de cada
+   aplicación instalable.
 7. **Las cuentas del local** — una por celular, y sus identificadores en
    `js/menu-data.js` (lista `EQUIPO`) y en `firebase-rules.json`. Es lo que
    hace que la cocina no pueda tomar pedidos ni el asador ver la venta del
@@ -86,8 +87,57 @@ orillas, que es justo lo que se cortaba antes.
 | `js/panel.js` | Lógica del panel del gerente. |
 | `js/tracker.js` | Aviso de "tu pedido va en camino". |
 | `js/games.js` | Juegos para la espera. |
+| `js/pwa.js` | Registra el ayudante y enciende el botón de instalar. |
+| `sw.js` | El ayudante: deja instalar las pantallas y guarda lo ya bajado. |
+| `manifest.json` | El menú del comensal, como aplicación. |
+| `manifest-cocina.json` · `-parrilla` · `-comanda` | Una aplicación por pantalla. |
 | `firebase-rules.json` | **Quién puede tocar qué.** La seguridad de verdad. |
 | `scripts/probar.js` | Comprobaciones antes de subir. `node scripts/probar.js` |
+
+---
+
+## Instalar las pantallas como aplicación
+
+Las tres pantallas de servicio se instalan por separado y cada una abre
+la suya. No es un adorno: una pestaña de Chrome se pierde entre las otras
+doce, se cierra sin querer y en Android es de las primeras que el sistema
+mata cuando le falta memoria. Instalada tiene su icono y el sistema la
+trata como la herramienta con la que se trabaja.
+
+**Cómo se instala:** se abre la pantalla en Chrome y sale un botón azul
+abajo, *"Instalar la cocina en este aparato"*. Si no sale, Chrome todavía
+no considera que se use bastante — está también en el menú de los tres
+puntos, como *"Instalar aplicación"*.
+
+Cada una tiene su propio icono y su propio color, porque tres iconos
+iguales en la misma pantalla de inicio son tres iconos inservibles:
+
+| Pantalla | Icono | Color |
+|---|---|---|
+| Cocina | sartén y olla | amarillo |
+| Parrilla | llama | naranja |
+| Comanda | lápiz | azul |
+
+Los dibuja `python scripts/generar-iconos-app.py` con el mismo símbolo que
+lleva la pantalla en su cabecera, sacado de la misma fuente que usa el
+sitio. Solo hay que volver a correrlo si cambia un color o un símbolo.
+
+### Qué hace y qué NO hace el ayudante
+
+`sw.js` guarda lo que ya se bajó para que una pantalla abierta sobreviva a
+un corte de wifi. Guarda cada cosa distinto:
+
+- **el HTML, siempre por red** — una tablet con el código de hace tres
+  semanas es peor que una que tarda medio segundo más;
+- **los `.css` y `.js` marcados con `?v=`, de lo guardado** — no pueden
+  cambiar sin cambiar de dirección;
+- **las fotos y las fuentes, lo guardado ahora y lo nuevo para la próxima.**
+
+**Lo que no toca, y es lo más importante: nada que vaya a Firebase.** Ni
+los pedidos, ni la sesión, ni el canal por el que llegan las comandas. Ese
+canal es una conexión que se queda abierta horas; un ayudante que
+intentara guardarla dejaría a la cocina sin recibir pedidos y sin un solo
+mensaje de error. `probar.js` lo comprueba en cada corrida.
 
 ---
 
@@ -428,7 +478,14 @@ python scripts/version.py  # obliga a los celulares a bajar el CSS y el JS nuevo
 descubren en hora pico: que el archivo que descarga el gerente no pierda
 campos, que la cuenta de una mesa junte todas sus sesiones, que un pedido
 del comensal no se pueda confirmar dos veces, que cada pantalla escriba
-solo su campo y que cada cuenta llegue solo hasta donde le toca.
+solo su campo, que cada cuenta llegue solo hasta donde le toca, que un
+aviso que no sonó siga pendiente y que el ayudante no se meta con los
+pedidos.
+
+`version.py` marca los `.css` y `.js` de las páginas **y también la caja
+del ayudante**, que es lo que hace que la anterior se tire al publicar.
+Si se olvidara, una tablet podría quedarse con el JavaScript viejo dentro
+— y eso ya no se arregla recargando.
 
 > **Sube con el local cerrado y sin nada en rojo.** Lo que un celular dejó
 > encolado se manda con las reglas que había cuando se anotó. Si cambias
