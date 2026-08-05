@@ -110,7 +110,9 @@ function probarExportacion() {
    ============================================================ */
 
 let nube;
-const nubeLimpia = () => { nube = { entrantes: {}, reclamados: new Set(), prohibido: null }; };
+const nubeLimpia = () => {
+    nube = { entrantes: {}, reclamados: new Set(), prohibido: null, caida: false };
+};
 
 function celular(rol) {
     const guardado = {};
@@ -122,7 +124,11 @@ function celular(rol) {
         correoSesion: () => rol + '@gmail.com',
         uidSesion: () => 'uid-' + rol,
         rolSesion: () => rol,
-        escuchar: () => (() => {}),
+        /* Se guarda el aviso para poder devolverle el eco: la nube repite
+           a todos —incluido a quien escribió— lo que se acaba de guardar,
+           y ahí es donde se rompían los vistos de la cocina. Sin esto las
+           pruebas nunca veían la mitad de la conversación. */
+        escuchar: (rama, avisar) => { propio.avisar = avisar; return () => {}; },
         /* Copia y no el mismo objeto: cada celular recibe su propia
            respuesta, y lo que borra uno no desaparece del otro hasta
            que la nube se lo diga. Ahí es donde está la carrera. */
@@ -136,6 +142,8 @@ function celular(rol) {
            tiene encolado lo que anotó con otra cuenta. */
         enviar: async (rama, valor, metodo) => {
             if (nube.prohibido && nube.prohibido(rama, valor, metodo)) return { ok: false, status: 401 };
+            // Sin señal: no es que no se pueda, es que no llega. Se reintenta.
+            if (nube.caida) return { ok: false, status: 0 };
             propio.enviado.push({ metodo: metodo || 'PUT', rama, valor });
             return { ok: true, status: 200 };
         },
@@ -166,7 +174,19 @@ function celular(rol) {
     });
     ['js/menu-data.js', 'js/store.js', 'js/servicio.js'].forEach(f => vm.runInContext(fuente(f), ctx));
 
-    return { propio, corre: expr => vm.runInContext(expr, ctx) };
+    const corre = expr => vm.runInContext(expr, ctx);
+
+    /**
+     * Lo que la nube le grita de vuelta a este celular.
+     *
+     *   eco('/k1/listos', { i1: 1 }, true)   solo cambió eso  (patch)
+     *   eco('/k1', {...}, false)             esto es todo lo que hay (put)
+     */
+    const eco = (ruta, dato, esRetoque) => {
+        if (propio.avisar) propio.avisar(dato, ruta, esRetoque);
+    };
+
+    return { propio, corre, eco };
 }
 
 const respirar = () => new Promise(r => setTimeout(r, 20));
@@ -520,21 +540,26 @@ function probarMoverMesa() {
    LA COCINA MARCA PLATO POR PLATO
    ============================================================ */
 
+/**
+ * Deja en el celular una comanda de la mesa 3 —1 pollo y 4 chuletas—
+ * como si hubiera llegado de la nube. Son 15,50 en total.
+ */
+function sembrarComanda(corre) {
+    const comandas = { k1: {
+        id: 'k1', sesion: 's1', mesa: 3, tanda: 0, creado: Date.now(),
+        estado: 'nuevo', sacado: false, codigo: 'M3 · 1PO 4CH',
+        items: [
+            { uid: 'i1', platoId: 'p5', nombre: 'Pollo Asado', cantidad: 1, precio: 3.5, estacion: 'asador' },
+            { uid: 'i2', platoId: 'p2', nombre: 'Chuleta',     cantidad: 4, precio: 4,   estacion: 'asador' }
+        ] } };
+    corre(`localStorage.setItem('srv_comandas', ${JSON.stringify(JSON.stringify(comandas))})`);
+}
+
 function probarChecklist() {
     console.log('\n--- La cocina marca plato por plato ---');
     nubeLimpia();
     const { corre, propio } = celular('cocina');
-
-    // Se mete una comanda como si hubiera llegado de la nube
-    corre(`localStorage.setItem('srv_comandas', JSON.stringify({ k1: {
-        id:'k1', sesion:'s1', mesa:3, tanda:0, creado: Date.now(), estado:'nuevo', sacado:false,
-        codigo:'M3 · 1PO 4CH',
-        items: [
-            { uid:'i1', platoId:'p5', nombre:'Pollo Asado', cantidad:1, precio:3.5, estacion:'asador' },
-            { uid:'i2', platoId:'p2', nombre:'Chuleta',     cantidad:4, precio:4,   estacion:'asador' }
-        ] } }))`);
-
-    const c = () => corre(`Servicio.getComandas()['k1']`);
+    sembrarComanda(corre);
 
     comprobar('al principio no está listo',   corre(`Servicio.todoListo(Servicio.getComandas()['k1'])`), false);
 
@@ -560,6 +585,110 @@ function probarChecklist() {
         [...new Set(propio.enviado.map(e => e.rama))], ['servicio/comandas/k1/listos']);
     comprobar('y siempre por PATCH',
         [...new Set(propio.enviado.map(e => e.metodo))], ['PATCH']);
+}
+
+/* ============================================================
+   EL ECO DE LA NUBE
+
+   Firebase le repite a todo el mundo —al que escribió también— lo que
+   se acaba de guardar, y lo hace de dos maneras muy parecidas:
+
+     put    "en este sitio hay ESTO"        lo de antes se tira
+     patch  "en este sitio cambió ESTO"     el resto sigue donde estaba
+
+   Se estaban tratando igual, así que cada patch borraba todo lo que la
+   nube no repitió en el aviso. Se veía en la cocina: marcabas la
+   chuleta y el visto del pollo se apagaba solo, sin que nadie lo
+   tocara. Y en silencio pasaba algo peor — al marcar ENTREGADO la
+   comanda se quedaba sin platos y sin mesa en el celular del mesero,
+   así que esa tanda desaparecía de la cuenta y se cobraba de menos.
+
+   Ninguna prueba lo veía porque la nube de mentira nunca devolvía el
+   eco: solo se probaba la mitad de la conversación.
+   ============================================================ */
+
+function probarEcoDeLaNube() {
+    console.log('\n--- Lo que la nube devuelve no puede borrar lo que ya había ---');
+    nubeLimpia();
+    const { corre, eco } = celular('cocina');
+    sembrarComanda(corre);
+    corre(`Servicio.iniciar(() => {}, 'estacion')`);
+
+    const comanda = campo => corre(`JSON.stringify(Servicio.getComandas()['k1'].${campo})`);
+
+    /* La cocina marca, y la nube le devuelve cada marca por separado.
+       Ese ir y venir es el orden real de las cosas. */
+    corre(`Servicio.marcarListo('k1', 'i1', 1)`);   eco('/k1/listos', { i1: 1 }, true);
+    corre(`Servicio.marcarListo('k1', 'i2', 1)`);   eco('/k1/listos', { i2: 1 }, true);
+    corre(`Servicio.marcarListo('k1', 'i2', 2)`);   eco('/k1/listos', { i2: 2 }, true);
+
+    comprobar('marcar la chuleta no apaga el pollo',
+        JSON.parse(comanda('listos')), { i1: 1, i2: 2 });
+
+    corre(`Servicio.marcarListo('k1', 'i2', 4)`);   eco('/k1/listos', { i2: 4 }, true);
+    comprobar('con todo marcado, ENTREGADO se enciende',
+        corre(`Servicio.todoListo(Servicio.getComandas()['k1'])`), true);
+
+    // Destocar sí tiene que quitarlo: la nube manda el campo en null
+    eco('/k1/listos', { i1: null }, true);
+    comprobar('y un visto quitado se quita de verdad',
+        JSON.parse(comanda('listos')), { i2: 4 });
+
+    /* ENTREGADO manda dos campos sobre la comanda entera. Antes esto la
+       dejaba valiendo solo esos dos campos. */
+    eco('/k1', { estado: 'entregado', entregado: 1700000000000 }, true);
+
+    comprobar('al entregar, el estado cambia',      JSON.parse(comanda('estado')), 'entregado');
+    comprobar('pero la comanda conserva sus platos', corre(`Servicio.getComandas()['k1'].items.length`), 2);
+    comprobar('y su mesa',                           corre(`Servicio.getComandas()['k1'].mesa`), 3);
+    comprobar('y sigue pegada a su cuenta',          JSON.parse(comanda('sesion')), 's1');
+    comprobar('así que se cobra completa',           corre(`Servicio.cuentaDeSesion('s1').total`), 19.5);
+
+    // Un aviso completo sobre un campo suelto sigue reemplazando ese campo
+    eco('/k1/estado', 'nuevo', false);
+    comprobar('un aviso completo sí reemplaza',     JSON.parse(comanda('estado')), 'nuevo');
+    comprobar('y tampoco se lleva los platos',       corre(`Servicio.getComandas()['k1'].items.length`), 2);
+
+    // Al reconectar llega la rama entera de una vez
+    eco('/', { k2: { id: 'k2', sesion: 's2', mesa: 5, estado: 'nuevo', creado: 2, items: [] } }, false);
+    comprobar('al reconectar no se pierde lo que había',
+        corre(`Object.keys(Servicio.getComandas()).sort().join(',')`), 'k1,k2');
+}
+
+/* ============================================================
+   OCHO TOQUES, UN ENVÍO
+
+   Cada visto salía en su propio envío. Con la red del local eso son
+   ocho viajes que llegan cuando quieren, y basta con que uno se pierda
+   para que la pantalla y la nube dejen de contar lo mismo. Si lo que
+   aún espera va al mismo sitio, se junta y sale de una vez.
+   ============================================================ */
+
+async function probarEnviosJuntos() {
+    console.log('\n--- Varios vistos seguidos salen en un solo envío ---');
+    nubeLimpia();
+    nube.caida = true;                    // sin señal: nada sale, todo espera
+    const { corre, propio } = celular('cocina');
+    sembrarComanda(corre);
+
+    const toques = [['i1', 1], ['i2', 1], ['i2', 2], ['i2', 3], ['i2', 4]];
+    for (const [uid, n] of toques) {
+        corre(`Servicio.marcarListo('k1', '${uid}', ${n})`);
+        await respirar();                 // una persona tocando, no un bucle
+    }
+
+    comprobar('los cinco toques esperan juntos', corre(`Servicio.pendientes()`), 1);
+    comprobar('sin señal no salió ninguno',      propio.enviado.length, 0);
+    comprobar('pero en pantalla están puestos',
+        corre(`Servicio.todoListo(Servicio.getComandas()['k1'])`), true);
+
+    nube.caida = false;                   // vuelve el wifi
+    corre(`Servicio.vaciarCola()`);
+    await respirar();
+
+    comprobar('al volver la señal sale una sola vez', propio.enviado.length, 1);
+    comprobar('con todo lo marcado dentro',           propio.enviado[0].valor, { i1: 1, i2: 4 });
+    comprobar('y no queda nada pendiente',            corre(`Servicio.pendientes()`), 0);
 }
 
 /* ============================================================
@@ -686,6 +815,8 @@ async function main() {
     probarEdicion();
     probarMoverMesa();
     probarChecklist();
+    probarEcoDeLaNube();
+    await probarEnviosJuntos();
     probarTomarPedido();
 
     console.log(fallos ? `\n${fallos} comprobación(es) FALLARON. No subas todavía.` : '\nTodo bien.');

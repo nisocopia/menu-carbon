@@ -142,7 +142,23 @@ const Servicio = (() => {
         if (!Red.activo) return;
 
         const cola = read(K.cola, []);
-        cola.push({ rama, valor, metodo: metodo || 'PUT', intentos: 0 });
+        const ultima = cola[cola.length - 1];
+
+        /* Marcar ocho platos seguidos son ocho envíos, y con la red del
+           local van llegando cuando quieren. Si lo último que espera va
+           al mismo sitio y también es un retoque, se le añade encima y
+           sale todo junto: ocho toques, un envío.
+
+           Solo se toca lo que aún no ha salido. La tarea de arriba puede
+           estar en el aire ahora mismo y añadirle algo sería mandarlo a
+           ninguna parte. */
+        const enElAire = vaciando && cola.length === 1;
+        const mismoSitio = ultima && !enElAire &&
+                           metodo === 'PATCH' && ultima.metodo === 'PATCH' && ultima.rama === rama;
+
+        if (mismoSitio) ultima.valor = Object.assign({}, ultima.valor, valor);
+        else cola.push({ rama, valor, metodo: metodo || 'PUT', intentos: 0 });
+
         write(K.cola, cola);
         vaciarCola();
     }
@@ -1139,23 +1155,49 @@ const Servicio = (() => {
      * ningun lado: solo se veia al recargar, que es cuando vuelve a
      * llegar la ruta "/" con todo. De ahi lo de tener que actualizar en
      * la cocina.
+     *
+     * Y falta la mitad del asunto: `esRetoque` distingue el aviso de
+     * "esto es todo lo que hay aqui" del de "solo cambiaron estos
+     * campos". Los dos llegan con la misma pinta —una ruta y un objeto—
+     * pero el segundo hay que MEZCLARLO. Metiendolo tal cual se borraba
+     * todo lo que la nube no repitio en el aviso:
+     *
+     *   la cocina marca el pollo    -> se manda { i1: 1 }
+     *   la nube lo repite de vuelta -> listos pasaba a valer { i1: 1 }
+     *   la cocina marca la chuleta  -> se manda { i2: 1 }
+     *   la nube lo repite de vuelta -> listos pasaba a valer { i2: 1 }
+     *
+     * y el visto del pollo se apagaba solo, sin que nadie lo tocara.
      */
-    function aplicarEnRuta(clave, ruta, dato) {
+    function aplicarEnRuta(clave, ruta, dato, esRetoque) {
         const partes = String(ruta || '/').split('/').filter(Boolean);
 
         // Llego la rama entera
-        if (!partes.length) { mezclar(clave, dato); return; }
+        if (!partes.length && !esRetoque) { mezclar(clave, dato); return; }
 
         const todo = read(clave, {});
         let nodo = todo;
-        for (let i = 0; i < partes.length - 1; i++) {
+
+        /* Un retoque nombra el sitio ENTERO en su ruta y trae dentro los
+           campos; un dato completo nombra en la ruta el campo que se
+           reemplaza. Por eso uno baja un escalon mas que el otro. */
+        const hasta = esRetoque ? partes.length : partes.length - 1;
+        for (let i = 0; i < hasta; i++) {
             if (!nodo[partes[i]] || typeof nodo[partes[i]] !== 'object') nodo[partes[i]] = {};
             nodo = nodo[partes[i]];
         }
 
-        const ultima = partes[partes.length - 1];
-        if (dato === null || dato === undefined) delete nodo[ultima];
-        else nodo[ultima] = dato;
+        if (esRetoque) {
+            // Campo a campo: lo que no viene en el aviso se queda como estaba
+            Object.keys(dato || {}).forEach(k => {
+                if (dato[k] === null) delete nodo[k];
+                else nodo[k] = dato[k];
+            });
+        } else {
+            const ultima = partes[partes.length - 1];
+            if (dato === null || dato === undefined) delete nodo[ultima];
+            else nodo[ultima] = dato;
+        }
 
         write(clave, todo);
     }
@@ -1202,8 +1244,8 @@ const Servicio = (() => {
            Escuchar "servicio" entero de una vez no sirve: en Firebase el
            permiso no sube de las hijas al padre, así que pedir la rama
            completa da permiso denegado aunque cada hija sí se pueda leer. */
-        Red.escuchar('servicio/comandas', (datos, ruta) => {
-            aplicarEnRuta(K.comandas, ruta, datos);
+        Red.escuchar('servicio/comandas', (datos, ruta, esRetoque) => {
+            aplicarEnRuta(K.comandas, ruta, datos, esRetoque);
             alCambiar();
         }, true);
 

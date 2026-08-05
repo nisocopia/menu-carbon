@@ -224,6 +224,14 @@ const Sync = (() => {
     /**
      * Escucha una rama de la base y avisa cada vez que cambia.
      * Devuelve una función para dejar de escuchar.
+     *
+     * Se llama `alCambiar(dato, ruta, esRetoque)`. Firebase avisa de dos
+     * maneras y confundirlas cuesta caro:
+     *
+     *   put    el dato es TODO lo que hay en esa ruta; lo de antes se tira
+     *   patch  el dato son SOLO los campos que cambiaron; el resto sigue ahí
+     *
+     * Tratar un patch como un put borra lo que no venía en el aviso.
      */
     function escuchar(rama, alCambiar, conSesion) {
         if (!activo) return () => {};
@@ -273,17 +281,17 @@ const Sync = (() => {
 
             fuente.onopen = latir;
 
-            const aplicar = e => {
+            const aplicar = esRetoque => e => {
                 latir();
                 try {
                     const m = JSON.parse(e.data);
                     // Firebase manda la ruta relativa y el dato nuevo
-                    alCambiar(m.data, m.path);
+                    alCambiar(m.data, m.path, esRetoque);
                 } catch (err) { /* mensaje de control, se ignora */ }
             };
 
-            fuente.addEventListener('put', aplicar);
-            fuente.addEventListener('patch', aplicar);
+            fuente.addEventListener('put',   aplicar(false));
+            fuente.addEventListener('patch', aplicar(true));
             // Firebase manda esto cada tanto solo para decir "sigo aquí"
             fuente.addEventListener('keep-alive', latir);
 
