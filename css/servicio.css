@@ -399,6 +399,42 @@
     cursor: pointer;
 }
 
+.mover-confirmar {
+    width: 100%;
+    margin-top: 12px;
+    background: #FFC107;
+    border: none;
+    border-radius: 12px;
+    color: #111;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 15px;
+    cursor: pointer;
+}
+
+/* El total cambia por las tarrinas. Se dice antes de confirmar y con
+   el número puesto: enterarse después es lo que hace desconfiar. */
+.mod-nota.cambia-total {
+    background: #1f1a0d;
+    border: 1px solid #6b5a24;
+    border-radius: 10px;
+    color: #f0e2b0;
+    padding: 10px 12px;
+    margin-top: 10px;
+}
+
+.mod-nota.cambia-total b { color: #ffd75e; font-size: 1.05rem; }
+
+/* Cuando no se puede, se lee el motivo y no hay ningún botón que tocar */
+.mod-nota.bloqueo {
+    background: #2a1414;
+    border: 1px solid #6b2424;
+    border-radius: 10px;
+    color: #ffd7d7;
+    padding: 12px;
+}
+
 .btn-cobrar-abrir {
     background: #FFC107;
     color: #111;
@@ -1223,8 +1259,6 @@
     .estacion .tablero .ticket.ahora .ticket-mesa { font-size: 2.1rem; }
     .estacion .tablero .ticket.ahora .ticket-turno { width: 48px; height: 48px; font-size: 1.6rem; }
 
-    /* El separador de "para llevar" corta la rejilla entera */
-    .estacion .tablero .separador-llevar,
     .estacion .tablero .vacio { grid-column: 1 / -1; }
 
     /* En pantalla grande el dedo está más lejos: casillas más altas */
@@ -1232,18 +1266,20 @@
     .ti-caja { width: 38px; height: 38px; }
 }
 
-.separador-llevar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #2196f3;
-    font-size: 0.8rem;
-    font-weight: 600;
-    text-transform: uppercase;
+/* Un pedido para llevar hace la misma cola que los demás —el primero
+   que entra es el primero que sale, sin excepciones— así que lo único
+   que lo distingue es este cartel. Tiene que leerse de lejos y no
+   parecerse a los colores del reloj: el azul no es urgencia. */
+.ticket-llevar {
+    display: inline-block;
+    background: #1b4a6e;
+    border-radius: 6px;
+    color: #d7ecff;
+    font-size: 0.78rem;
+    font-weight: 800;
     letter-spacing: 1px;
-    border-top: 2px dashed #1e3a4d;
-    padding-top: 14px;
-    margin: 18px 0 12px;
+    margin-bottom: 8px;
+    padding: 4px 10px;
 }
 
 .sacadas {
@@ -1310,7 +1346,6 @@
     }
 
     .ticket { margin-bottom: 0; }
-    .separador-llevar { grid-column: 1 / -1; }
     .srv-vista { max-width: 620px; margin: 0 auto; }
     .srv-pie { max-width: 620px; left: 50%; transform: translateX(-50%); }
     .mesas-grid { grid-template-columns: repeat(4, 1fr); }

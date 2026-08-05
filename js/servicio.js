@@ -800,32 +800,149 @@ const Servicio = (() => {
        encima de la mesa 2 es peor que no tener papel.
        ============================================================ */
 
-    function moverMesa(origen, destino) {
-        if (!destino || origen === destino) return { ok: false, motivo: 'Escoge una mesa distinta.' };
+    /**
+     * ¿Se puede cambiar el tipo de servicio de esta cuenta?
+     *
+     * Cambiar de mesa a mesa se puede siempre: la comida es la misma y
+     * solo cambia dónde se sienta. Cambiar el TIPO es otra cosa, porque
+     * mueve el dinero — lo que se lleva va en tarrina y la tarrina se
+     * cobra. Por eso aquí sí hay dos puertas cerradas.
+     */
+    function puedeCambiarServicio(ref) {
+        const ses = sesionesDe(ref).filter(s => s.abierta);
+        if (!ses.length) return { ok: false, motivo: 'Esta cuenta ya está cerrada.' };
 
-        const sesiones = sesionesAbiertasDeMesa(origen);
-        if (!sesiones.length) return { ok: false, motivo: `La mesa ${origen} está libre.` };
+        /* Con dinero ya cobrado no se toca: el total cambiaría después de
+           que alguien pagó su parte, y lo que faltara habría que
+           reclamárselo a los que quedan en la mesa. */
+        if (cuentaDe(ref).cobrado > 0) {
+            return { ok: false, motivo: 'Ya se cobró parte de esta cuenta. Cambiar el tipo movería el total.' };
+        }
 
-        if (sesionesAbiertasDeMesa(destino).length) {
-            return { ok: false, motivo: `La mesa ${destino} está ocupada. Cóbrala primero o escoge otra.` };
+        /* Lo que ya salió de la cocina, salió. Si la mesa quiere llevarse
+           lo que le queda, eso son platos sueltos y para eso ya está el
+           marcarlos "para llevar" uno por uno. */
+        const servida = tandasDe(ref).find(c => c.estado === 'entregado');
+        if (servida) {
+            return { ok: false, motivo: `${servida.codigo || codigoDe(servida)} ya se entregó. ` +
+                                        `Para llevarse lo que falta, marca esos platos como "para llevar".` };
+        }
+
+        return { ok: true, motivo: '' };
+    }
+
+    /**
+     * Mueve una cuenta entera —sus sesiones y todas sus tandas— a otro
+     * sitio: otra mesa, o "para llevar" a nombre de alguien.
+     *
+     *     moverCuenta({ mesa: 5 },       { mesa: 2 })
+     *     moverCuenta({ mesa: 5 },       { llevar: true, nombre: 'Carlos' })
+     *     moverCuenta({ sesion: 'abc' }, { mesa: 7 })
+     *
+     * Es UNA función y no dos parecidas porque en los datos el tipo de
+     * servicio no es un campo aparte: un pedido para llevar es una
+     * cuenta con mesa 0 y un nombre. Cambiar de mesa y cambiar de tipo
+     * son literalmente el mismo movimiento.
+     */
+    function moverCuenta(ref, destino) {
+        const ses = sesionesDe(ref).filter(s => s.abierta);
+        if (!ses.length) return { ok: false, motivo: 'Esta cuenta ya no está abierta.' };
+
+        const aLlevar     = !!(destino && destino.llevar);
+        const mesaNueva   = aLlevar ? 0 : Number((destino || {}).mesa) || 0;
+        const nombreNuevo = aLlevar ? String((destino || {}).nombre || '').trim() : '';
+
+        if (!aLlevar && !mesaNueva)  return { ok: false, motivo: 'Escoge una mesa.' };
+        if (aLlevar && !nombreNuevo) return { ok: false, motivo: 'Escribe a nombre de quién va el pedido.' };
+
+        const eraLlevar = esLlevar(ses[0]);
+
+        if (!aLlevar && !eraLlevar && ses[0].mesa === mesaNueva) {
+            return { ok: false, motivo: 'Escoge una mesa distinta.' };
+        }
+        if (aLlevar && eraLlevar && claveNombre(ses[0].nombre) === claveNombre(nombreNuevo)) {
+            return { ok: false, motivo: 'Ese pedido ya va a ese nombre.' };
+        }
+
+        /* El sitio al que va tiene que estar libre, o se mezclarían dos
+           cuentas distintas en una sola y se cobrarían juntas. */
+        const mias = new Set(ses.map(s => s.id));
+
+        if (!aLlevar && sesionesAbiertasDeMesa(mesaNueva).some(s => !mias.has(s.id))) {
+            return { ok: false, motivo: `La mesa ${mesaNueva} está ocupada. Cóbrala primero o escoge otra.` };
+        }
+
+        const otro = aLlevar ? llevarPorNombre(nombreNuevo) : null;
+        if (otro && !mias.has(otro.id)) {
+            return { ok: false, motivo: `Ya hay un pedido abierto a nombre de ${otro.nombre}. Usa otro nombre.` };
+        }
+
+        const cambiaTipo = aLlevar !== eraLlevar;
+        if (cambiaTipo) {
+            const puede = puedeCambiarServicio(ref);
+            if (!puede.ok) return puede;
         }
 
         const todas = getSesiones();
-        sesiones.forEach(s => {
-            todas[s.id].mesa = destino;
+        ses.forEach(s => {
+            todas[s.id].mesa   = mesaNueva;
+            todas[s.id].nombre = nombreNuevo;
             todas[s.id].movida = Date.now();
         });
         write(K.sesiones, todas);
-        sesiones.forEach(s => encolar(`servicio/sesiones/${s.id}`, todas[s.id]));
+        ses.forEach(s => encolar(`servicio/sesiones/${s.id}`, todas[s.id]));
 
-        // El código se rehace con la mesa nueva, conservando la letra:
-        // M5b pasa a ser M2b y sigue siendo la segunda tanda.
-        tandasDe({ mesa: destino }).forEach(c => {
-            parchearComanda(c.id, { mesa: destino, codigo: codigoDe({ ...c, mesa: destino }) });
-        });
+        /* Las tandas se buscan por su sesión y no por la mesa: la mesa
+           acaba de cambiar y buscar por ella no encontraría ninguna.
+           El código se rehace conservando la letra — M5b pasa a ser M2b,
+           o LLb, y sigue siendo la segunda tanda. */
+        ses.forEach(s => tandasDe({ sesion: s.id })
+            .filter(c => c.estado !== 'anulado')
+            .forEach(c => {
+                const patch = { mesa: mesaNueva };
+
+                if (cambiaTipo) {
+                    /* Todo lo de la cuenta pasa al tipo nuevo, incluso lo
+                       que ya iba marcado suelto: la cuenta entera se va,
+                       no media. Y con eso se rehacen solas la tarrina y
+                       los cubiertos, que es de donde sale el total. */
+                    const items = (c.items || []).map(it => ({ ...it, llevar: aLlevar }));
+                    ajustarTarrinas(items);
+                    patch.items     = items;
+                    patch.cubiertos = cubiertosDe(items);
+                    patch.nombre    = nombreNuevo;
+                }
+
+                patch.codigo = codigoDe({ ...c, mesa: mesaNueva, items: patch.items || c.items });
+                parchearComanda(c.id, patch);
+            }));
 
         alCambiar();
         return { ok: true, motivo: '' };
+    }
+
+    /** Cambiar de mesa es un caso de lo anterior, no una función aparte. */
+    const moverMesa = (origen, destino) => moverCuenta({ mesa: origen }, { mesa: destino });
+
+    /**
+     * Qué le pasaría al total si esta cuenta cambiara de tipo.
+     *
+     * Se calcula con la MISMA regla que luego lo aplica, así que no
+     * puede prometer un número y cobrar otro. Sirve para enseñárselo al
+     * mesero antes de confirmar: la cuenta sube o baja por las tarrinas
+     * y eso no se puede descubrir después.
+     */
+    function efectoDeCambiarServicio(ref, aLlevar) {
+        let antes = 0, despues = 0;
+
+        tandasDe(ref).filter(c => c.estado !== 'anulado').forEach(c => {
+            const items = (c.items || []).map(it => ({ ...it, llevar: !!aLlevar }));
+            ajustarTarrinas(items);
+            antes   += totalDe(c.items);
+            despues += totalDe(items);
+        });
+
+        return { antes, despues, diferencia: despues - antes };
     }
 
     /** Corregir un pedido mal tomado: se anula entero y se vuelve a mandar. */
@@ -1435,7 +1552,9 @@ const Servicio = (() => {
         rol, permisoEn, puedeTocar, puedeAnotar, puedeCobrar,
         // hacer
         enviarComanda, editarComanda, marcarEntregado, devolverANuevo, marcarSacado, anularComanda,
-        abrirSesion, cerrarSesion, cerrarMesa, cerrarCuenta, moverMesa, registrarPago,
+        abrirSesion, cerrarSesion, cerrarMesa, cerrarCuenta, registrarPago,
+        // mover una cuenta: de mesa, o entre servirse y llevar
+        moverMesa, moverCuenta, puedeCambiarServicio, efectoDeCambiarServicio,
         getExtras, guardarExtra,
         // lo que manda el comensal
         enviarEntrante, getEntrantes, confirmarEntrante, descartarEntrante,

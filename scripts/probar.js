@@ -716,6 +716,7 @@ const MANDA = {
     editado:   ['mesero', 'parrilla'],
     nota:      ['mesero', 'parrilla'],
     mesa:      ['mesero'],                          // cambio de mesa
+    nombre:    ['mesero'],                          // al pasar a para llevar
     anulado:   ['mesero', 'parrilla'],
     motivo:    ['mesero', 'parrilla'],
     estado:    ['mesero', 'parrilla', 'cocina'],
@@ -902,6 +903,93 @@ async function probarEnviosJuntos() {
    Lo que se comprueba es simple y es lo que importa: que una fila que
    ya está NUNCA se mueva de sitio.
    ============================================================ */
+
+/* ============================================================
+   PASAR DE SERVIRSE A LLEVAR, Y AL REVÉS
+
+   El cliente cambia de idea a mitad del pedido. En los datos el tipo de
+   servicio no es un campo aparte: un pedido para llevar es una cuenta
+   con mesa 0 y un nombre. Por eso mover de mesa y cambiar de tipo son
+   la misma función.
+
+   Lo delicado es el dinero: lo que se lleva va en tarrina y la tarrina
+   se cobra, así que el total sube al pasar a llevar y baja al volver.
+   ============================================================ */
+
+function probarCambioDeServicio() {
+    console.log('\n--- La mesa 3 decide llevárselo ---');
+    const { corre } = pantallaComanda();
+
+    corre(`verMesa(3)`);
+    corre(`agregarAlBorrador(Store.findPlato('p5'), 2)`);   // 2 pollos, llevan tarrina
+    corre(`agregarAlBorrador(Store.findPlato('p2'), 1)`);   // 1 chuleta, no lleva
+    corre(`enviar()`);
+
+    const total = () => corre(`Servicio.cuentaDe(ref()).total`);
+    comprobar('en la mesa son 2 pollos y una chuleta', total(), 11);
+
+    // Lo que se va a cobrar de más se dice ANTES, no después
+    comprobar('se avisa del total nuevo antes de confirmar',
+        corre(`Servicio.efectoDeCambiarServicio({ mesa: 3 }, true)`),
+        { antes: 11, despues: 11.5, diferencia: 0.5 });
+
+    corre(`refActual = { mesa: 3 }`);
+    corre(`cambiarTipoA({ llevar: true, nombre: 'Carlos' })`);
+
+    comprobar('la cuenta ahora es de Carlos',
+        corre(`Servicio.nombreDeCuenta(ref())`), 'Carlos');
+    comprobar('la mesa 3 queda libre',
+        corre(`!!Servicio.sesionDeMesa(3)`), false);
+    comprobar('el código deja de decir M3',
+        corre(`Servicio.tandasDe(ref())[0].codigo.split(' ')[0]`), 'LL');
+    comprobar('y aparecieron las 2 tarrinas de los pollos', total(), 11.5);
+    comprobar('todo va marcado para llevar',
+        corre(`Servicio.tandasDe(ref())[0].items.every(i => i.llevar)`), true);
+    comprobar('y ya no cuenta cubiertos',
+        corre(`Servicio.tandasDe(ref())[0].cubiertos`), 0);
+
+    // Y al revés: se arrepiente y se sienta
+    corre(`cambiarTipoA({ mesa: 7 })`);
+    comprobar('se sienta en la mesa 7',
+        corre(`Servicio.nombreDeCuenta(ref())`), 'Mesa 7');
+    comprobar('las tarrinas se quitan solas', total(), 11);
+    comprobar('el código vuelve a decir la mesa',
+        corre(`Servicio.tandasDe(ref())[0].codigo.split(' ')[0]`), 'M7');
+    comprobar('y vuelven los cubiertos',
+        corre(`Servicio.tandasDe(ref())[0].cubiertos`), 3);
+
+    console.log('\n--- Cuándo NO se deja cambiar ---');
+
+    comprobar('la mesa ocupada no se puede pisar',
+        corre(`(() => { verMesa(2); agregarAlBorrador(Store.findPlato('p2'), 1); enviar();
+                        return Servicio.moverCuenta({ mesa: 7 }, { mesa: 2 }).motivo; })()`),
+        'La mesa 2 está ocupada. Cóbrala primero o escoge otra.');
+
+    comprobar('sin nombre no se puede pasar a llevar',
+        corre(`Servicio.moverCuenta({ mesa: 7 }, { llevar: true, nombre: '  ' }).motivo`),
+        'Escribe a nombre de quién va el pedido.');
+
+    // Ya entregado: eso ya salió de la cocina
+    corre(`(() => {
+        const c = Servicio.tandasDe({ mesa: 7 })[0];
+        Servicio.marcarEntregado(c.id);
+    })()`);
+    comprobar('lo ya entregado bloquea el cambio',
+        corre(`/ya se entregó/.test(Servicio.moverCuenta({ mesa: 7 }, { llevar: true, nombre: 'Ana' }).motivo)`),
+        true);
+    comprobar('pero cambiar de mesa sigue permitido, que no toca el total',
+        corre(`Servicio.moverCuenta({ mesa: 7 }, { mesa: 9 }).ok`), true);
+
+    // Ya cobrado
+    corre(`(() => {
+        const cuenta = Servicio.cuentaDe({ mesa: 9 });
+        Servicio.registrarPago({ mesa: 9, sesion: Servicio.sesionesDe({ mesa: 9 })[0].id,
+                                 lineas: [cuenta.items[0]], forma: 'efectivo' });
+    })()`);
+    comprobar('lo ya cobrado también',
+        corre(`/Ya se cobró/.test(Servicio.moverCuenta({ mesa: 9 }, { llevar: true, nombre: 'Ana' }).motivo)`),
+        true);
+}
 
 /* ============================================================
    EL TABLERO DE LA PARRILLA Y DE LA COCINA
@@ -1211,6 +1299,7 @@ async function main() {
     await probarCorreccionDelMesero();
     probarEcoDeLaNube();
     await probarEnviosJuntos();
+    probarCambioDeServicio();
     probarTableroParrilla();
     probarArrozPendiente();
     probarEscaleraDeTurnos();
