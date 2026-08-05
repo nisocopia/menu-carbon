@@ -110,7 +110,7 @@ function probarExportacion() {
    ============================================================ */
 
 let nube;
-const nubeLimpia = () => { nube = { entrantes: {}, reclamados: new Set() }; };
+const nubeLimpia = () => { nube = { entrantes: {}, reclamados: new Set(), prohibido: null }; };
 
 function celular(rol) {
     const guardado = {};
@@ -131,6 +131,14 @@ function celular(rol) {
         guardar:  async (rama, valor) => { propio.enviado.push({ metodo: 'PUT',   rama, valor }); return true; },
         parchear: async (rama, valor) => { propio.enviado.push({ metodo: 'PATCH', rama, valor }); return true; },
         agregar:  async (rama, valor) => { propio.enviado.push({ metodo: 'POST',  rama, valor }); return true; },
+        /* La cola manda por aquí. `nube.prohibido` deja simular que las
+           reglas rechazan algo, que es lo que pasa cuando un celular
+           tiene encolado lo que anotó con otra cuenta. */
+        enviar: async (rama, valor, metodo) => {
+            if (nube.prohibido && nube.prohibido(rama, valor, metodo)) return { ok: false, status: 401 };
+            propio.enviado.push({ metodo: metodo || 'PUT', rama, valor });
+            return { ok: true, status: 200 };
+        },
         /* Lo que de verdad decide quién se queda con un pedido: las
            reglas solo dejan crear el nodo si todavía no existe. */
         reclamar: async rama => {
@@ -264,6 +272,54 @@ async function probarEscrituras() {
     await soloEsto(`Servicio.anularComanda('${id}', '')`,  ['anulado', 'estado', 'motivo']);
 }
 
+/* ============================================================
+   LO QUE LA NUBE RECHAZA NO PUEDE TRABAR LA COLA
+
+   Pasó de verdad: el celular tomó pedidos en comanda.html con la cuenta
+   de la cocina, y esa cola vive en el navegador, no en la pantalla. Al
+   abrir parrilla.html —mismo navegador, misma cola— la nube rechazaba
+   esos pedidos una y otra vez. Como iban primeros, tapaban todo lo que
+   venía detrás y la pantalla se quedaba en rojo para siempre.
+   ============================================================ */
+
+async function probarColaTrabada() {
+    console.log('\n--- Algo que la nube rechaza, encolado antes que lo bueno ---');
+    nubeLimpia();
+
+    // Se rechaza lo que se refiera a esta comanda concreta
+    nube.prohibido = rama => rama.indexOf('servicio/comandas/veneno') === 0;
+
+    const A = celular('parrilla');
+    A.corre(`localStorage.setItem('srv_cola', JSON.stringify([
+        { rama:'servicio/comandas/veneno', valor:{ id:'veneno' }, metodo:'PUT', intentos:0 },
+        { rama:'servicio/comandas/bueno',  valor:{ sacado:true }, metodo:'PATCH', intentos:0 }
+    ]))`);
+
+    A.corre('Servicio.vaciarCola()');
+    await respirar();
+
+    comprobar('la cola queda vacía, no trabada',      A.corre('Servicio.pendientes()'), 0);
+    comprobar('lo bueno de atrás sí salió',
+        A.propio.enviado.map(e => e.rama), ['servicio/comandas/bueno']);
+    comprobar('lo rechazado se aparta, no se pierde',  A.corre('Servicio.apartadas()'), 1);
+    comprobar('la pantalla puede volver a decir verde', A.corre('Servicio.hayLinea()'), true);
+
+    // Y se puede resolver desde el celular
+    A.corre('Servicio.descartarApartado()');
+    comprobar('descartarlo lo deja en cero', A.corre('Servicio.apartadas()'), 0);
+
+    // Sin permiso de por medio, un fallo de red SIGUE reintentándose
+    nubeLimpia();
+    nube.prohibido = () => false;
+    const B = celular('mesero');
+    B.corre(`localStorage.setItem('srv_cola', JSON.stringify([
+        { rama:'servicio/comandas/x1', valor:{ id:'x1' }, metodo:'PUT', intentos:0 } ]))`);
+    nube.prohibido = null;
+    B.corre('Servicio.vaciarCola()');
+    await respirar();
+    comprobar('lo que sí puede salir, sale', B.corre('Servicio.pendientes()'), 0);
+}
+
 function probarPermisos() {
     console.log('\n--- Quién puede qué ---');
     nubeLimpia();
@@ -287,6 +343,7 @@ async function main() {
     probarMesaConDosSesiones();
     await probarDobleConfirmacion();
     await probarEscrituras();
+    await probarColaTrabada();
     probarPermisos();
 
     console.log(fallos ? `\n${fallos} comprobación(es) FALLARON. No subas todavía.` : '\nTodo bien.');

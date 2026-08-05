@@ -407,10 +407,19 @@ const Sync = (() => {
      */
     const reclamar = (rama, valor) => escribir(rama, valor, 'PUT', true);
 
+    /**
+     * Igual que guardar o parchear, pero diciendo POR QUÉ no salió.
+     *
+     * Lo usa la cola. Sin el motivo, "no salió por el wifi" y "no salió
+     * porque el permiso lo prohíbe" se tratan igual, y el segundo se
+     * reintenta para siempre — tapando todo lo que viene detrás.
+     */
+    const enviar = (rama, valor, metodo) => escribir(rama, valor, metodo || 'PUT', true);
+
     return {
         activo,
         entrar, salir, haySesion, correoSesion, uidSesion, rolSesion, token,
-        escuchar, leer, guardar, parchear, agregar, reclamar,
+        escuchar, leer, guardar, parchear, agregar, reclamar, enviar,
         ramaViva, desdeUltimoContacto, fallo
     };
 })();

@@ -1073,6 +1073,27 @@ body.desconectado .srv-top {
     margin-top: 4px;
 }
 
+/* Resolver desde el celular lo que la nube rechaza, sin tener que ir a
+   borrar los datos del navegador con seis mesas esperando. */
+.srv-alarma-btns {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.srv-alarma-btns button {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 8px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 10px 8px;
+    cursor: pointer;
+}
+
 /* ============================================================
    SOLO MIRANDO
 

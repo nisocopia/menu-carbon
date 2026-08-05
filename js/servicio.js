@@ -27,7 +27,8 @@ const Servicio = (() => {
         sesiones: NS + 'sesiones',
         cola:     NS + 'cola',        // lo que falta subir
         extras:   NS + 'extras',      // bebidas sueltas que se fueron aprendiendo
-        tomados:  NS + 'tomados'      // pedidos del comensal que este celular ya pasó a comanda
+        tomados:  NS + 'tomados',     // pedidos del comensal que este celular ya pasó a comanda
+        apartado: NS + 'apartado'     // lo que la nube rechaza y nunca va a salir
     };
 
     /* Un dispositivo puede quedarse sin nube (sync.js no cargó o el
@@ -37,6 +38,7 @@ const Servicio = (() => {
         escuchar: () => (() => {}), leer: async () => null,
         guardar: async () => false, parchear: async () => false,
         agregar: async () => false, reclamar: async () => ({ ok: false, status: 0 }),
+        enviar: async () => ({ ok: false, status: 0 }),
         ramaViva: () => true, desdeUltimoContacto: () => 0, fallo: () => ''
     };
 
@@ -155,15 +157,26 @@ const Servicio = (() => {
             let cola = read(K.cola, []);
             while (cola.length) {
                 const tarea = cola[0];
-                const ok = tarea.metodo === 'PATCH'
-                    ? await Red.parchear(tarea.rama, tarea.valor)
-                    : await Red.guardar(tarea.rama, tarea.valor);
-                if (!ok) {
-                    // Se queda en la cola y se reintenta más tarde. Que no se
-                    // pierda es más importante que que llegue ya.
+                const r = await Red.enviar(tarea.rama, tarea.valor, tarea.metodo);
+
+                if (!r.ok && r.status !== 401 && r.status !== 403) {
+                    // El wifi o la nube. Se queda en la cola y se reintenta
+                    // más tarde: que no se pierda es más importante que que
+                    // llegue ya.
                     marcarLinea(false);
                     break;
                 }
+
+                /* Permiso denegado. Esto NO se arregla reintentando: con
+                   esta cuenta no va a salir nunca. Antes se reintentaba
+                   igual y, como iba primero, tapaba todo lo que venía
+                   detrás — la pantalla se quedaba en rojo para siempre y
+                   los pedidos buenos no salían tampoco.
+
+                   Se aparta y se sigue. No se borra: queda a un lado,
+                   contado y a la vista, para decidirlo a mano. */
+                if (!r.ok) apartar(tarea);
+
                 cola = read(K.cola, []).slice(1);
                 write(K.cola, cola);
                 marcarLinea(true);
@@ -171,6 +184,50 @@ const Servicio = (() => {
         } finally {
             vaciando = false;
         }
+    }
+
+    /* ------------------------------------------------------------
+       LO QUE LA NUBE RECHAZA
+
+       Casi siempre es de una cuenta que ya no puede hacer eso: pedidos
+       anotados desde el celular de la cocina, por ejemplo. Se aparta
+       para que no trabe lo demás, pero no se tira a la basura sin que
+       nadie lo vea: se cuenta, se muestra y se descarta a mano.
+       ------------------------------------------------------------ */
+
+    function apartar(tarea) {
+        const fuera = read(K.apartado, []);
+        fuera.push({ rama: tarea.rama, valor: tarea.valor, metodo: tarea.metodo,
+                     motivo: porQueNoSale(), cuando: Date.now() });
+        // Solo las últimas 50: esto es para mirarlo, no un archivo histórico
+        write(K.apartado, fuera.slice(-50));
+    }
+
+    const apartadas = () => read(K.apartado, []).length;
+
+    /** Qué es lo apartado, en palabras, para poder decidir si importa. */
+    function detalleApartado() {
+        return read(K.apartado, []).map(t => {
+            const id = String(t.rama).split('/').pop();
+            const c = getComandas()[id];
+            return c ? (c.codigo || codigoDe(c)) : t.rama;
+        });
+    }
+
+    function descartarApartado() {
+        write(K.apartado, []);
+        alCambiar();
+    }
+
+    /** Volver a intentarlo, por si se entró con la cuenta que sí puede. */
+    function reintentarApartado() {
+        const fuera = read(K.apartado, []);
+        if (!fuera.length) return;
+        write(K.cola, read(K.cola, []).concat(
+            fuera.map(t => ({ rama: t.rama, valor: t.valor, metodo: t.metodo, intentos: 0 }))));
+        write(K.apartado, []);
+        vaciarCola();
+        alCambiar();
     }
 
     function marcarLinea(ok) {
@@ -894,6 +951,11 @@ const Servicio = (() => {
         write(K.sesiones, {});
         write(K.pagos, {});
         write(K.tomados, {});
+        /* También lo que este celular tenía sin mandar. Si no, "dejar
+           limpio" dejaba la cola llena de cosas que se refieren a
+           comandas que ya no existen. */
+        write(K.cola, []);
+        write(K.apartado, []);
         entrantes = {};
 
         if (!Red.activo) { alCambiar(); return true; }
@@ -943,6 +1005,7 @@ const Servicio = (() => {
         comandasComoPedidos, sesionesEntre,
         // estado del sistema
         iniciar, hayLinea, pendientes, porQueNoSale, recibiendo, vaciarCola,
+        apartadas, detalleApartado, descartarApartado, reintentarApartado,
         limpiarViejo, vaciarTodo, nuevoId
     };
 })();

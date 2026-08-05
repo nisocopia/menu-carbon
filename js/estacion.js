@@ -286,19 +286,48 @@ function pintarAlarma(recibiendo, faltan) {
     const caja = $('alarma');
     if (!caja) return;
 
-    if (recibiendo && !faltan) { caja.hidden = true; return; }
+    const rechazadas = Servicio.apartadas();
+    if (recibiendo && !faltan && !rechazadas) { caja.hidden = true; return; }
 
     const quien = (typeof Sync !== 'undefined' && Sync.correoSesion) ? Sync.correoSesion() : '';
     const motivo = Servicio.porQueNoSale();
 
     caja.hidden = false;
-    caja.innerHTML = `
-        <strong><i class="fas fa-triangle-exclamation"></i>
-            ${!recibiendo ? 'No está llegando nada' : faltan + ' sin enviar'}</strong>
-        ${motivo ? `<span>${motivo}</span>` : ''}
-        ${!recibiendo && !motivo
-            ? '<span>No se pudo abrir el canal con la nube. Suele ser el wifi o el permiso de la cuenta.</span>' : ''}
-        ${quien ? `<small>Entraste como ${quien}</small>` : ''}`;
+
+    if (!recibiendo || faltan) {
+        caja.innerHTML = `
+            <strong><i class="fas fa-triangle-exclamation"></i>
+                ${!recibiendo ? 'No está llegando nada' : faltan + ' sin enviar'}</strong>
+            ${motivo ? `<span>${motivo}</span>` : ''}
+            ${!recibiendo && !motivo
+                ? '<span>No se pudo abrir el canal con la nube. Suele ser el wifi o el permiso de la cuenta.</span>' : ''}
+            ${quien ? `<small>Entraste como ${quien}</small>` : ''}`;
+        return;
+    }
+
+    caja.innerHTML = avisoRechazadas(rechazadas, quien);
+}
+
+/**
+ * Lo que la nube rechazó y ya no se reintenta.
+ *
+ * Casi siempre es de cuando esta pantalla se usaba con otra cuenta.
+ * Se muestra con nombre y apellido —el código del pedido, no una ruta
+ * de la base de datos— porque quien lo lee tiene que poder decidir si
+ * eso importa o es basura de una prueba.
+ */
+function avisoRechazadas(cuantas, quien) {
+    const cuales = Servicio.detalleApartado().slice(0, 6).join(' · ');
+    return `
+        <strong><i class="fas fa-ban"></i> ${cuantas} que la nube rechaza</strong>
+        <span>No van a salir con esta cuenta, y ya no traban lo demás.
+              Casi siempre son de cuando este celular se usó con otro correo.</span>
+        ${cuales ? `<span>${cuales}</span>` : ''}
+        ${quien ? `<small>Entraste como ${quien}</small>` : ''}
+        <span class="srv-alarma-btns">
+            <button data-rechazadas="descartar">Descartar</button>
+            <button data-rechazadas="reintentar">Reintentar</button>
+        </span>`;
 }
 
 /** Hace cuántos minutos entró el pedido. */
@@ -459,6 +488,26 @@ function itemHtml(it) {
    ACCIONES
    ============================================================ */
 
+/**
+ * Qué hacer con lo que la nube rechazó.
+ *
+ * Descartar avisa de lo que se pierde antes de perderlo. Reintentar
+ * sirve si mientras tanto se entró con la cuenta que sí puede.
+ */
+function resolverRechazadas(que) {
+    if (que === 'reintentar') {
+        Servicio.reintentarApartado();
+        toast('Reintentando…');
+        return;
+    }
+    const n = Servicio.apartadas();
+    if (!confirm(`Descartar ${n} cosa(s) que la nube rechaza?\n\n` +
+                 `Si alguna era un pedido de verdad, la cocina nunca lo vio ` +
+                 `y hay que volver a anotarlo desde la comanda.`)) return;
+    Servicio.descartarApartado();
+    toast('Descartado');
+}
+
 function accion(id) {
     /* El botón ni se dibuja cuando la cuenta es de mirar, pero la
        comprobación se repite aquí: el dibujo se puede editar desde el
@@ -512,6 +561,9 @@ function iniciarEstacion(cual) {
         document.addEventListener('click', e => {
             const btn = e.target.closest('[data-accion]');
             if (btn) { accion(btn.dataset.accion); return; }
+
+            const rech = e.target.closest('[data-rechazadas]');
+            if (rech) { resolverRechazadas(rech.dataset.rechazadas); return; }
 
             // Tocar el aviso rojo dice por que no esta saliendo o entrando
             if (e.target.closest('#red')) {

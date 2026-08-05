@@ -135,15 +135,44 @@ function pintarAlarma(faltan) {
     const caja = $('alarma');
     if (!caja) return;
 
-    if (!faltan) { caja.hidden = true; return; }
+    const rechazadas = Servicio.apartadas();
+    if (!faltan && !rechazadas) { caja.hidden = true; return; }
 
     const quien = (typeof Sync !== 'undefined' && Sync.correoSesion) ? Sync.correoSesion() : '';
     caja.hidden = false;
+
+    if (faltan) {
+        caja.innerHTML = `
+            <strong><i class="fas fa-triangle-exclamation"></i> ${faltan} sin enviar</strong>
+            <span>${Servicio.porQueNoSale() || 'Sin detalle todavía.'}</span>
+            ${quien ? `<small>Entraste como ${quien}</small>` : ''}
+            <small>Lo que anotaste no se pierde: sale solo en cuanto se resuelva.</small>`;
+        return;
+    }
+
+    /* Lo que la nube rechazó ya no se reintenta y no traba lo demás,
+       pero tampoco se tira sin que nadie lo vea. */
+    const cuales = Servicio.detalleApartado().slice(0, 6).join(' · ');
     caja.innerHTML = `
-        <strong><i class="fas fa-triangle-exclamation"></i> ${faltan} sin enviar</strong>
-        <span>${Servicio.porQueNoSale() || 'Sin detalle todavía.'}</span>
+        <strong><i class="fas fa-ban"></i> ${rechazadas} que la nube rechaza</strong>
+        <span>No van a salir con esta cuenta. Casi siempre son de cuando
+              este celular se usó con otro correo.</span>
+        ${cuales ? `<span>${cuales}</span>` : ''}
         ${quien ? `<small>Entraste como ${quien}</small>` : ''}
-        <small>Lo que anotaste no se pierde: sale solo en cuanto se resuelva.</small>`;
+        <span class="srv-alarma-btns">
+            <button data-rechazadas="descartar">Descartar</button>
+            <button data-rechazadas="reintentar">Reintentar</button>
+        </span>`;
+}
+
+function resolverRechazadas(que) {
+    if (que === 'reintentar') { Servicio.reintentarApartado(); toast('Reintentando…'); return; }
+    const n = Servicio.apartadas();
+    if (!confirm(`¿Descartar ${n} cosa(s) que la nube rechaza?\n\n` +
+                 `Si alguna era un pedido de verdad, la cocina nunca lo vio ` +
+                 `y hay que volver a anotarlo.`)) return;
+    Servicio.descartarApartado();
+    toast('Descartado');
 }
 
 /* ============================================================
@@ -734,6 +763,9 @@ function conectarEventos() {
 
     document.addEventListener('click', e => {
         const t = e.target;
+
+        const rech = t.closest('[data-rechazadas]');
+        if (rech) return resolverRechazadas(rech.dataset.rechazadas);
 
         const mesa = t.closest('[data-mesa]');
         if (mesa) return verMesa(Number(mesa.dataset.mesa));
