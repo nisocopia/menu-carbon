@@ -561,17 +561,37 @@ function agregarAlBorrador(plato, cantidad) {
     pintarBorrador();
 }
 
+/**
+ * La tarrina que le tocaría a lo que hay en el borrador.
+ *
+ * Se CALCULA para mostrarla; no se mete en el borrador. Cuando se metía,
+ * cada plato nuevo la sacaba de su fila y la volvía a poner al final, así
+ * que las filas de abajo subían un renglón justo mientras el mesero
+ * estaba tocando — y el dedo terminaba cayendo en el "−" de otro plato,
+ * que lo bajaba a cero y lo borraba.
+ *
+ * Al enviar la agrega Servicio, que es donde tiene que estar.
+ */
+function tarrinaDelBorrador() {
+    const plato = Store.findPlato('t1');
+    const cuantas = plato ? Servicio.tarrinasDe(borrador) : 0;
+    return cuantas ? { plato, cuantas, importe: cuantas * plato.precio } : null;
+}
+
 function pintarBorrador() {
     const cont = $('borrador');
+    const tarrina = tarrinaDelBorrador();
 
-    // La tarrina se pone sola antes de dibujar, así el mesero ve el
-    // total de verdad mientras todavía está armando el pedido y no una
-    // sorpresa al cobrar.
-    Servicio.ajustarTarrinas(borrador);
+    // El pie se queda a la vista aunque no haya nada todavía, porque en
+    // un pedido para llevar ahí está el campo del nombre: si se
+    // escondiera, no habría dónde escribirlo hasta agregar un plato.
+    const pideNombre = !!(refActual && refActual.nuevoLlevar);
 
     if (!borrador.length) {
         cont.innerHTML = '';
-        $('pie-mesa').hidden = true;
+        $('borrador-resumen').textContent = '0 platos';
+        $('borrador-total').textContent = money(0);
+        $('pie-mesa').hidden = !pideNombre;
         pintarPie();
         return;
     }
@@ -585,35 +605,32 @@ function pintarBorrador() {
                     ? '— solo se pueden agregar bebidas y porciones' : ''}
             </div>` : ''}
         <h2 class="borrador-titulo">${editandoTanda ? 'Cómo queda la tanda' : 'Esta tanda'}</h2>
-        ${borrador.map(bitemHtml).join('')}`;
+        ${borrador.map(bitemHtml).join('')}
+        ${tarrina ? filaTarrina(tarrina) : ''}`;
 
-    const total = borrador.reduce((s, i) => s + i.precio * i.cantidad, 0);
-    const n = borrador.filter(i => !i.automatico).reduce((s, i) => s + i.cantidad, 0);
+    const total = borrador.reduce((s, i) => s + i.precio * i.cantidad, 0)
+                + (tarrina ? tarrina.importe : 0);
+    const n = borrador.reduce((s, i) => s + i.cantidad, 0);
     $('borrador-resumen').textContent = n === 1 ? '1 plato' : n + ' platos';
     $('borrador-total').textContent = money(total);
     $('pie-mesa').hidden = false;
     pintarPie();
 }
 
+/** Va siempre al final y no se toca: es para ver de dónde salen los centavos. */
+const filaTarrina = t => `
+    <div class="bitem automatico">
+        <div class="bitem-cant"><span>${t.cuantas}</span></div>
+        <div class="bitem-info">
+            <span class="bitem-nom">${t.plato.nombre}</span>
+            <span class="bitem-det">se agrega sola para lo que se llevan</span>
+        </div>
+        <span class="bitem-pre">${money(t.importe)}</span>
+    </div>`;
+
 function bitemHtml(it) {
     const p = Store.findPlato(it.platoId);
     const faltaElegir = p && p.elegir && it.elegidas.length !== p.elegir.cuantas;
-
-    /* La tarrina la puso el sistema y no se toca a mano: si se pudiera,
-       al siguiente repintado volvería a cuadrarse sola y parecería que
-       la pantalla deshace lo que uno hace. Se muestra para que se vea
-       de dónde salen los centavos, nada más. */
-    if (it.automatico) {
-        return `
-        <div class="bitem automatico">
-            <div class="bitem-cant"><span>${it.cantidad}</span></div>
-            <div class="bitem-info">
-                <span class="bitem-nom">${it.nombre}</span>
-                <span class="bitem-det">se agrega sola para lo que se llevan</span>
-            </div>
-            <span class="bitem-pre">${money(it.precio * it.cantidad)}</span>
-        </div>`;
-    }
 
     // Lo que ya estaba en la tanda cuando pasó el minuto: se ve, no se toca
     if (it.bloqueado) {
@@ -666,11 +683,15 @@ function pintarPie() {
         return;
     }
 
-    const listo = !!nombreLlevar.trim();
-    boton.disabled = !listo;
-    boton.innerHTML = listo
-        ? '<i class="fas fa-paper-plane"></i> Enviar'
-        : '<i class="fas fa-user-pen"></i> Escribe el nombre';
+    /* Dos cosas pueden faltar y hay que decir cuál, no un "no" a secas:
+       el nombre, o los platos. */
+    const hayNombre = !!nombreLlevar.trim();
+    const hayPlatos = borrador.length > 0;
+
+    boton.disabled = !(hayNombre && hayPlatos);
+    boton.innerHTML = !hayNombre ? '<i class="fas fa-user-pen"></i> Escribe el nombre'
+                    : !hayPlatos ? '<i class="fas fa-utensils"></i> Agrega los platos'
+                    : '<i class="fas fa-paper-plane"></i> Enviar';
 }
 
 /** La línea chica de abajo: lo que se le quitó, el término, si es para llevar. */
