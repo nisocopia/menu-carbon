@@ -588,6 +588,96 @@ function probarChecklist() {
 }
 
 /* ============================================================
+   AGREGARLE ALGO A UNA TANDA QUE YA ESTÁ EN MARCHA
+
+   Pasado el minuto, el ticket ya lo contaron en la parrilla y en la
+   cocina. Meterle una línea encima es hacer crecer un papel que alguien
+   tiene en la mano a media faena. Sale como tanda nueva y hace su turno
+   al final, como en el cuaderno: primero en entrar, primero en salir.
+
+   El caso de la casa: la mesa 5 pide 4 chuletas, la mesa 4 pide 2
+   pollos, y la mesa 5 llama para una chuleta más. Esa chuleta va
+   tercera, y va sola.
+   ============================================================ */
+
+function probarAgregarATandaEnMarcha() {
+    console.log('\n--- Una chuleta más para la mesa 5, con la parrilla ya trabajando ---');
+    const { corre } = pantallaComanda();
+
+    corre(`verMesa(5)`);
+    corre(`agregarAlBorrador(Store.findPlato('p2'), 4)`);   // 4 chuletas
+    corre(`agregarAlBorrador(Store.findPlato('r1'), 1)`);   // y un arroz
+    corre(`enviar()`);
+
+    corre(`verMesa(4)`);
+    corre(`agregarAlBorrador(Store.findPlato('p5'), 2)`);   // 2 pollos
+    corre(`enviar()`);
+
+    // Se envejecen las dos: ya pasó el minuto de gracia de las dos
+    corre(`(() => {
+        const t = Servicio.getComandas();
+        Object.values(t).forEach(c => { c.creado = Date.now() - (c.mesa === 5 ? 180000 : 120000); });
+        localStorage.setItem('srv_comandas', JSON.stringify(t));
+    })()`);
+
+    const idMesa5 = corre(`Object.values(Servicio.getComandas()).find(c => c.mesa === 5).id`);
+
+    corre(`verMesa(5)`);
+    corre(`abrirEdicion('${idMesa5}')`);
+    comprobar('la tanda en marcha se abre para agregar, no para rehacer',
+        corre(`editandoTanda.modo`), 'agregados');
+
+    corre(`agregarAlBorrador(Store.findPlato('p2'), 1)`);   // la chuleta que llamaron a pedir
+    comprobar('y se avisa en la pantalla antes de enviar',
+        corre(`vaAparte(borrador[borrador.length - 1])`), true);
+
+    corre(`enviar()`);
+
+    const cola = corre(`Servicio.comandasDe('asador')
+        .map((c, i) => (i + 1) + '. ' + c.codigo)`);
+    comprobar('la parrilla las ve en el orden en que entraron', cola,
+        ['1. M5 · 4CH 1 Arroz', '2. M4 · 2PO', '3. M5b · 1CH']);
+
+    const deMesa5 = corre(`Servicio.tandasDe({ mesa: 5 })
+        .map(c => c.codigo + ': ' + c.items.map(i => i.cantidad + ' ' + i.nombre).join(' + '))`);
+    comprobar('la tanda de antes se queda como estaba', deMesa5[0], 'M5 · 4CH 1 Arroz: 4 Chuleta + 1 Arroz');
+    comprobar('y la nueva lleva solo lo que se agregó', deMesa5[1], 'M5b · 1CH: 1 Chuleta');
+
+    comprobar('las dos se cobran en la misma cuenta',
+        corre(`Servicio.cuentaDe({ mesa: 5 }).total`), 21.5);
+
+    /* Un arroz más no se le suma al arroz que la cocina ya tiene contado:
+       ese ticket está en la mano de alguien. Hace su propia línea. */
+    corre(`abrirEdicion('${idMesa5}')`);
+    corre(`agregarAlBorrador(Store.findPlato('r1'), 1)`);
+    comprobar('un arroz más no engorda el que ya está cocinándose',
+        corre(`borrador.filter(i => i.platoId === 'r1').map(i => i.cantidad)`), [1, 1]);
+    comprobar('y también sale como tanda nueva',
+        corre(`vaAparte(borrador[borrador.length - 1])`), true);
+    corre(`cancelarEdicion()`);
+
+    /* Una bebida no pasa por ninguna pantalla: abrirle una tanda nueva
+       solo sería un código más que leer. Se queda donde está. */
+    corre(`abrirEdicion('${idMesa5}')`);
+    corre(`agregarAlBorrador(Store.findPlato('b3'), 1)`);   // cola personal
+    comprobar('una bebida no abre tanda nueva',
+        corre(`vaAparte(borrador[borrador.length - 1])`), false);
+    corre(`enviar()`);
+
+    comprobar('la cola entra en la tanda de siempre',
+        corre(`Servicio.tandasDe({ mesa: 5 }).length`), 2);
+    comprobar('y se cobra igual',
+        corre(`Servicio.cuentaDe({ mesa: 5 }).total`), 22);
+
+    // Abrir una tanda, mirarla y cerrarla no es corregirla
+    const antes = corre(`Servicio.getComandas()['${idMesa5}'].editado`);
+    corre(`abrirEdicion('${idMesa5}')`);
+    corre(`enviar()`);
+    comprobar('mirar una tanda sin tocarla no la marca como corregida',
+        corre(`Servicio.getComandas()['${idMesa5}'].editado`), antes);
+}
+
+/* ============================================================
    CADA CAMPO CON SU LLAVE
 
    En Firebase el permiso no baja del padre a las hijas, pero un campo
@@ -922,6 +1012,7 @@ async function main() {
     probarEdicion();
     probarMoverMesa();
     probarChecklist();
+    probarAgregarATandaEnMarcha();
     probarLlavesDeCampos();
     await probarCorreccionDelMesero();
     probarEcoDeLaNube();

@@ -527,25 +527,26 @@ function pintarTodoElMenu() {
 
 /* ---------- El borrador ---------- */
 
-/** ¿Se puede meter este plato ahora mismo? */
-function admitido(platoId) {
-    if (!editandoTanda || editandoTanda.modo !== 'agregados') return true;
-    if (Servicio.editableSiempre(platoId)) return true;
-    toast('Ya pasó el minuto: aquí solo entran bebidas y porciones');
-    return false;
-}
+/* Antes, pasado el minuto, aquí solo se dejaban meter bebidas y
+   porciones: cualquier otra cosa se rechazaba con un aviso. Era lo
+   único que se podía hacer mientras un agregado se guardaba encima del
+   ticket que la cocina ya tenía. Ahora lo que hay que cocinar sale como
+   tanda nueva y hace su turno, así que se puede pedir de todo a
+   cualquier hora — que es lo que pasa en el salón. */
 
 function agregarAlBorrador(plato, cantidad) {
-    if (!admitido(plato.id)) return;
-
     // En un pedido para llevar todo va para llevar. Marcarlo plato por
     // plato era pedirle al mesero que repita lo que ya dijo al entrar,
     // y de ahí salían las tarrinas que no se cobraban.
     const paraLlevar = esLlevar();
 
-    // Si ya está y nadie lo modificó, se suma en la misma línea
+    /* Si ya está y nadie lo modificó, se suma en la misma línea.
+       Salvo una cosa: en una tanda ya en marcha, un arroz más no se le
+       suma al arroz que la cocina ya tiene contado — hace su propia
+       línea, y esa saldrá como tanda aparte. */
     const igual = borrador.find(i => i.platoId === plato.id && !i.bloqueado && !i.sin.length &&
-                                     !i.termino && i.llevar === paraLlevar && !i.nota && !i.elegidas.length);
+                                     !i.termino && i.llevar === paraLlevar && !i.nota && !i.elegidas.length &&
+                                     !(saleAparte(plato.id) && yaVenia(i)));
     if (igual) {
         igual.cantidad += (cantidad || 1);
     } else {
@@ -602,7 +603,8 @@ function pintarBorrador() {
                 <i class="fas fa-pen"></i>
                 Corrigiendo <b>${editandoTanda.codigo}</b>
                 ${editandoTanda.modo === 'agregados'
-                    ? '— solo se pueden agregar bebidas y porciones' : ''}
+                    ? '— lo de arriba ya está en marcha. Lo que agregues para cocinar sale como tanda nueva y hace su turno.'
+                    : ''}
             </div>` : ''}
         <h2 class="borrador-titulo">${editandoTanda ? 'Cómo queda la tanda' : 'Esta tanda'}</h2>
         ${borrador.map(bitemHtml).join('')}
@@ -645,8 +647,12 @@ function bitemHtml(it) {
         </div>`;
     }
 
+    // Lo que se le suma a una tanda ya cerrada y hay que cocinar: se
+    // avisa aquí, antes de enviar, no después con un código raro.
+    const aparte = vaAparte(it);
+
     return `
-        <div class="bitem ${faltaElegir ? 'incompleto' : ''}" data-uid="${it.uid}">
+        <div class="bitem ${faltaElegir ? 'incompleto' : ''} ${aparte ? 'aparte' : ''}" data-uid="${it.uid}">
             <div class="bitem-cant">
                 <button data-menos="${it.uid}" aria-label="Quitar uno">−</button>
                 <span>${it.cantidad}</span>
@@ -654,6 +660,7 @@ function bitemHtml(it) {
             </div>
             <div class="bitem-info" data-mod="${it.uid}">
                 <span class="bitem-nom">${it.nombre}</span>
+                ${aparte ? '<span class="bitem-aparte">tanda nueva</span>' : ''}
                 ${detalleItem(it, faltaElegir)}
             </div>
             <span class="bitem-pre">${money(it.precio * it.cantidad)}</span>
@@ -853,7 +860,17 @@ function abrirEdicion(id) {
     const modo = Servicio.edicionDe(c);
     if (modo === 'no') { toast('Esta tanda ya no se puede tocar'); return; }
 
-    editandoTanda = { id, modo, codigo: c.codigo || Servicio.codigoDe(c) };
+    /* Se apunta qué había ya en la tanda. Lo que se agregue encima se
+       reconoce por no estar en esta lista, y si hay que cocinarlo sale
+       como tanda nueva en vez de colarse en el ticket que la cocina
+       tiene en la mano. */
+    editandoTanda = {
+        id, modo,
+        codigo: c.codigo || Servicio.codigoDe(c),
+        sesion: c.sesion,
+        mesa: c.mesa,
+        previos: c.items.map(it => it.uid)
+    };
     borrador = c.items
         .filter(it => !it.automatico)          // la tarrina se recalcula sola
         .map(it => ({
@@ -872,6 +889,62 @@ function cancelarEdicion() {
     pintarMesa();
 }
 
+/**
+ * ¿Este plato del borrador es un agregado que hay que cocinar?
+ *
+ * Lo que se le suma a una tanda ya cerrada NO puede meterse en el
+ * ticket que la parrilla o la cocina tienen delante: ese ticket ya lo
+ * contaron, y a media faena le crecería una línea. Sale como tanda
+ * nueva —M4b— y hace su turno al final, igual que en el cuaderno:
+ * primero en entrar, primero en salir.
+ *
+ * Las bebidas no pasan por ninguna pantalla, así que esas se quedan en
+ * su tanda: abrir una M4b por una cola solo sería un código más que
+ * leer.
+ */
+const saleAparte = platoId =>
+    !!editandoTanda &&
+    editandoTanda.modo === 'agregados' &&
+    Servicio.estacionDe(platoId) !== 'barra';
+
+/** ¿Esta línea ya venía en la tanda, o se agregó en esta corrección? */
+const yaVenia = it => !!editandoTanda && editandoTanda.previos.includes(it.uid);
+
+const vaAparte = it => saleAparte(it.platoId) && !yaVenia(it);
+
+/**
+ * Guarda lo que se corrigió. Puede salir en dos partes: la corrección
+ * encima de la tanda de siempre, y lo agregado como tanda nueva.
+ */
+function guardarEdicion() {
+    const aparte = borrador.filter(vaAparte);
+    const encima = borrador.filter(it => !aparte.includes(it));
+
+    const dicho = [];
+
+    if (encima.length) {
+        // Si no cambió nada, editarComanda no manda nada y no hay qué anunciar
+        const antes = (Servicio.getComandas()[editandoTanda.id] || {}).editado;
+        const c = Servicio.editarComanda(editandoTanda.id, encima);
+        if (c && c.editado !== antes) dicho.push((c.codigo || '') + ' corregido');
+    }
+
+    if (aparte.length) {
+        const nueva = Servicio.enviarComanda({
+            mesa: editandoTanda.mesa || 0,
+            sesion: editandoTanda.sesion,
+            items: aparte,
+            origen: 'mesero'
+        });
+        if (nueva) dicho.push((nueva.codigo || '') + ' a la cola');
+    }
+
+    editandoTanda = null;
+    borrador = [];
+    pintarMesa();
+    toast(dicho.length ? dicho.join(' · ') : 'Sin cambios');
+}
+
 /* ---------- Enviar ---------- */
 
 function enviar() {
@@ -885,15 +958,7 @@ function enviar() {
     });
     if (incompleto) { toast('Falta escoger las carnes del ' + incompleto.nombre); abrirMod(incompleto.uid); return; }
 
-    // Corrigiendo una tanda: se guarda encima, conservando su código
-    if (editandoTanda) {
-        const c = Servicio.editarComanda(editandoTanda.id, borrador);
-        editandoTanda = null;
-        borrador = [];
-        pintarMesa();
-        if (c) toast((c.codigo || '') + ' corregido');
-        return;
-    }
+    if (editandoTanda) { guardarEdicion(); return; }
 
     if (refActual.nuevoLlevar && !nombreLlevar.trim()) {
         toast('Escribe a nombre de quién va el pedido');
