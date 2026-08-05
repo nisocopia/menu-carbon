@@ -602,6 +602,24 @@
 .bitem.automatico .bitem-info,
 .bitem.bloqueado .bitem-info { cursor: default; }
 
+/* Lo que se le agrega a una tanda ya cerrada no se guarda encima: sale
+   como tanda nueva y hace su turno. Se marca aquí, en el borrador, para
+   que no sea una sorpresa al enviar. */
+.bitem.aparte { border-color: #4CAF50; }
+
+.bitem-aparte {
+    display: inline-block;
+    margin-top: 3px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: #1e3a24;
+    color: #7fd88a;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
 .editando-aviso {
     display: flex;
     align-items: center;

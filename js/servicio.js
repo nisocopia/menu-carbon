@@ -625,10 +625,13 @@ const Servicio = (() => {
         automatico: !!it.automatico      // la tarrina, que se puso sola
     }));
 
-    function enviarComanda({ mesa, nombre, items, nota, origen }) {
+    function enviarComanda({ mesa, nombre, items, nota, origen, sesion: sesionId }) {
         if (!items || !items.length) return null;
 
-        const sesion = abrirSesion(mesa, nombre);
+        /* Lo que se agrega a una tanda ya servida se pega a la cuenta de
+           ESA tanda, no a "la sesión de esa mesa": si la mesa tiene dos
+           cuentas abiertas se le cobraría a la equivocada. */
+        const sesion = (sesionId && getSesiones()[sesionId]) || abrirSesion(mesa, nombre);
         // La letra se cuenta sobre la CUENTA: si la mesa quedó con dos
         // sesiones abiertas, sus tandas siguen siendo M3, M3b, M3c y no
         // dos series que empiezan de cero y se pisan.
@@ -884,8 +887,7 @@ const Servicio = (() => {
         const patch = {
             items: copia,
             cubiertos: cubiertosDe(copia),
-            codigo: codigoDe({ ...c, items: copia }),
-            editado: Date.now()
+            codigo: codigoDe({ ...c, items: copia })
         };
 
         /* La nota solo va si de verdad se escribió algo distinto. La
@@ -895,6 +897,14 @@ const Servicio = (() => {
         const notaNueva = nota != null ? nota : (c.nota || '');
         if (notaNueva !== (c.nota || '')) patch.nota = notaNueva;
 
+        /* Abrir una tanda, mirarla y cerrarla no es corregirla. Sin esto
+           la hora de "editado" cambiaba sola y se mandaba un aviso a
+           todos los celulares por no haber hecho nada. */
+        const hayCambio = Object.keys(patch)
+            .some(k => JSON.stringify(patch[k]) !== JSON.stringify(c[k]));
+        if (!hayCambio) return c;
+
+        patch.editado = Date.now();
         return parchearComanda(id, patch);
     }
 
