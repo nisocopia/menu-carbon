@@ -374,9 +374,14 @@ function pintarTandasPrevias() {
                     </button>` : ''}
             </div>
 
-            ${esMesa && Servicio.puedeCobrar() ? `
-                <button class="btn-mover" data-mover="${r.mesa}">
-                    <i class="fas fa-right-left"></i> Cambiar de mesa
+            ${Servicio.puedeCobrar() ? `
+                ${esMesa ? `
+                    <button class="btn-mover" data-mover="${r.mesa}">
+                        <i class="fas fa-right-left"></i> Cambiar de mesa
+                    </button>` : ''}
+                <button class="btn-mover" data-tipo="1">
+                    <i class="fas fa-${esMesa ? 'box' : 'chair'}"></i>
+                    ${esMesa ? 'Pasarlo a para llevar' : 'Sentarlo en una mesa'}
                 </button>` : ''}
         </div>`;
 }
@@ -1090,6 +1095,93 @@ function moverA(destino) {
     toast(`Mesa ${desde} → mesa ${destino}`);
 }
 
+/* ------------------------------------------------------------
+   PASAR DE SERVIRSE A LLEVAR, Y AL REVÉS
+
+   El cliente cambia de idea a mitad del pedido y hasta ahora eso
+   obligaba a anular todo y volver a anotarlo. Es el mismo movimiento
+   que cambiar de mesa —la cuenta entera se va a otro sitio— así que
+   usa la misma hoja y la misma función de abajo.
+
+   Lo que sí es distinto: esto mueve el total, porque lo que se lleva
+   va en tarrina. El número nuevo se enseña ANTES de confirmar.
+   ------------------------------------------------------------ */
+
+function abrirTipo() {
+    const r = ref();
+    if (!r) return;
+
+    const esMesa  = !!r.mesa;
+    const aLlevar = esMesa;                 // se va al contrario de lo que es
+    const puede   = Servicio.puedeCambiarServicio(r);
+
+    $('mover-titulo').textContent = esMesa ? 'Pasarlo a para llevar' : 'Sentarlo en una mesa';
+
+    /* Si no se puede, se dice por qué y no se dibuja ningún botón. Un
+       botón que rebota enseña a desconfiar de la pantalla. */
+    if (!puede.ok) {
+        $('mover-cuerpo').innerHTML = `<p class="mod-nota bloqueo">${puede.motivo}</p>`;
+        $('hoja-mover').classList.add('open');
+        return;
+    }
+
+    const efecto = Servicio.efectoDeCambiarServicio(r, aLlevar);
+    const aviso = efecto.diferencia ? `
+        <p class="mod-nota cambia-total">
+            La cuenta pasa de ${money(efecto.antes)} a <b>${money(efecto.despues)}</b>
+            ${efecto.diferencia > 0 ? '— lo que se lleva va en tarrina' : '— ya no hacen falta las tarrinas'}
+        </p>` : '';
+
+    if (esMesa) {
+        $('mover-cuerpo').innerHTML = `
+            <p class="mod-nota">Se va todo: las tandas, la cuenta y lo que falta cobrar.</p>
+            ${aviso}
+            <label class="pie-nombre">
+                <span>¿A nombre de quién?</span>
+                <input id="tipo-nombre" maxlength="30" autocomplete="off" placeholder="Carlos">
+            </label>
+            <button class="mover-confirmar" data-tipo-ok="1">Pasarlo a para llevar</button>`;
+        $('hoja-mover').classList.add('open');
+        const campo = $('tipo-nombre');
+        if (campo) campo.focus();
+        return;
+    }
+
+    const total = Number(CFG.mesas) || 11;
+    const libres = [];
+    for (let n = 1; n <= total; n++) if (!Servicio.sesionDeMesa(n)) libres.push(n);
+
+    $('mover-cuerpo').innerHTML = libres.length
+        ? `<p class="mod-nota">Se sienta en la mesa que escojas y deja de ser para llevar.</p>
+           ${aviso}
+           <div class="mover-grid">
+               ${libres.map(n => `<button class="mover-mesa" data-tipo-mesa="${n}">${n}</button>`).join('')}
+           </div>`
+        : `<p class="mod-nota">No hay ninguna mesa libre ahora mismo.</p>`;
+
+    $('hoja-mover').classList.add('open');
+}
+
+function cambiarTipoA(destino) {
+    const r = ref();
+    if (!r) return;
+
+    const antes = Servicio.nombreDeCuenta(r);
+
+    /* La sesión se apunta ANTES de mover. Después no habría de dónde
+       sacarla: si la cuenta era { mesa: 3 }, esa mesa acaba de quedar
+       libre y preguntar por ella no devuelve nada. El id de la sesión
+       es lo único que no cambia al moverse. */
+    const sesionId = (Servicio.sesionesDe(r)[0] || {}).id;
+
+    const res = Servicio.moverCuenta(r, destino);
+    if (!res.ok) { alert(res.motivo); return; }
+
+    $('hoja-mover').classList.remove('open');
+    abrirCuenta(destino.llevar ? { sesion: sesionId } : { mesa: destino.mesa });
+    toast(`${antes} → ${Servicio.nombreDeCuenta(ref())}`);
+}
+
 /* ============================================================
    6. NAVEGACIÓN Y EVENTOS
    ============================================================ */
@@ -1224,6 +1316,17 @@ function conectarEventos() {
 
         const destino = t.closest('[data-destino]');
         if (destino) return moverA(Number(destino.dataset.destino));
+
+        if (t.closest('[data-tipo]')) return abrirTipo();
+
+        const aMesa = t.closest('[data-tipo-mesa]');
+        if (aMesa) return cambiarTipoA({ mesa: Number(aMesa.dataset.tipoMesa) });
+
+        if (t.closest('[data-tipo-ok]')) {
+            const nombre = ($('tipo-nombre') || {}).value || '';
+            if (!nombre.trim()) { toast('Escribe a nombre de quién va el pedido'); return; }
+            return cambiarTipoA({ llevar: true, nombre });
+        }
 
         if (t.closest('#mover-cerrar')) return $('hoja-mover').classList.remove('open');
 

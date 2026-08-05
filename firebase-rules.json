@@ -66,6 +66,7 @@
             ".validate": "newData.isNumber()"
           },
           "nombre": {
+            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1')",
             ".validate": "newData.isString() && newData.val().length < 40"
           },
           "nota": {

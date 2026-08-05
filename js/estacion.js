@@ -338,18 +338,19 @@ function pintar() {
 
     const todas = Servicio.comandasDe(ESTACION);
 
-    // La parrilla deja para el final lo que es solo para llevar: así sale
-    // caliente cuando el de la mesa ya está comiendo.
-    const esDiferido = c => ESTACION === 'asador' && c.items.every(it => it.llevar);
+    /* UNA SOLA COLA, POR HORA DE ENTRADA.
 
-    /* "Ya lo saqué" es solo del asador: limpia SU tarjeta cuando la carne
-       sale de la parrilla. La cocina todavía tiene que emplatar y servir,
-       así que su tarjeta se queda hasta que ella misma marque ENTREGADO
-       — eso sí las borra de las dos pantallas, porque el plato ya salió. */
+       La parrilla dejaba para el final lo que era solo para llevar, con
+       la idea de que saliera caliente cuando el de la mesa ya estuviera
+       comiendo. En la práctica rompía la única regla que todo el mundo
+       en el local entiende sin explicación: el primero que entra es el
+       primero que sale. Con dos listas nadie sabía qué iba antes.
+
+       El tipo de servicio ya no decide el orden: solo se distingue con
+       un cartel en la tarjeta. */
     const yaLoSaco = c => ESTACION === 'asador' && c.sacado;
 
-    const activas   = todas.filter(c => !yaLoSaco(c) && !esDiferido(c));
-    const diferidas = todas.filter(c => !yaLoSaco(c) && esDiferido(c));
+    const activas = todas.filter(c => !yaLoSaco(c));
     /* Abajo, plegado, lo que ya se resolvió en esta pantalla:
        en el asador lo que salió de la parrilla, en la cocina lo ya
        entregado. No estorba el tablero y sirve para responder
@@ -375,7 +376,7 @@ function pintar() {
 
     const tablero = $('tablero');
 
-    if (!activas.length && !diferidas.length) {
+    if (!activas.length) {
         /* "Todo al día" solo se puede decir si de verdad se está
            escuchando. Si el canal está caído, la pantalla vacía no
            significa que no haya pedidos: significa que no los vemos. */
@@ -391,14 +392,7 @@ function pintar() {
                        Pregunta antes de dar por hecho que no hay nada.</small>
             </div>`;
     } else {
-        // La numeración sigue de corrido: lo diferido va al final de la
-        // fila, no en una fila aparte que empiece otra vez por el uno.
-        tablero.innerHTML =
-            activas.map((c, i) => tarjeta(c, i + 1)).join('') +
-            (diferidas.length ? `
-                <div class="separador-llevar">
-                    <i class="fas fa-bag-shopping"></i> Para llevar — al final
-                </div>` + diferidas.map((c, i) => tarjeta(c, activas.length + i + 1)).join('') : '');
+        tablero.innerHTML = activas.map((c, i) => tarjeta(c, i + 1)).join('');
     }
 
     const caja = $('sacadas-caja');
@@ -470,6 +464,12 @@ function tarjeta(c, turno) {
         </div>
 
         ${ahora ? '<div class="ticket-ahora">EMPIEZA POR ESTE</div>' : ''}
+
+        <!-- Ya no va al final de la fila, así que el tipo de servicio
+             tiene que decirse aquí y de lejos. En un pedido mixto no
+             sale este cartel: la mesa sigue siendo mesa, y lo que se
+             lleva va marcado plato por plato. -->
+        ${c.mesa ? '' : '<div class="ticket-llevar">📦 PARA LLEVAR</div>'}
 
         <!-- El código guardado, no uno recalculado con lo que ve esta
              pantalla: si el asador dijera "M9 · 2PO" y la cocina
