@@ -1163,7 +1163,8 @@
 }
 
 .ticket-btn.sosteniendo .ticket-btn-progreso {
-    animation: llenar var(--duracion, 2000ms) linear forwards;
+    /* El tiempo lo manda estacion.js (SOSTENER); esto es solo el respaldo */
+    animation: llenar var(--duracion, 1000ms) linear forwards;
 }
 
 @keyframes llenar { to { width: 100%; } }
