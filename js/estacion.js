@@ -423,13 +423,18 @@ function tarjeta(c, turno) {
     const urgencia = min >= 25 ? 'roja' : min >= 15 ? 'ambar' : '';
     const ahora    = turno === 1;
 
+    /* La escalera: el primero encendido, el segundo un punto menos, el
+       tercero otro punto. Del cuarto en adelante todos igual — más
+       escalones no se distinguirían y solo apagarían el tablero. */
+    const escalon = turno >= 1 ? 'turno-' + Math.min(turno, 4) : '';
+
     // Para llevar, el nombre manda: es lo que se grita al entregar
     const quien = c.mesa ? 'Mesa ' + c.mesa
                 : c.nombre ? c.nombre
                 : 'LLEVAR';
 
     return `
-    <article class="ticket ${urgencia} ${apagada(c) ? 'sacada' : ''} ${ahora ? 'ahora' : ''}"
+    <article class="ticket ${urgencia} ${escalon} ${apagada(c) ? 'sacada' : ''} ${ahora ? 'ahora' : ''}"
              data-id="${c.id}">
         <div class="ticket-top">
             ${turno ? `<span class="ticket-turno">${turno}</span>` : ''}
@@ -454,7 +459,7 @@ function tarjeta(c, turno) {
                </div>` : ''}
 
         <ul class="ticket-items">
-            ${c.items.map(it => itemHtml(it, c)).join('')}
+            ${itemsDeLaVista(c).map(it => itemHtml(it, c)).join('')}
         </ul>
 
         ${c.nota ? `<div class="ticket-nota"><i class="fas fa-note-sticky"></i> ${c.nota}</div>` : ''}
@@ -530,6 +535,42 @@ function detallesDe(it) {
 
     return detalles;
 }
+
+/**
+ * Dos renglones que se ven exactamente igual tienen que ser uno solo.
+ *
+ * El mesero manda "1 chuleta sin arroz" y "1 chuleta sin plátano". Lo
+ * que se quita es cosa de la cocina y en la parrilla no se muestra, así
+ * que al asador le llegaban dos renglones idénticos:
+ *
+ *     1 Chuleta
+ *     1 Chuleta        <- este se lo saltó
+ *     2 Pollo
+ *
+ * Pasó en el servicio de verdad: llevó una chuleta y dejó la otra. Se
+ * juntan por lo que SE VE, no por lo que trae el ítem: si en pantalla
+ * no hay nada que las distinga, no pueden ser dos líneas. Lo que sí
+ * cambia el trabajo —el término, las carnes de un mixto, si va para
+ * llevar— sí se ve, así que sigue separando.
+ *
+ * En la cocina no se juntan: ahí cada unidad es una casilla que se
+ * marca, y las casillas van pegadas a su ítem.
+ */
+function juntarIguales(items) {
+    const filas = new Map();
+
+    items.forEach(it => {
+        const seVe = JSON.stringify([it.nombre, !!it.llevar, detallesDe(it)]);
+        const ya = filas.get(seVe);
+        if (ya) ya.cantidad += it.cantidad;
+        else filas.set(seVe, { ...it });
+    });
+
+    return [...filas.values()];
+}
+
+const itemsDeLaVista = c =>
+    ESTACION === 'asador' ? juntarIguales(c.items) : c.items;
 
 /**
  * En la parrilla, una línea por ítem con su cantidad delante.

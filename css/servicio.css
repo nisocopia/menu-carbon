@@ -931,6 +931,29 @@
 
 .ticket.sacada { opacity: 0.5; }
 
+/* ------------------------------------------------------------
+   LA ESCALERA
+
+   Con cuatro o cinco tarjetas iguales una debajo de otra, el número
+   solo no bastaba: había que buscarlo. Ahora el orden también se ve
+   de lejos, sin leer nada — el que va primero encendido, el segundo
+   un punto menos, el tercero otro punto. Del cuarto en adelante todos
+   igual: más escalones no se distinguirían y solo apagarían el
+   tablero.
+
+   Se baja poco a propósito. Esto es para ordenar la mirada, no para
+   esconder pedidos: el de más abajo tiene que seguir leyéndose desde
+   la puerta.
+   ------------------------------------------------------------ */
+
+.ticket.turno-2 { opacity: 0.90; }
+.ticket.turno-3 { opacity: 0.80; }
+.ticket.turno-4 { opacity: 0.74; }
+
+/* Con el reloj no se juega: un pedido de 25 minutos no se apaga por
+   estar abajo en la fila. El tiempo manda sobre el orden. */
+.ticket.roja { opacity: 1; }
+
 .ticket-top {
     display: flex;
     justify-content: space-between;
