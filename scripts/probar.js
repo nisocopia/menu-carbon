@@ -1005,16 +1005,62 @@ function probarCambioDeServicio() {
 function pantallaEstacion(cual) {
     const guardado = {};
 
-    const nodo = () => ({
-        innerHTML: '', textContent: '', value: '', hidden: false, disabled: false,
-        dataset: {}, style: { setProperty() {} },
-        classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
-        addEventListener() {}, focus() {}, closest: () => null, querySelectorAll: () => []
-    });
+    /* Las clases se guardan de verdad y no se tiran: el borde que late
+       mientras queda algo sin anunciar es el único aviso que ningún
+       permiso del navegador puede apagar, así que hay que poder
+       comprobar que se enciende y que se apaga. */
+    const nodo = () => {
+        const clases = new Set();
+        return {
+            innerHTML: '', textContent: '', value: '', hidden: false, disabled: false,
+            dataset: {}, style: { setProperty() {} }, clases,
+            classList: {
+                add: c => clases.add(c),
+                remove: c => clases.delete(c),
+                contains: c => clases.has(c),
+                toggle: (c, on) => { if (on) clases.add(c); else clases.delete(c); }
+            },
+            addEventListener() {}, focus() {}, closest: () => null, querySelectorAll: () => []
+        };
+    };
+
+    /* El mismo id devuelve el mismo nodo. Sin esto no hay forma de mirar
+       en qué quedó un cartel después de tocarlo: cada consulta daba un
+       nodo recién estrenado y en blanco. */
+    const nodos = {};
+    const porId = id => (nodos[id] = nodos[id] || nodo());
+
+    const cuerpo = nodo();
+
+    /* EL AUDIO, A MANO.
+
+       Que suene o no es cosa del navegador y no se puede provocar desde
+       una prueba. Aquí se decide con un interruptor, porque lo que hay
+       que comprobar no es el tono: es qué hace el sistema cuando el
+       navegador se niega a soltarlo. */
+    const sonadas = [];
+    let dejaSonar = false;
+
+    /* Sonar no es instantáneo, y lo que pasa MIENTRAS suena es donde se
+       esconden los pedidos perdidos. `retener` deja el tono a medias
+       para poder meter otro pedido justo en ese hueco. */
+    let reteniendo = false;
+    let soltarPlay = null;
 
     const ctx = vm.createContext({
         console, Date, Math, JSON, Promise, Number, String, Array, Object, Map, Set,
         isNaN, parseFloat, parseInt,
+        Blob: class { constructor(partes, op) { this.partes = partes; this.type = op && op.type; } },
+        URL: { createObjectURL: () => 'blob:prueba' },
+        Audio: class {
+            constructor(src) { this.src = src; this.currentTime = 0; }
+            play() {
+                if (!dejaSonar) return Promise.reject(new Error('bloqueado'));
+                sonadas.push(Date.now());
+                if (!reteniendo) return Promise.resolve();
+                return new Promise(r => { soltarPlay = r; });
+            }
+        },
         Sync: {
             activo: true, haySesion: () => true, correoSesion: () => cual + '@gmail.com',
             uidSesion: () => 'u', rolSesion: () => (cual === 'asador' ? 'parrilla' : 'cocina'),
@@ -1025,8 +1071,8 @@ function pantallaEstacion(cual) {
             ramaViva: () => true, desdeUltimoContacto: () => 0, fallo: () => '',
             salir() {}, entrar: async () => ({})
         },
-        document: { getElementById: nodo, addEventListener() {}, querySelectorAll: () => [],
-                    createElement: nodo, hidden: false },
+        document: { getElementById: porId, addEventListener() {}, querySelectorAll: () => [],
+                    createElement: nodo, hidden: false, title: '', body: cuerpo },
         window: { addEventListener() {}, scrollTo() {} },
         navigator: {},
         setInterval: () => 0, setTimeout: () => 0, clearTimeout() {},
@@ -1042,7 +1088,15 @@ function pantallaEstacion(cual) {
         .forEach(f => vm.runInContext(fuente(f), ctx));
     vm.runInContext(`ESTACION = '${cual}'; PUEDE = true;`, ctx);
 
-    return { corre: e => vm.runInContext(e, ctx) };
+    return {
+        corre: e => vm.runInContext(e, ctx),
+        nodo: porId,
+        cuerpo,
+        sonadas: () => sonadas.length,
+        dejarSonar: v => { dejaSonar = v; },
+        retener: v => { reteniendo = v; },
+        soltar: () => { if (soltarPlay) { soltarPlay(); soltarPlay = null; } }
+    };
 }
 
 /** Una comanda con las dos chuletas que se confundieron, y dos pollos. */
@@ -1158,6 +1212,196 @@ function probarArrozPendiente() {
 
     corre(`Servicio.anularComanda('n3', 'prueba')`);
     comprobar('y lo anulado tampoco', arroz(), 0);
+}
+
+/* ============================================================
+   EL AVISO DE PEDIDO NUEVO
+
+   Es lo único que separa "la cocina lo tiene" de "la cocina no se ha
+   enterado". Y fallaba de la peor manera posible: en silencio. El
+   navegador se negaba a sonar, el pedido se daba por avisado igual, y
+   no se volvía a intentar nunca. Nadie podía notarlo hasta que el
+   plato salía veinte minutos tarde.
+
+   Por eso lo que más se comprueba aquí no es que suene, sino que lo
+   que NO sonó siga esperando.
+   ============================================================ */
+
+async function probarAvisoDePedidoNuevo() {
+    console.log('\n--- El aviso de pedido nuevo ---');
+    const p = pantallaEstacion('cocina');
+    const { corre } = p;
+
+    const meter = (id, extra) => corre(`(() => {
+        const t = Servicio.getComandas();
+        t['${id}'] = Object.assign({
+            id: '${id}', sesion: 's', mesa: 3, creado: 1, estado: 'nuevo',
+            items: [{ uid: 'u${id}', platoId: 'p5', nombre: 'Pollo Asado',
+                      cantidad: 1, precio: 3.5, estacion: 'asador', sin: [] }]
+        }, ${JSON.stringify(extra || {})});
+        localStorage.setItem('srv_comandas', JSON.stringify(t));
+    })()`);
+
+    const pendientes = () => corre('porAvisar.size');
+    const avisado    = id => corre(`avisadas.has('${id}')`);
+    const parpadea   = () => p.cuerpo.clases.has('hay-nuevo');
+
+    /* Lo que ya estaba en el celular al abrir la pantalla es lo de
+       antes, no un pedido que acaba de entrar. */
+    meter('vieja');
+    corre(`Servicio.comandasDe(ESTACION).forEach(c => avisadas.set(c.id, marcaDe(c)))`);
+    p.dejarSonar(true);
+    await corre('revisarNovedades()');
+    comprobar('lo que ya estaba al abrir no suena', p.sonadas(), 0);
+
+    /* Y un pedido nuevo suena YA. Antes había un plazo de cuatro
+       segundos desde que se abría la pantalla, y lo que entraba dentro
+       de ese plazo se perdía sin dejar rastro. */
+    meter('n1');
+    await corre('revisarNovedades()');
+    comprobar('un pedido nuevo suena, sin plazos de espera', p.sonadas(), 1);
+    comprobar('y queda anunciado', avisado('n1'), true);
+    comprobar('sin nada pendiente, la pantalla no parpadea', parpadea(), false);
+
+    /* ---- LO QUE DE VERDAD SE ROMPÍA ---- */
+    corre('sonandoHasta = 0; yaSono = false');
+    p.dejarSonar(false);
+    meter('n2');
+    await corre('revisarNovedades()');
+
+    comprobar('si el navegador no deja sonar, NO se da por avisado', avisado('n2'), false);
+    comprobar('el pedido sigue esperando su aviso', pendientes(), 1);
+    comprobar('y la pantalla lo dice parpadeando', parpadea(), true);
+    comprobar('el cartel dice cuántos hay esperando',
+        /1 pedido nuevo/.test(p.nodo('sin-sonido').innerHTML) &&
+        !p.nodo('sin-sonido').hidden, true);
+
+    // Alguien toca la pantalla: sale lo que se había quedado dentro
+    p.dejarSonar(true);
+    await corre('desbloquear()');
+    comprobar('al tocar la pantalla suena lo que estaba esperando', p.sonadas(), 2);
+    comprobar('y recién ahí se da por avisado', avisado('n2'), true);
+    comprobar('deja de parpadear', parpadea(), false);
+    comprobar('y el cartel se guarda', p.nodo('sin-sonido').hidden, true);
+
+    /* ---- DOS PEDIDOS CASI JUNTOS ----
+
+       Hay una pausa entre alarma y alarma porque dos encima suenan a
+       ruido y no a aviso. Antes esa pausa DESCARTABA el segundo pedido;
+       ahora solo lo hace esperar. */
+    corre('sonandoHasta = Date.now() + 1200');
+    meter('n3');
+    await corre('revisarNovedades()');
+    comprobar('el segundo pedido no suena encima del primero', p.sonadas(), 2);
+    comprobar('pero no se pierde: queda esperando', pendientes(), 1);
+
+    corre('sonandoHasta = 0');
+    await corre('intentarAvisar()');
+    comprobar('y suena en cuanto pasa la pausa', p.sonadas(), 3);
+    comprobar('sin dejar nada pendiente', pendientes(), 0);
+
+    /* ---- UN PEDIDO CORREGIDO ES UN AVISO NUEVO ----
+
+       "Era chuleta, no pollo" cambia el trabajo de la cocina tanto como
+       un pedido nuevo, y antes llegaba en silencio: la tarjeta cambiaba
+       sola y había que darse cuenta mirando. */
+    corre('sonandoHasta = 0');
+    meter('n1', { editado: 999 });
+    await corre('revisarNovedades()');
+    comprobar('corregir un pedido vuelve a sonar', p.sonadas(), 4);
+
+    // Pero deshacer un toque de más no es un pedido nuevo
+    corre('sonandoHasta = 0');
+    corre(`Servicio.marcarEntregado('n1')`);
+    await corre('revisarNovedades()');
+    corre('sonandoHasta = 0');
+    corre(`Servicio.devolverANuevo('n1')`);
+    await corre('revisarNovedades()');
+    comprobar('deshacer un entregado NO suena como pedido nuevo', p.sonadas(), 4);
+}
+
+/**
+ * Sonar tarda, y en ese rato puede entrar otro pedido.
+ *
+ * Es el mismo error de siempre disfrazado: si al terminar el pitido se
+ * diera por avisado TODO lo que hay en la lista, el pedido que entró a
+ * mitad quedaría anunciado por un tono que sonó antes de que existiera.
+ * Nadie lo habría oído y nadie volvería a intentarlo.
+ */
+async function probarPedidoQueEntraMientrasSuena() {
+    console.log('\n--- Un pedido que entra mientras suena el anterior ---');
+    const p = pantallaEstacion('cocina');
+    const { corre } = p;
+
+    const meter = id => corre(`(() => {
+        const t = Servicio.getComandas();
+        t['${id}'] = { id: '${id}', sesion: 's', mesa: 3, creado: 1, estado: 'nuevo',
+            items: [{ uid: 'u${id}', platoId: 'p5', nombre: 'Pollo Asado',
+                      cantidad: 1, precio: 3.5, estacion: 'asador', sin: [] }] };
+        localStorage.setItem('srv_comandas', JSON.stringify(t));
+    })()`);
+
+    p.dejarSonar(true);
+    p.retener(true);
+
+    // Empieza a sonar por el primero y se queda a medias
+    meter('a');
+    const sonando = corre('revisarNovedades()');
+    await respirar();
+    comprobar('el primero está sonando', p.sonadas(), 1);
+
+    // Justo en ese hueco entra el segundo
+    meter('b');
+    corre('revisarNovedades()');
+    await respirar();
+    comprobar('el segundo no suena encima', p.sonadas(), 1);
+
+    // Termina el primer tono
+    p.soltar();
+    await sonando;
+    await respirar();
+
+    comprobar('el primero queda anunciado', corre(`avisadas.has('a')`), true);
+    comprobar('el segundo NO, porque ese tono no era suyo', corre(`avisadas.has('b')`), false);
+    comprobar('y sigue esperando su propio aviso', corre('porAvisar.size'), 1);
+
+    // Y lo consigue en cuanto pasa la pausa
+    p.retener(false);
+    corre('sonandoHasta = 0');
+    await corre('intentarAvisar()');
+    comprobar('que acaba sonando', p.sonadas(), 2);
+    comprobar('sin dejar nada pendiente', corre('porAvisar.size'), 0);
+}
+
+/**
+ * El aviso vivía dentro de la función que dibuja el tablero, y a mitad
+ * de camino. Cualquier fallo dibujando se llevaba la alarma por delante
+ * sin que nadie se enterara. Ahora avisar va primero y no depende de
+ * que el dibujo salga bien.
+ */
+async function probarAvisoIndependienteDelDibujo() {
+    console.log('\n--- Avisar no depende de que el tablero se dibuje ---');
+    const p = pantallaEstacion('cocina');
+    const { corre } = p;
+
+    p.dejarSonar(true);
+    corre(`(() => {
+        const t = Servicio.getComandas();
+        t.roto = { id: 'roto', sesion: 's', mesa: 1, creado: 1, estado: 'nuevo',
+                   items: [{ uid: 'z', platoId: 'p5', nombre: 'Pollo Asado',
+                             cantidad: 1, precio: 3.5, estacion: 'asador', sin: [] }] };
+        localStorage.setItem('srv_comandas', JSON.stringify(t));
+    })()`);
+
+    // Se rompe el dibujo a propósito
+    corre(`pintarRed = () => { throw new Error('tablero roto'); }`);
+
+    let reventó = false;
+    try { await corre('alLlegarDatos()'); } catch (e) { reventó = true; }
+    await respirar();
+
+    comprobar('el tablero revienta', reventó, true);
+    comprobar('pero el aviso salió igual', p.sonadas(), 1);
 }
 
 function probarEscaleraDeTurnos() {
@@ -1304,6 +1548,9 @@ async function main() {
     probarArrozPendiente();
     probarEscaleraDeTurnos();
     probarTomarPedido();
+    await probarAvisoDePedidoNuevo();
+    await probarPedidoQueEntraMientrasSuena();
+    await probarAvisoIndependienteDelDibujo();
 
     console.log(fallos ? `\n${fallos} comprobación(es) FALLARON. No subas todavía.` : '\nTodo bien.');
     process.exit(fallos ? 1 : 0);
