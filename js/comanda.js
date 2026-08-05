@@ -66,11 +66,42 @@ async function entrar() {
     }
 }
 
+/**
+ * Tomar pedidos y cobrar es del mesero y del gerente. La cocina y la
+ * parrilla tienen cuenta del local, pero eso no las hace meseros: con
+ * el correo de la cocina se entraba aquí y se podía anotar y cobrar.
+ *
+ * Se le dice cuál es su pantalla, no solo que no puede.
+ */
+function negarPaso() {
+    const quien = Sync.correoSesion ? Sync.correoSesion() : '';
+    const suya = { cocina: 'cocina.html', parrilla: 'parrilla.html' }[Servicio.rol()];
+    Sync.salir();
+    $('lock').hidden = false;
+    $('lock-error').textContent = quien
+        ? `${quien} no toma pedidos.` + (suya ? ` Tu pantalla es ${suya}.` : '')
+        : 'Esa cuenta no está en la lista del equipo del local.';
+}
+
 function abrirApp() {
+    if (Servicio.permisoEn('comanda') !== 'todo') { negarPaso(); return; }
+
     $('lock').hidden = true;
+    ajustarSegunPermiso();
     Servicio.limpiarViejo(2);
     Servicio.iniciar(redibujar);
     verMesas();
+}
+
+/** Fuera los enlaces a pantallas que esta cuenta no puede abrir. */
+function ajustarSegunPermiso() {
+    document.querySelectorAll('.srv-links a[href]').forEach(a => {
+        const destino = a.getAttribute('href') || '';
+        if (destino.includes('panel')) { a.hidden = Servicio.rol() !== 'gerente'; return; }
+        const pantalla = destino.includes('parrilla') ? 'asador'
+                       : destino.includes('cocina')   ? 'cocina' : null;
+        if (pantalla) a.hidden = Servicio.permisoEn(pantalla) === 'no';
+    });
 }
 
 /* ============================================================
@@ -175,7 +206,10 @@ function pintarMesas() {
 
     for (let n = 1; n <= total; n++) {
         const sesion = Servicio.sesionDeMesa(n);
-        const cuenta = sesion ? Servicio.cuentaDeSesion(sesion.id) : null;
+        // La cuenta es de la MESA: si por lo que sea quedó con dos
+        // sesiones abiertas, aquí salen las dos sumadas y no se pierde
+        // de vista lo que comió nadie.
+        const cuenta = sesion ? Servicio.cuentaDeMesa(n) : null;
         const ocupada = !!sesion;
 
         // Cuánto lleva sentada la mesa: ayuda a saber a quién atender
@@ -224,8 +258,8 @@ function pintarTandasPrevias() {
 
     if (!sesion) { cont.innerHTML = ''; return; }
 
-    const tandas = Servicio.comandasDeSesion(sesion.id).filter(c => c.estado !== 'anulado');
-    const cuenta = Servicio.cuentaDeSesion(sesion.id);
+    const tandas = Servicio.comandasDeMesa(mesaActual).filter(c => c.estado !== 'anulado');
+    const cuenta = Servicio.cuentaDeMesa(mesaActual);
 
     if (!tandas.length) { cont.innerHTML = ''; return; }
 
@@ -245,7 +279,7 @@ function pintarTandasPrevias() {
             <div class="previa-cuenta">
                 <span>Cuenta de la mesa</span>
                 <strong>${money(cuenta.saldo)}</strong>
-                <button class="btn-cobrar-abrir" data-cobrar="${sesion.id}">
+                <button class="btn-cobrar-abrir" data-cobrar="${mesaActual}">
                     <i class="fas fa-cash-register"></i> Cobrar
                 </button>
             </div>
@@ -580,10 +614,13 @@ function enviar() {
    5. VISTA: COBRAR
    ============================================================ */
 
-let sesionCobrando = null;
+/* Se cobra la MESA, no una sesión suelta: es lo que el mesero tiene
+   delante y es lo único que garantiza que no queden platos sin cobrar
+   en una segunda sesión que nadie está mirando. */
+let mesaCobrando = null;
 
-function verCobrar(sesionId) {
-    sesionCobrando = sesionId;
+function verCobrar(mesa) {
+    mesaCobrando = mesa;
     seleccion = new Map();
     mostrarVista('cobrar');
     $('titulo').textContent = 'Cobrar';
@@ -592,7 +629,7 @@ function verCobrar(sesionId) {
 }
 
 function pintarCobrar() {
-    const cuenta = Servicio.cuentaDeSesion(sesionCobrando);
+    const cuenta = Servicio.cuentaDeMesa(mesaCobrando);
 
     $('cobrar-lista').innerHTML = cuenta.items.filter(l => l.pendiente > 0).map(l => {
         const clave = l.platoId + '|' + l.precio;
@@ -631,9 +668,9 @@ function cobrar(forma) {
 
     if (!lineas.length) { toast('Toca primero lo que se va a cobrar.'); return; }
 
-    Servicio.registrarPago({ sesionId: sesionCobrando, lineas, forma });
+    Servicio.registrarPago({ mesa: mesaCobrando, lineas, forma });
 
-    const cuenta = Servicio.cuentaDeSesion(sesionCobrando);
+    const cuenta = Servicio.cuentaDeMesa(mesaCobrando);
     if (cuenta.saldo <= 0.001) { toast('Mesa cerrada'); verMesas(); }
     else { seleccion = new Map(); pintarCobrar(); toast('Cobrado · faltan ' + money(cuenta.saldo)); }
 }
@@ -739,12 +776,23 @@ function conectarEventos() {
         }
 
         const abrirCobro = t.closest('[data-cobrar]');
-        if (abrirCobro) return verCobrar(abrirCobro.dataset.cobrar);
+        if (abrirCobro) return verCobrar(Number(abrirCobro.dataset.cobrar));
 
         const confirmar = t.closest('[data-confirmar]');
         if (confirmar) {
-            const c = Servicio.confirmarEntrante(confirmar.dataset.confirmar);
-            if (c) avisarEnviada(c);
+            /* Se apaga el botón mientras se resuelve. Confirmar pide
+               permiso a la nube antes de crear nada, y ese viaje deja
+               una rendija para tocar dos veces — que es justo lo que se
+               está evitando. */
+            confirmar.disabled = true;
+            Servicio.confirmarEntrante(confirmar.dataset.confirmar).then(c => {
+                if (!c) return;
+                if (c.ocupado) { toast('Ese pedido ya lo confirmó otro celular'); return; }
+                avisarEnviada(c);
+            }).catch(() => {
+                confirmar.disabled = false;
+                toast('No se pudo confirmar. Inténtalo otra vez.');
+            });
             return;
         }
 
@@ -807,7 +855,7 @@ function conectarEventos() {
         }
 
         if (t.closest('#cobrar-todo')) {
-            Servicio.cuentaDeSesion(sesionCobrando).items.forEach(l => {
+            Servicio.cuentaDeMesa(mesaCobrando).items.forEach(l => {
                 if (l.pendiente > 0) seleccion.set(l.platoId + '|' + l.precio, l.pendiente);
             });
             pintarCobrar();

@@ -143,6 +143,26 @@ const Sync = (() => {
         return (sesion && sesion.uid) || null;
     }
 
+    /**
+     * Qué papel tiene la cuenta que entró: 'gerente', 'mesero', 'cocina'
+     * o 'parrilla'. Sale de la lista EQUIPO de menu-data.js.
+     *
+     * Si el local no llenó esa lista, devuelve 'gerente' para todos: es
+     * como funcionaba antes y así nadie se queda afuera por no haberla
+     * configurado todavía. En cambio, si la lista existe y la cuenta no
+     * está en ella, devuelve null — y quien pregunte debe negarle el
+     * paso, no dejarlo entrar por si acaso.
+     *
+     * Esto ordena las pantallas; NO es la seguridad. La seguridad son
+     * las reglas de Firebase, que revisan lo mismo del lado del servidor.
+     */
+    function rolSesion() {
+        const equipo = (typeof EQUIPO !== 'undefined' && EQUIPO) ? EQUIPO : {};
+        if (!Object.keys(equipo).length) return haySesion() ? 'gerente' : null;
+        const uid = uidSesion();
+        return (uid && equipo[uid]) || null;
+    }
+
     /* ---------------- LECTURA EN VIVO ---------------- */
 
     /**
@@ -317,15 +337,25 @@ const Sync = (() => {
 
     /* ---------------- ESCRITURA ---------------- */
 
+    /**
+     * Devuelve `{ ok, status }`, no solo un sí o un no.
+     *
+     * El motivo importa: "no salió porque no hay wifi" se reintenta, y
+     * "no salió porque el permiso lo prohíbe" nunca va a salir por más
+     * que se reintente. Sin el número de estado no se pueden distinguir,
+     * y el que decide qué celular se queda con un pedido necesita saber
+     * exactamente esa diferencia. `status: 0` es que ni siquiera hubo
+     * respuesta.
+     */
     async function escribir(rama, valor, metodo, conSesion) {
-        if (!activo) { ultimoFallo = 'Este local no tiene nube configurada'; return false; }
+        if (!activo) { ultimoFallo = 'Este local no tiene nube configurada'; return { ok: false, status: 0 }; }
 
         let url = `${BD}/${rama}.json`;
         if (conSesion !== false) {
             const t = await token();
             if (!t) {
                 ultimoFallo = 'No hay sesión válida. Vuelve a entrar con tu correo y clave.';
-                return false;
+                return { ok: false, status: 0 };
             }
             url += `?auth=${encodeURIComponent(t)}`;
         }
@@ -337,31 +367,50 @@ const Sync = (() => {
                 body: JSON.stringify(valor)
             });
 
-            if (r.ok) { ultimoFallo = ''; return true; }
+            if (r.ok) { ultimoFallo = ''; return { ok: true, status: r.status }; }
 
             const detalle = await r.text().catch(() => '');
-            ultimoFallo = r.status === 401
+            ultimoFallo = (r.status === 401 || r.status === 403)
                 ? `Permiso denegado en "${rama}". Revisa las reglas de Firebase.`
                 : `Error ${r.status} en "${rama}". ${String(detalle).slice(0, 120)}`;
-            return false;
+            return { ok: false, status: r.status };
         } catch (e) {
             ultimoFallo = (e && e.name === 'AbortError')
                 ? 'La nube no respondió a tiempo. Se reintenta solo.'
                 : 'Sin conexión con la nube';
-            return false;
+            return { ok: false, status: 0 };
         }
     }
 
-    /** Reemplaza el contenido de una rama (requiere ser el gerente). */
-    const guardar = (rama, valor) => escribir(rama, valor, 'PUT', true);
+    /** Reemplaza el contenido de una rama. */
+    const guardar = async (rama, valor) => (await escribir(rama, valor, 'PUT', true)).ok;
+
+    /**
+     * Cambia solo los campos que se le pasan y deja el resto quieto.
+     *
+     * Hace falta para que cada pantalla pueda tener permiso sobre lo
+     * suyo y nada más: si el asador mandara la comanda entera cada vez
+     * que toca "Ya lo saqué", necesitaría permiso para escribir todos
+     * los campos, y entonces el permiso no separaría nada.
+     */
+    const parchear = async (rama, valor) => (await escribir(rama, valor, 'PATCH', true)).ok;
 
     /** Agrega un elemento nuevo sin pisar los demás (lo usa el comensal). */
-    const agregar = (rama, valor) => escribir(rama, valor, 'POST', false);
+    const agregar = async (rama, valor) => (await escribir(rama, valor, 'POST', false)).ok;
+
+    /**
+     * Escribe con el detalle del fallo a la vista. Se usa para reclamar
+     * algo que solo puede ser de uno: las reglas dejan crear el nodo
+     * únicamente si todavía no existe, así que el primer celular que
+     * llega recibe ok y el segundo recibe 401. Ese 401 es la respuesta,
+     * no un error.
+     */
+    const reclamar = (rama, valor) => escribir(rama, valor, 'PUT', true);
 
     return {
         activo,
-        entrar, salir, haySesion, correoSesion, uidSesion, token,
-        escuchar, leer, guardar, agregar,
+        entrar, salir, haySesion, correoSesion, uidSesion, rolSesion, token,
+        escuchar, leer, guardar, parchear, agregar, reclamar,
         ramaViva, desdeUltimoContacto, fallo
     };
 })();

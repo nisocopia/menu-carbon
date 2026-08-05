@@ -26,17 +26,64 @@ const Servicio = (() => {
         pagos:    NS + 'pagos',
         sesiones: NS + 'sesiones',
         cola:     NS + 'cola',        // lo que falta subir
-        extras:   NS + 'extras'       // bebidas sueltas que se fueron aprendiendo
+        extras:   NS + 'extras',      // bebidas sueltas que se fueron aprendiendo
+        tomados:  NS + 'tomados'      // pedidos del comensal que este celular ya pasó a comanda
     };
 
     /* Un dispositivo puede quedarse sin nube (sync.js no cargó o el
        restaurante no la configuró) y aun así tiene que tomar pedidos. */
     const Red = (typeof Sync !== 'undefined') ? Sync : {
-        activo: false, haySesion: () => false,
+        activo: false, haySesion: () => false, rolSesion: () => 'gerente',
         escuchar: () => (() => {}), leer: async () => null,
-        guardar: async () => false, agregar: async () => false,
+        guardar: async () => false, parchear: async () => false,
+        agregar: async () => false, reclamar: async () => ({ ok: false, status: 0 }),
         ramaViva: () => true, desdeUltimoContacto: () => 0, fallo: () => ''
     };
+
+    /* ============================================================
+       QUIÉN PUEDE QUÉ
+
+       Cada celular entra con su cuenta y esa cuenta manda una sola
+       pantalla. Las otras las puede mirar, porque saber si la carne ya
+       salió sirve a todos, pero no tocarlas: dos manos sobre el mismo
+       botón es como se pierde un plato.
+
+         todo  manda en esa pantalla
+         ver   la abre y la lee, pero no puede tocar nada
+         no    ni siquiera la abre
+
+       Esto ordena las pantallas. La seguridad de verdad son las reglas
+       de Firebase, que revisan lo mismo del lado del servidor: aquí se
+       podría hacer trampa editando el navegador, allá no.
+       ============================================================ */
+
+    const PERMISOS = {
+        gerente:  { comanda: 'todo', cocina: 'todo', parrilla: 'todo' },
+        mesero:   { comanda: 'todo', cocina: 'ver',  parrilla: 'ver'  },
+        cocina:   { comanda: 'no',   cocina: 'todo', parrilla: 'ver'  },
+        parrilla: { comanda: 'no',   cocina: 'ver',  parrilla: 'todo' }
+    };
+
+    /** El rol de quien entró en este celular, o null si no entró nadie. */
+    const rol = () => (Red.rolSesion ? Red.rolSesion() : 'gerente');
+
+    /**
+     * Qué puede hacer quien entró en la pantalla que se le pregunte.
+     * La parrilla se llama 'asador' en los datos de los platos y
+     * 'parrilla' en los permisos: es la misma.
+     */
+    function permisoEn(pantalla) {
+        const cual = pantalla === 'asador' ? 'parrilla' : pantalla;
+        const quien = rol();
+        if (!quien) return 'no';
+        const reglas = PERMISOS[quien];
+        // Un rol escrito con un error de dedo en menu-data.js no debe
+        // abrirlo todo: se niega y la pantalla dice qué revisar.
+        if (!reglas) return 'no';
+        return reglas[cual] || 'no';
+    }
+
+    const puedeTocar = pantalla => permisoEn(pantalla) === 'todo';
 
     let alCambiar = () => {};
     let enLinea   = true;
@@ -70,7 +117,12 @@ const Servicio = (() => {
        LA COLA: lo que todavía no llegó a la nube
        ============================================================ */
 
-    function encolar(rama, valor) {
+    /**
+     * @param metodo 'PUT' manda el objeto entero (crear), 'PATCH' manda
+     *        solo los campos que cambiaron (corregir). Lo viejo que haya
+     *        quedado en la cola sin método se sigue tratando como PUT.
+     */
+    function encolar(rama, valor, metodo) {
         /* Si el local no tiene nube, no hay a dónde mandarlo y todo vive
            en este celular. Encolarlo dejaría la alarma roja prendida para
            siempre diciendo que algo no salió, cuando no hay nada que
@@ -78,7 +130,7 @@ const Servicio = (() => {
         if (!Red.activo) return;
 
         const cola = read(K.cola, []);
-        cola.push({ rama, valor, intentos: 0 });
+        cola.push({ rama, valor, metodo: metodo || 'PUT', intentos: 0 });
         write(K.cola, cola);
         vaciarCola();
     }
@@ -103,7 +155,9 @@ const Servicio = (() => {
             let cola = read(K.cola, []);
             while (cola.length) {
                 const tarea = cola[0];
-                const ok = await Red.guardar(tarea.rama, tarea.valor);
+                const ok = tarea.metodo === 'PATCH'
+                    ? await Red.parchear(tarea.rama, tarea.valor)
+                    : await Red.guardar(tarea.rama, tarea.valor);
                 if (!ok) {
                     // Se queda en la cola y se reintenta más tarde. Que no se
                     // pierda es más importante que que llegue ya.
@@ -261,12 +315,34 @@ const Servicio = (() => {
        SESIONES DE MESA
        ============================================================ */
 
-    /** La sesión abierta de una mesa, o null si la mesa está libre. */
-    function sesionDeMesa(mesa) {
+    /**
+     * TODAS las sesiones abiertas de una mesa.
+     *
+     * Normalmente es una. Son dos cuando dos celulares sientan a la
+     * misma mesa en el mismo momento: ninguno alcanzó a ver la del
+     * otro y cada uno abrió la suya. Eso pasa y no se puede evitar sin
+     * un servidor que reparta turnos.
+     *
+     * Lo que sí se puede es que no importe: de aquí en adelante la
+     * cuenta es de la MESA y suma todas sus sesiones. Antes se mostraba
+     * solo la más nueva, así que los platos de la otra existían pero no
+     * los veía nadie — y nadie los cobraba.
+     */
+    function sesionesAbiertasDeMesa(mesa) {
         return Object.values(getSesiones())
             .filter(s => s.mesa === mesa && s.abierta)
-            .sort((a, b) => b.creado - a.creado)[0] || null;
+            .sort((a, b) => a.creado - b.creado || String(a.id).localeCompare(String(b.id)));
     }
+
+    /**
+     * La sesión con la que se anota lo nuevo de esa mesa: la más vieja.
+     *
+     * Que sea la más vieja y no la más nueva no es un detalle: es un
+     * orden que los dos celulares calculan igual sin hablarse, así que
+     * los dos terminan escribiendo en la misma y el desdoble se cierra
+     * solo en cuanto se ven.
+     */
+    const sesionDeMesa = mesa => sesionesAbiertasDeMesa(mesa)[0] || null;
 
     function abrirSesion(mesa) {
         const ya = sesionDeMesa(mesa);
@@ -283,11 +359,16 @@ const Servicio = (() => {
     function cerrarSesion(sesionId) {
         const todas = getSesiones();
         const s = todas[sesionId];
-        if (!s) return;
+        if (!s || !s.abierta) return;
         s.abierta = false;
         s.cerrado = Date.now();
         write(K.sesiones, todas);
         encolar(`servicio/sesiones/${sesionId}`, s);
+    }
+
+    /** La mesa quedó pagada: se liberan todas sus sesiones, no solo una. */
+    function cerrarMesa(mesa) {
+        sesionesAbiertasDeMesa(mesa).forEach(s => cerrarSesion(s.id));
         alCambiar();
     }
 
@@ -295,6 +376,14 @@ const Servicio = (() => {
         Object.values(getComandas())
             .filter(c => c.sesion === sesionId)
             .sort((a, b) => a.creado - b.creado);
+
+    /** Lo que pidió la mesa, venga de la sesión que venga. */
+    function comandasDeMesa(mesa) {
+        const ids = new Set(sesionesAbiertasDeMesa(mesa).map(s => s.id));
+        return Object.values(getComandas())
+            .filter(c => ids.has(c.sesion))
+            .sort((a, b) => a.creado - b.creado);
+    }
 
     const pagosDeSesion = sesionId =>
         Object.values(getPagos())
@@ -313,7 +402,10 @@ const Servicio = (() => {
         if (!items || !items.length) return null;
 
         const sesion = abrirSesion(mesa);
-        const tanda  = comandasDeSesion(sesion.id).length;
+        // La letra se cuenta sobre la MESA: si la mesa quedó con dos
+        // sesiones abiertas, sus tandas siguen siendo M3, M3b, M3c y no
+        // dos series que empiezan de cero y se pisan.
+        const tanda  = comandasDeMesa(mesa).length;
 
         const comanda = {
             id: nuevoId(),
@@ -352,13 +444,22 @@ const Servicio = (() => {
         return comanda;
     }
 
+    /**
+     * Cambia unos campos de una comanda y manda a la nube SOLO esos.
+     *
+     * Antes se reenviaba la comanda entera. Además de pesar de más,
+     * obligaba a que el asador tuviera permiso sobre todos los campos
+     * para poder tocar el suyo — y con eso el permiso ya no separaba
+     * nada. Mandando solo el campo, cada pantalla necesita permiso
+     * únicamente sobre lo que de verdad cambia.
+     */
     function parchearComanda(id, patch) {
         const todas = getComandas();
         const c = todas[id];
         if (!c) return null;
         Object.assign(c, patch);
         write(K.comandas, todas);
-        encolar(`servicio/comandas/${id}`, c);
+        encolar(`servicio/comandas/${id}`, patch, 'PATCH');
         alCambiar();
         return c;
     }
@@ -404,12 +505,13 @@ const Servicio = (() => {
        falta se queda abierto en la mesa.
        ============================================================ */
 
-    /** Lo que la mesa pidió, junto y sin repetir, con lo que ya pagó descontado. */
-    function cuentaDeSesion(sesionId) {
+    /** Junta lo pedido en varias sesiones y le descuenta lo ya pagado. */
+    function cuentaDe(sesionIds) {
+        const ids = new Set(sesionIds);
         const lineas = new Map();
 
-        comandasDeSesion(sesionId)
-            .filter(c => c.estado !== 'anulado')
+        Object.values(getComandas())
+            .filter(c => ids.has(c.sesion) && c.estado !== 'anulado')
             .forEach(c => c.items.forEach(it => {
                 const clave = it.platoId + '|' + it.precio;
                 const l = lineas.get(clave) || { platoId: it.platoId, nombre: it.nombre, precio: it.precio, cantidad: 0, pagada: 0 };
@@ -417,11 +519,13 @@ const Servicio = (() => {
                 lineas.set(clave, l);
             }));
 
-        pagosDeSesion(sesionId).forEach(p => (p.lineas || []).forEach(pl => {
-            const clave = pl.platoId + '|' + pl.precio;
-            const l = lineas.get(clave);
-            if (l) l.pagada += pl.cantidad;
-        }));
+        Object.values(getPagos())
+            .filter(p => ids.has(p.sesion))
+            .forEach(p => (p.lineas || []).forEach(pl => {
+                const clave = pl.platoId + '|' + pl.precio;
+                const l = lineas.get(clave);
+                if (l) l.pagada += pl.cantidad;
+            }));
 
         const items = [...lineas.values()].map(l => ({ ...l, pendiente: l.cantidad - l.pagada }));
         const total    = items.reduce((s, l) => s + l.cantidad * l.precio, 0);
@@ -430,10 +534,26 @@ const Servicio = (() => {
         return { items, total, cobrado, saldo: total - cobrado };
     }
 
-    function registrarPago({ sesionId, lineas, forma }) {
+    const cuentaDeSesion = sesionId => cuentaDe([sesionId]);
+
+    /**
+     * La cuenta que se cobra: la de la MESA entera.
+     *
+     * Es la que ve el mesero y la que decide cuándo se libera la mesa.
+     * Si la mesa quedó con dos sesiones abiertas, aquí salen las dos
+     * juntas y no hay platos escondidos.
+     */
+    const cuentaDeMesa = mesa => cuentaDe(sesionesAbiertasDeMesa(mesa).map(s => s.id));
+
+    function registrarPago({ mesa, lineas, forma }) {
+        const abiertas = sesionesAbiertasDeMesa(mesa);
+        if (!abiertas.length) return null;
+
         const monto = lineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
         const pago = {
-            id: nuevoId(), sesion: sesionId, lineas, monto,
+            // El cobro se anota en la sesión con la que se viene
+            // anotando todo lo de esa mesa, para que quede junto.
+            id: nuevoId(), sesion: abiertas[0].id, mesa, lineas, monto,
             forma: forma || 'efectivo', cuando: Date.now()
         };
 
@@ -442,8 +562,8 @@ const Servicio = (() => {
         write(K.pagos, todos);
         encolar(`servicio/pagos/${pago.id}`, pago);
 
-        // Si ya no queda saldo, la mesa se libera sola
-        if (cuentaDeSesion(sesionId).saldo <= 0.001) cerrarSesion(sesionId);
+        // Si ya no queda saldo, la mesa se libera sola — entera
+        if (cuentaDeMesa(mesa).saldo <= 0.001) cerrarMesa(mesa);
         else alCambiar();
 
         return pago;
@@ -484,14 +604,83 @@ const Servicio = (() => {
 
     let entrantes = {};
 
+    /* ------------------------------------------------------------
+       QUE NO SE CONFIRME DOS VECES
+
+       Confirmar un pedido lo borra de la bandeja, pero ese borrado
+       viaja por la red y tarda. Mientras tanto la bandeja se vuelve a
+       preguntar cada pocos segundos, y lo que contesta la nube pisa lo
+       que sabe el celular: el pedido reaparecía como si nadie lo
+       hubiera tocado. Uno lo confirmaba otra vez y a la parrilla le
+       llegaba dos veces el mismo plato, con la cuenta doblada.
+
+       Se cierra por los dos lados:
+
+       1. ESTE celular anota qué pedidos ya pasó a comanda. Aunque la
+          nube se los devuelva, no los vuelve a mostrar.
+       2. Entre celulares no alcanza con anotar, porque cada uno anota
+          lo suyo. Ahí se reclama el pedido en la nube: las reglas solo
+          dejan crear la marca si todavía no existe, así que el primero
+          que llega la crea y al segundo le rebota. Un solo ganador.
+       ------------------------------------------------------------ */
+
+    const getTomados = () => read(K.tomados, {});
+    const yaTomado   = llave => !!getTomados()[llave];
+
+    function marcarTomado(llave) {
+        const t = getTomados();
+        t[llave] = Date.now();
+        write(K.tomados, t);
+    }
+
+    /** Se olvida de lo que ya no está en la bandeja: no hay nada que tapar. */
+    function limpiarTomados() {
+        const t = getTomados();
+        let cambio = false;
+        Object.keys(t).forEach(k => {
+            if (!entrantes[k] || Date.now() - t[k] > 6 * 3600 * 1000) { delete t[k]; cambio = true; }
+        });
+        if (cambio) write(K.tomados, t);
+    }
+
     const getEntrantes = () => Object.entries(entrantes)
+        .filter(([llave]) => !yaTomado(llave))
         .map(([llave, e]) => ({ ...e, llave }))
         .sort((a, b) => a.creado - b.creado);
 
-    /** El mesero lo acepta: recién ahí sale a la parrilla y a la cocina. */
-    function confirmarEntrante(llave, mesa) {
+    /**
+     * El mesero lo acepta: recién ahí sale a la parrilla y a la cocina.
+     *
+     * Devuelve la comanda creada, `{ ocupado: true }` si otro celular se
+     * le adelantó, o null si ya no había nada que confirmar.
+     */
+    async function confirmarEntrante(llave, mesa) {
         const e = entrantes[llave];
-        if (!e) return null;
+        if (!e || yaTomado(llave)) return null;
+
+        // Primero se anota aquí: así un doble toque nervioso ya no pasa,
+        // aunque la red esté lenta y todavía no se sepa nada de nadie.
+        marcarTomado(llave);
+        alCambiar();
+
+        if (Red.activo) {
+            const r = await Red.reclamar(`servicio/tomados/${llave}`,
+                { por: (Red.correoSesion && Red.correoSesion()) || '', cuando: Date.now() });
+
+            /* Rebotó porque otro ya lo tenía. No es un error de red: es la
+               respuesta. Se sale sin crear nada. */
+            if (!r.ok && (r.status === 401 || r.status === 403)) {
+                delete entrantes[llave];
+                alCambiar();
+                return { ocupado: true };
+            }
+
+            /* Si no hubo respuesta (status 0) seguimos adelante. Sin red
+               no se puede saber si alguien más lo tomó, y entre perder un
+               pedido y arriesgar un duplicado raro, se prefiere que la
+               comida salga: el duplicado se ve y se anula, el pedido que
+               nunca entró no lo ve nadie. */
+        }
 
         const comanda = enviarComanda({
             mesa: mesa != null ? mesa : e.mesa,
@@ -611,7 +800,7 @@ const Servicio = (() => {
 
         if (ses !== undefined) mezclar(K.sesiones, ses);
         if (pag !== undefined) mezclar(K.pagos, pag);
-        if (ent !== undefined) entrantes = ent || {};
+        if (ent !== undefined) { entrantes = ent || {}; limpiarTomados(); }
 
         alCambiar();
     }
@@ -704,11 +893,16 @@ const Servicio = (() => {
         write(K.comandas, {});
         write(K.sesiones, {});
         write(K.pagos, {});
+        write(K.tomados, {});
         entrantes = {};
 
         if (!Red.activo) { alCambiar(); return true; }
 
-        const ramas = ['servicio/comandas', 'servicio/sesiones', 'servicio/pagos', 'servicio/entrantes'];
+        /* Las reglas de Firebase solo le dejan borrar estas ramas al
+           gerente. Si lo intenta otra cuenta, la nube dice que no y aquí
+           se devuelve false para que la pantalla no mienta. */
+        const ramas = ['servicio/comandas', 'servicio/sesiones', 'servicio/pagos',
+                       'servicio/entrantes', 'servicio/tomados'];
         const hechos = await Promise.all(ramas.map(r => Red.guardar(r, null)));
         alCambiar();
         return hechos.every(Boolean);
@@ -733,13 +927,15 @@ const Servicio = (() => {
 
     return {
         // consultar
-        getComandas, getSesiones, getPagos, comandasDe, comandasDeSesion,
-        sesionDeMesa, cuentaDeSesion, pagosDeSesion,
+        getComandas, getSesiones, getPagos, comandasDe, comandasDeSesion, comandasDeMesa,
+        sesionDeMesa, sesionesAbiertasDeMesa, cuentaDeSesion, cuentaDeMesa, pagosDeSesion,
         estacionDe, guarnicionDe, categoriaDe, codigoDe, etiquetaDe,
         cubiertosDe, nombreCorto, resumirItems,
+        // quién puede qué
+        rol, permisoEn, puedeTocar,
         // hacer
         enviarComanda, marcarEntregado, devolverANuevo, marcarSacado, anularComanda,
-        abrirSesion, cerrarSesion, registrarPago,
+        abrirSesion, cerrarSesion, cerrarMesa, registrarPago,
         getExtras, guardarExtra,
         // lo que manda el comensal
         enviarEntrante, getEntrantes, confirmarEntrante, descartarEntrante,

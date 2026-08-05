@@ -11,9 +11,12 @@ const Nube = (typeof Sync !== 'undefined') ? Sync : {
     activo: false,
     haySesion: () => false,
     correoSesion: () => null,
+    uidSesion: () => null,
+    rolSesion: () => null,
     salir() {},
     escuchar: () => (() => {}),
     guardar: async () => false,
+    parchear: async () => false,
     agregar: async () => false,
     leer: async () => null,
     entrar() { throw new Error('sin-configurar'); }
@@ -311,6 +314,9 @@ function enviarPedido(mesa) {
     document.getElementById('pedido-nota').value = '';   // que no se arrastre al siguiente pedido
     actualizarBarra();
     cerrarCarrito();
+    // Buen momento para mandar lo que miró: ya decidió y la pantalla
+    // se queda quieta en la comanda.
+    Store.enviarVistas();
     mostrarComanda(pedido);
 
     if (typeof iniciarTracker === 'function') iniciarTracker(pedido);
@@ -447,6 +453,14 @@ function conectarEventos() {
     document.getElementById('cart-modal').addEventListener('click', e => {
         if (e.target.id === 'cart-modal') cerrarCarrito();
     });
+
+    /* Lo que el comensal miró se manda de una sola vez cuando se va o
+       cambia de app, no plato por plato mientras hace scroll: no corre
+       ninguna prisa y así la red queda libre para lo que sí importa. */
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) Store.enviarVistas();
+    });
+    window.addEventListener('pagehide', () => Store.enviarVistas());
 }
 
 /**

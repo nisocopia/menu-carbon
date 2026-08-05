@@ -43,6 +43,34 @@ const RESTAURANTE = {
 };
 
 /* ------------------------------------------------------------
+   QUIÉN ES QUIÉN EN EL LOCAL
+
+   Cada celular entra con su propia cuenta, y cada cuenta hace una
+   sola cosa. Antes bastaba con tener cuenta del local: con el correo
+   de la cocina se podía abrir la comanda y tomar pedidos.
+
+   Los identificadores se sacan de Firebase → Authentication → Users,
+   columna User UID. No son claves y no sirven para entrar: son
+   nombres. Quien de verdad manda son las reglas de Firebase, que
+   comparan contra el token firmado y no se pueden engañar desde el
+   navegador. Por eso los mismos uid van escritos también en
+   firebase-rules.json — si cambias uno, cámbialo en los dos lados.
+
+   Los roles válidos son: 'gerente', 'mesero', 'cocina', 'parrilla'.
+
+   SI SE DEJA VACÍO, cualquier cuenta del local puede todo, como
+   antes. Así un restaurante que todavía no ha repartido las cuentas
+   no se queda con el personal afuera.
+   ------------------------------------------------------------ */
+
+const EQUIPO = {
+    'fbdIzi6tOwhwJwQR6xY0MLUz4UE3': 'gerente',    // eduardolino78@gmail.com
+    'YHeMmcUbMFdsPQrIcvT561FDunt1': 'mesero',     // mesa@gmail.com
+    'rgi36tpn1KNHeDEqJN17dpbWguy2': 'cocina',     // cocina@gmail.com
+    '0elTDMQYcHSZYZHHyZ4i3RFPQEo1': 'parrilla'    // asador@gmail.com
+};
+
+/* ------------------------------------------------------------
    SINCRONIZACIÓN EN VIVO  (opcional)
 
    Con esto configurado, cuando el gerente marca un plato como agotado
