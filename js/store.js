@@ -163,11 +163,13 @@ const Store = (() => {
         write(K.pedidos, lista.slice(0, 300));
         write(K.pedidoAct, registro);
 
-        // Que le llegue al panel del gerente aunque el comensal esté en su
-        // propio celular. Si falla la red, el pedido igual quedó en pantalla.
-        if (typeof Sync !== 'undefined' && Sync.activo) {
-            Sync.agregar('pedidos', registro);
-        }
+        /* Ya no se sube a la nube.
+           Este registro es del comensal: le sirve para su aviso de "tu
+           pedido va en camino" y vive en su propio celular. A la cocina
+           lo que le llega es la comanda que el mesero confirma, y el
+           panel cuenta esas. Subirlo también aquí llenaba una rama que
+           el panel ignoraba a propósito para no contar dos veces el
+           mismo pedido: se escribía, se guardaba, y no lo leía nadie. */
         return registro;
     }
 
@@ -207,12 +209,33 @@ const Store = (() => {
 
     /* ---------------- VISTAS (para las estadísticas) ---------------- */
 
+    /* Lo que este comensal lleva mirado en esta visita, todavía sin mandar.
+       Antes cada plato que pasaba por la pantalla era un envío a la nube y
+       un registro guardado para siempre: veinte por visita, mil en una
+       noche buena, y nada los borraba nunca. El panel se los bajaba todos
+       cada vez que se abría, para calcular una sola cosa. */
+    let vistasPorMandar = {};
+
     function registrarVista(platoId) {
         const v = read(K.vistas, {});
         v[platoId] = (v[platoId] || 0) + 1;
         write(K.vistas, v);
+        vistasPorMandar[platoId] = (vistasPorMandar[platoId] || 0) + 1;
+    }
+
+    /**
+     * Manda de una sola vez todo lo que miró este comensal.
+     *
+     * Se llama cuando se va o cuando pide, no mientras hace scroll: no
+     * hay ninguna prisa por este dato y sí la hay por que la red esté
+     * libre para lo que sí importa, que es el pedido.
+     */
+    function enviarVistas() {
+        const platos = vistasPorMandar;
+        vistasPorMandar = {};
+        if (!Object.keys(platos).length) return;
         if (typeof Sync !== 'undefined' && Sync.activo) {
-            Sync.agregar('vistas', { plato: platoId, cuando: Date.now() });
+            Sync.agregar('vistas', { platos, cuando: Date.now() });
         }
     }
 
@@ -220,7 +243,17 @@ const Store = (() => {
     function mezclarVistasRemotas(remotas) {
         const total = Object.assign({}, read(K.vistas, {}));
         Object.values(remotas || {}).forEach(v => {
-            if (v && v.plato) total[v.plato] = (total[v.plato] || 0) + 1;
+            if (!v) return;
+            // Lo que se guarda hoy: una visita entera en un solo registro
+            if (v.platos) {
+                Object.keys(v.platos).forEach(id => {
+                    total[id] = (total[id] || 0) + (Number(v.platos[id]) || 0);
+                });
+            // Y lo de antes, un registro por plato. Sigue contando: son
+            // meses de datos del local y no hay por qué tirarlos.
+            } else if (v.plato) {
+                total[v.plato] = (total[v.plato] || 0) + 1;
+            }
         });
         return total;
     }
@@ -276,61 +309,76 @@ const Store = (() => {
         };
     }
 
-    /* ---------------- EXPORTAR menu-data.js ---------------- */
+    /* ---------------- EXPORTAR menu-data.js ----------------
+
+       ESTE ARCHIVO TIENE QUE SALIR COMPLETO.
+
+       Antes se escribía campo por campo, a mano: nombre, precio, foto y
+       poco más. Servía cuando el menú era solo un menú. Después llegaron
+       la estación de cada plato, las siglas, los atajos, los cubiertos,
+       las guarniciones y la conexión con la nube — y ninguno de esos
+       campos estaba en la lista, así que el archivo generado los
+       borraba. Quien lo subiera al sitio se quedaba con el menú del
+       comensal funcionando y el sistema de comandas muerto, sin un solo
+       mensaje de error, porque el archivo se veía perfecto.
+
+       Por eso ya no hay lista de campos: se copia lo que HAY. El día que
+       agregues un campo nuevo, sale solo.
+       ---------------- */
+
+    /** Nombre de campo sin comillas cuando se puede, para que se lea bien. */
+    const llaveJs = k => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(k) ? k : JSON.stringify(k);
+
+    /** Cualquier valor, tal cual, en una sola línea. */
+    function valorJs(v, campo) {
+        // Los precios se leen mejor con sus dos decimales: 3.50, no 3.5
+        if (campo === 'precio' && typeof v === 'number' && !isNaN(v)) return v.toFixed(2);
+        if (Array.isArray(v)) return '[' + v.map(x => valorJs(x)).join(', ') + ']';
+        if (v && typeof v === 'object') return '{ ' + paresJs(v).join(', ') + ' }';
+        return JSON.stringify(v);
+    }
+
+    /** Los pares de un objeto, saltándose lo que no tiene valor. */
+    const paresJs = obj => Object.keys(obj)
+        .filter(k => obj[k] !== undefined)
+        .map(k => `${llaveJs(k)}: ${valorJs(obj[k], k)}`);
+
+    /** Un objeto suelto del archivo, con cada campo en su renglón. */
+    const bloqueJs = (nombre, obj) =>
+        `const ${nombre} = {\n` + paresJs(obj).map(l => '    ' + l).join(',\n') + `\n};\n`;
 
     /**
      * Genera el contenido de menu-data.js con los cambios del gerente
      * ya incorporados, para dejarlos fijos en el sitio.
      */
     function exportarMenuData() {
-        const cfg = getConfig();
-        const menu = getMenu();
+        const partes = [
+            `/* Generado desde el panel del gerente — ${new Date().toLocaleString('es-EC')}\n` +
+            `   Reemplaza con esto el archivo js/menu-data.js del sitio. */\n`,
+            bloqueJs('RESTAURANTE', getConfig())
+        ];
 
-        const cfgLineas = [
-            `    nombre:     ${JSON.stringify(cfg.nombre)},`,
-            `    lema:       ${JSON.stringify(cfg.lema)},`,
-            `    frase:      ${JSON.stringify(cfg.frase)},`,
-            `    horario:    ${JSON.stringify(cfg.horario)},`,
-            `    direccion:  ${JSON.stringify(cfg.direccion)},`,
-            `    telefono:   ${JSON.stringify(cfg.telefono)},`,
-            `    whatsapp:   ${JSON.stringify(cfg.whatsapp || '')},`,
-            `    moneda:     ${JSON.stringify(cfg.moneda)},`,
-            `    panelSal:   ${JSON.stringify(cfg.panelSal)},`,
-            `    panelHash:  ${JSON.stringify(cfg.panelHash)},`,
-            `    tiempoPromedio: ${cfg.tiempoPromedio}`
-        ].join('\n');
+        /* Se copian tal cual: la lista del equipo, la conexión con la
+           nube y los nombres de las guarniciones. Si faltara cualquiera
+           de los tres, el sistema de comandas no vuelve a arrancar. */
+        if (typeof EQUIPO       !== 'undefined') partes.push(bloqueJs('EQUIPO', EQUIPO));
+        if (typeof FIREBASE     !== 'undefined') partes.push(bloqueJs('FIREBASE', FIREBASE));
+        if (typeof GUARNICIONES !== 'undefined') partes.push(bloqueJs('GUARNICIONES', GUARNICIONES));
 
-        const cats = menu.map(cat => {
-            const platos = cat.platos.map(p => {
-                const campos = [`id: ${JSON.stringify(p.id)}`, `nombre: ${JSON.stringify(p.nombre)}`];
-                // Un plato puede quedarse sin precio a propósito (se muestra "Consultar")
-                if (typeof p.precio === 'number' && !isNaN(p.precio)) campos.push(`precio: ${p.precio.toFixed(2)}`);
-                if (p.img)         campos.push(`img: ${JSON.stringify(p.img)}`);
-                if (p.descripcion) campos.push(`descripcion: ${JSON.stringify(p.descripcion)}`);
-                if (p.destacado)   campos.push('destacado: true');
-                if (p.agotado)     campos.push('agotado: true');
-                return `            { ${campos.join(', ')} }`;
-            }).join(',\n');
-
+        const cats = getMenu().map(cat => {
+            const { platos, ...resto } = cat;
             return [
                 '    {',
-                `        id: ${JSON.stringify(cat.id)},`,
-                `        nombre: ${JSON.stringify(cat.nombre)},`,
-                `        icono: ${JSON.stringify(cat.icono)},`,
-                `        descripcion: ${JSON.stringify(cat.descripcion || '')},`,
-                `        estilo: ${JSON.stringify(cat.estilo)},`,
-                cat.sugerible  ? '        sugerible: true,'  : null,
-                cat.soloMesero ? '        soloMesero: true,' : null,
+                paresJs(resto).map(l => '        ' + l).join(',\n') + ',',
                 '        platos: [',
-                platos,
+                platos.map(p => '            { ' + paresJs(p).join(', ') + ' }').join(',\n'),
                 '        ]',
                 '    }'
-            ].filter(Boolean).join('\n');
+            ].join('\n');
         }).join(',\n');
 
-        return `/* Generado desde el panel del gerente — ${new Date().toLocaleString('es-EC')} */\n\n` +
-               `const RESTAURANTE = {\n${cfgLineas}\n};\n\n` +
-               `const MENU = [\n${cats}\n];\n`;
+        partes.push(`const MENU = [\n${cats}\n];\n`);
+        return partes.join('\n');
     }
 
     return {
@@ -341,7 +389,7 @@ const Store = (() => {
         getCarrito, saveCarrito, limpiarCarrito,
         guardarPedido, getPedidos, getPedidoActivo, cerrarPedidoActivo,
         setEstadoPedido, borrarPedidos,
-        registrarVista, getVistas,
+        registrarVista, enviarVistas, getVistas,
         getStats, exportarMenuData,
         // Puentes con la nube
         aplicarOverridesRemotos, aplicarConfigRemota,

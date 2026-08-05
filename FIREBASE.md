@@ -55,8 +55,15 @@ Esas reglas hacen que:
 - Solo el gerente, con su cuenta, pueda **cambiarlos**
 - Los comensales puedan **crear** pedidos pero no leer los de otros
 - Nadie pueda borrar ni modificar pedidos ajenos
+- **Cada cuenta del local solo pueda tocar lo suyo**: el asador su
+  "Ya lo saqué", la cocina su "ENTREGADO", el mesero las comandas y los
+  cobros. Y **solo el gerente pueda borrar el servicio**
 
 Esto es seguridad de verdad: la valida el servidor de Google, no el navegador.
+
+> **Los uid van escritos dentro de las reglas.** Tal como está el archivo
+> lleva los de este local. Para otro restaurante hay que reemplazarlos —
+> ver el paso 4.
 
 ### 4. Crear las cuentas del local
 
@@ -68,28 +75,59 @@ Barra lateral: **Seguridad → Authentication → Comenzar**.
 Crea **una cuenta por celular**, no una compartida. Así, si alguien se va del
 local, se le borra la suya y nadie más tiene que cambiar de clave:
 
-| Celular | Correo de ejemplo | Entra a |
-|---|---|---|
-| El tuyo | `gerente@carbon.local` | `comanda.html` y `panel.html` |
-| El del asador | `asador@carbon.local` | `parrilla.html` y `comanda.html` |
-| El de la cocina | `cocina@carbon.local` | `cocina.html` |
+| Celular | Correo de ejemplo | Manda en | Puede mirar |
+|---|---|---|---|
+| El tuyo | `gerente@carbon.local` | todo | — |
+| El del mesero | `mesa@carbon.local` | `comanda.html` | parrilla y cocina |
+| El del asador | `parrilla@carbon.local` | `parrilla.html` | cocina |
+| El de la cocina | `cocina@carbon.local` | `cocina.html` | parrilla |
 
 Los correos no tienen que existir de verdad; Firebase no manda ningún mensaje.
 Las claves **no van en el código**: Firebase las guarda cifradas.
 
-#### Que solo el gerente pueda tocar los precios
+#### Decirle al sistema quién es quién
 
-Tal como quedan las reglas, cualquier cuenta del local podria cambiar
-precios. Para que eso quede solo en manos del dueno:
+Las cuatro cuentas son válidas para Firebase. Lo que las distingue es su
+**User UID**, y hay que escribirlo en dos sitios.
 
-1. En **Authentication -> Users**, copia el **User UID** de su cuenta
+1. En **Authentication → Users**, copia el **User UID** de cada una
    (usa el icono de copiar: seleccionar con el mouse corta el texto)
-2. En `firebase-rules.json`, reemplaza el uid que aparece en las cuatro
-   reglas que dicen `auth.uid == '...'`
-3. Vuelve a publicar las reglas
 
-Desde ese momento el personal sigue tomando pedidos y marcando
-entregados, pero ya no puede cambiar el menu ni ver la venta del dia.
+2. En `js/menu-data.js`, lista `EQUIPO` — esto ordena las pantallas:
+
+   ```js
+   const EQUIPO = {
+       'uid-del-gerente': 'gerente',
+       'uid-del-mesero':  'mesero',
+       'uid-de-cocina':   'cocina',
+       'uid-del-asador':  'parrilla'
+   };
+   ```
+
+   Además, en el mismo archivo, pon el uid del dueño en `gerenteUid`.
+
+3. En `firebase-rules.json`, reemplaza los uid que ya vienen escritos por
+   los de este local. Es un buscar-y-reemplazar por cada uno.
+
+4. Vuelve a publicar las reglas.
+
+**Los dos archivos tienen que decir lo mismo.** El primero decide qué
+pantalla abre cada quien; el segundo es el que de verdad lo impide,
+porque lo revisa el servidor de Google contra el token firmado.
+
+Desde ese momento:
+
+- el personal toma pedidos y marca entregados, pero **no** puede cambiar
+  el menú ni ver la venta del día
+- la cocina y la parrilla **no** entran a la comanda
+- **solo el gerente** puede vaciar el servicio
+
+> **Si dejas `EQUIPO` vacío**, cualquier cuenta del local puede todo,
+> como funcionaba antes. Así un local que todavía no repartió las cuentas
+> no se queda con el personal afuera.
+
+Que los uid queden a la vista en el repositorio no es un descuido: **un
+uid no es una clave y no sirve para entrar**. Es solo un nombre.
 
 ### 5. Copiar la configuración al menú
 

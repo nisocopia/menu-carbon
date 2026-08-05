@@ -211,6 +211,10 @@
 
 .srv-links a i { display: block; font-size: 1rem; margin-bottom: 4px; color: #FFC107; }
 
+/* Un enlace a una pantalla que esta cuenta no puede abrir se quita, no se
+   deja apagado: un enlace que siempre rebota solo enseña a desconfiar. */
+.srv-links a[hidden] { display: none; }
+
 /* ============================================================
    TOMAR EL PEDIDO
    ============================================================ */
@@ -1068,6 +1072,49 @@ body.desconectado .srv-top {
     opacity: 0.75;
     margin-top: 4px;
 }
+
+/* Resolver desde el celular lo que la nube rechaza, sin tener que ir a
+   borrar los datos del navegador con seis mesas esperando. */
+.srv-alarma-btns {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.srv-alarma-btns button {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 8px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 10px 8px;
+    cursor: pointer;
+}
+
+/* ============================================================
+   SOLO MIRANDO
+
+   La cocina puede ver cómo va la parrilla y al revés, pero sin tocar.
+   Azul y no rojo a propósito: no hay nada roto, es la pantalla de otro.
+   Y va arriba del todo, porque si no se ve el aviso, la tarjeta sin
+   botón parece un error del sistema.
+   ============================================================ */
+
+.srv-solover {
+    background: #14496b;
+    border-bottom: 1px solid #2b7bb9;
+    color: #d7ecff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 10px 16px;
+}
+
+.srv-solover[hidden] { display: none; }
+.srv-solover i { margin-right: 8px; color: #7ec8ff; }
 
 /* El navegador no deja sonar hasta que alguien toca la pantalla. Mientras
    siga bloqueado hay que decirlo: un aviso que no suena y nadie sabe que

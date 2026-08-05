@@ -20,6 +20,13 @@ let sonido   = true;
 let vistas   = new Set();     // para no volver a sonar por lo mismo
 let abiertoEn = Date.now();   // lo que ya estaba al abrir no suena
 
+/* ¿Esta cuenta manda en esta pantalla o solo la está mirando?
+   La cocina puede ver cómo va la parrilla y la parrilla cómo va la
+   cocina — saber si la carne ya salió le sirve a los dos. Lo que no
+   pueden es tocar el botón del otro: dos manos sobre el mismo pedido
+   es como se pierde un plato. */
+let PUEDE = true;
+
 const $ = id => document.getElementById(id);
 
 function toast(texto) {
@@ -187,15 +194,58 @@ async function entrar() {
     }
 }
 
+/**
+ * Esta cuenta no tiene nada que hacer aquí. Se le dice con nombre y
+ * apellido cuál es la suya, porque a las siete de la noche "acceso
+ * denegado" no le sirve a nadie.
+ */
+function negarPaso() {
+    const quien = Sync.correoSesion ? Sync.correoSesion() : '';
+    Sync.salir();
+    $('lock').hidden = false;
+    $('lock-error').textContent = quien
+        ? `${quien} no es la cuenta de esta pantalla. Entra con la que le toca.`
+        : 'Esa cuenta no está en la lista del equipo del local.';
+}
+
 function abrirApp() {
+    const permiso = Servicio.permisoEn(ESTACION);
+    if (permiso === 'no') { negarPaso(); return; }
+    PUEDE = permiso === 'todo';
+
     $('lock').hidden = true;
     abiertoEn = Date.now();
     // Si se entro tocando el boton, este es el momento en que el
     // navegador nos deja empezar a sonar
     prepararAudio();
+    ajustarSegunPermiso();
     Servicio.limpiarViejo(2);
     Servicio.iniciar(pintar, 'estacion');
     pintar();
+}
+
+/**
+ * Deja la pantalla acorde con lo que puede hacer quien entró: el aviso
+ * de solo lectura arriba, y fuera los enlaces a pantallas que esa
+ * cuenta no puede abrir. Un enlace que siempre rebota solo enseña a
+ * desconfiar de la pantalla.
+ */
+function ajustarSegunPermiso() {
+    const aviso = $('solover');
+    if (aviso) {
+        aviso.hidden = PUEDE;
+        aviso.innerHTML = `<i class="fas fa-eye"></i> Estás mirando ${
+            ESTACION === 'asador' ? 'la parrilla' : 'la cocina'
+        }. Aquí no puedes marcar nada — solo quien la atiende.`;
+    }
+
+    document.querySelectorAll('.srv-links a[href]').forEach(a => {
+        const destino = a.getAttribute('href') || '';
+        const pantalla = destino.includes('comanda')  ? 'comanda'
+                       : destino.includes('parrilla') ? 'asador'
+                       : destino.includes('cocina')   ? 'cocina' : null;
+        if (pantalla) a.hidden = Servicio.permisoEn(pantalla) === 'no';
+    });
 }
 
 /* ============================================================
@@ -236,19 +286,48 @@ function pintarAlarma(recibiendo, faltan) {
     const caja = $('alarma');
     if (!caja) return;
 
-    if (recibiendo && !faltan) { caja.hidden = true; return; }
+    const rechazadas = Servicio.apartadas();
+    if (recibiendo && !faltan && !rechazadas) { caja.hidden = true; return; }
 
     const quien = (typeof Sync !== 'undefined' && Sync.correoSesion) ? Sync.correoSesion() : '';
     const motivo = Servicio.porQueNoSale();
 
     caja.hidden = false;
-    caja.innerHTML = `
-        <strong><i class="fas fa-triangle-exclamation"></i>
-            ${!recibiendo ? 'No está llegando nada' : faltan + ' sin enviar'}</strong>
-        ${motivo ? `<span>${motivo}</span>` : ''}
-        ${!recibiendo && !motivo
-            ? '<span>No se pudo abrir el canal con la nube. Suele ser el wifi o el permiso de la cuenta.</span>' : ''}
-        ${quien ? `<small>Entraste como ${quien}</small>` : ''}`;
+
+    if (!recibiendo || faltan) {
+        caja.innerHTML = `
+            <strong><i class="fas fa-triangle-exclamation"></i>
+                ${!recibiendo ? 'No está llegando nada' : faltan + ' sin enviar'}</strong>
+            ${motivo ? `<span>${motivo}</span>` : ''}
+            ${!recibiendo && !motivo
+                ? '<span>No se pudo abrir el canal con la nube. Suele ser el wifi o el permiso de la cuenta.</span>' : ''}
+            ${quien ? `<small>Entraste como ${quien}</small>` : ''}`;
+        return;
+    }
+
+    caja.innerHTML = avisoRechazadas(rechazadas, quien);
+}
+
+/**
+ * Lo que la nube rechazó y ya no se reintenta.
+ *
+ * Casi siempre es de cuando esta pantalla se usaba con otra cuenta.
+ * Se muestra con nombre y apellido —el código del pedido, no una ruta
+ * de la base de datos— porque quien lo lee tiene que poder decidir si
+ * eso importa o es basura de una prueba.
+ */
+function avisoRechazadas(cuantas, quien) {
+    const cuales = Servicio.detalleApartado().slice(0, 6).join(' · ');
+    return `
+        <strong><i class="fas fa-ban"></i> ${cuantas} que la nube rechaza</strong>
+        <span>No van a salir con esta cuenta, y ya no traban lo demás.
+              Casi siempre son de cuando este celular se usó con otro correo.</span>
+        ${cuales ? `<span>${cuales}</span>` : ''}
+        ${quien ? `<small>Entraste como ${quien}</small>` : ''}
+        <span class="srv-alarma-btns">
+            <button data-rechazadas="descartar">Descartar</button>
+            <button data-rechazadas="reintentar">Reintentar</button>
+        </span>`;
 }
 
 /** Hace cuántos minutos entró el pedido. */
@@ -359,13 +438,14 @@ function tarjeta(c) {
 
         ${c.nota ? `<div class="ticket-nota"><i class="fas fa-note-sticky"></i> ${c.nota}</div>` : ''}
 
+        ${PUEDE ? `
         <button class="ticket-btn" data-accion="${c.id}">
             ${ESTACION === 'asador'
                 ? (c.sacado ? '<i class="fas fa-rotate-left"></i> Devolver' : '<i class="fas fa-check"></i> Ya lo saqué')
                 : (c.estado === 'entregado'
                     ? '<i class="fas fa-rotate-left"></i> Devolver'
                     : '<i class="fas fa-check"></i> ENTREGADO')}
-        </button>
+        </button>` : ''}
     </article>`;
 }
 
@@ -408,7 +488,33 @@ function itemHtml(it) {
    ACCIONES
    ============================================================ */
 
+/**
+ * Qué hacer con lo que la nube rechazó.
+ *
+ * Descartar avisa de lo que se pierde antes de perderlo. Reintentar
+ * sirve si mientras tanto se entró con la cuenta que sí puede.
+ */
+function resolverRechazadas(que) {
+    if (que === 'reintentar') {
+        Servicio.reintentarApartado();
+        toast('Reintentando…');
+        return;
+    }
+    const n = Servicio.apartadas();
+    if (!confirm(`Descartar ${n} cosa(s) que la nube rechaza?\n\n` +
+                 `Si alguna era un pedido de verdad, la cocina nunca lo vio ` +
+                 `y hay que volver a anotarlo desde la comanda.`)) return;
+    Servicio.descartarApartado();
+    toast('Descartado');
+}
+
 function accion(id) {
+    /* El botón ni se dibuja cuando la cuenta es de mirar, pero la
+       comprobación se repite aquí: el dibujo se puede editar desde el
+       navegador y la decisión no puede depender de eso. Quien de verdad
+       lo impide son las reglas de Firebase. */
+    if (!PUEDE) { toast('Esta pantalla no es tuya: solo puedes mirarla'); return; }
+
     const c = Servicio.getComandas()[id];
     if (!c) return;
 
@@ -455,6 +561,9 @@ function iniciarEstacion(cual) {
         document.addEventListener('click', e => {
             const btn = e.target.closest('[data-accion]');
             if (btn) { accion(btn.dataset.accion); return; }
+
+            const rech = e.target.closest('[data-rechazadas]');
+            if (rech) { resolverRechazadas(rech.dataset.rechazadas); return; }
 
             // Tocar el aviso rojo dice por que no esta saliendo o entrando
             if (e.target.closest('#red')) {

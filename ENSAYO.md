@@ -130,14 +130,46 @@ desconectada se ve igual de vacía que una sin pedidos. Tiene que gritarlo.
 
 ---
 
-## 10. Que el personal no entre al panel
+## 10. Que cada cuenta llegue solo hasta donde le toca
 
-En el celular del asador, escribe la direccion del panel a mano:
-`.../panel.html`
+Cada celular entra con **su** correo. Estas cuatro pruebas se hacen
+escribiendo la direccion a mano en el celular equivocado.
 
-- [ ] **No lo deja entrar.** Dice que esa cuenta es del local pero no la
-      del gerente
-- [ ] Con tu cuenta si entra
+**En el celular del asador:**
+
+- [ ] `.../panel.html` → **no lo deja entrar**. Dice que esa cuenta es del
+      local pero no la del gerente
+- [ ] `.../comanda.html` → **no lo deja**, y le dice que su pantalla es
+      `parrilla.html`
+- [ ] `.../cocina.html` → **si entra**, con una franja azul arriba que dice
+      "estas mirando la cocina" y **las tarjetas sin boton**
+
+**En el celular de la cocina:**
+
+- [ ] `.../parrilla.html` → **si entra**, mirando, sin boton de "Ya lo saque"
+
+**En el tuyo:** con tu cuenta entras a todo y puedes tocar todo.
+
+> Si alguna cuenta no entra a la suya, casi siempre es que el uid quedo
+> mal copiado. Estan en `js/menu-data.js` (lista `EQUIPO`) y en
+> `firebase-rules.json`, y los dos tienen que decir lo mismo.
+
+## 11. Que el mismo pedido no entre dos veces
+
+Con **dos** celulares abiertos en `comanda.html` (el tuyo y el del
+mesero), manda un pedido desde el celular de un cliente a la mesa 4.
+
+- [ ] Los dos ven "1 pedido desde la mesa"
+- [ ] Tocas **Confirmar y enviar** en el tuyo → se crea la comanda
+- [ ] En el del mesero, tocas Confirmar tambien → dice **"Ese pedido ya lo
+      confirmo otro celular"** y **no** crea una segunda comanda
+- [ ] En el asador aparece **una sola** tarjeta de la mesa 4
+
+## 12. Que solo tu puedas vaciar el servicio
+
+- [ ] Con tu cuenta, `panel.html` → **Vaciar el servicio** funciona
+- [ ] Ninguna otra cuenta llega a esa pantalla, y aunque llegara, la nube
+      le negaria el borrado
 
 ---
 

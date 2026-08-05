@@ -13,9 +13,12 @@ const Nube = (typeof Sync !== 'undefined') ? Sync : {
     activo: false,
     haySesion: () => false,
     correoSesion: () => null,
+    uidSesion: () => null,
+    rolSesion: () => null,
     salir() {},
     escuchar: () => (() => {}),
     guardar: async () => false,
+    parchear: async () => false,
     agregar: async () => false,
     leer: async () => null,
     entrar() { throw new Error('sin-configurar'); }
@@ -242,13 +245,11 @@ function escucharNube() {
 
     marcarEstadoNube('conectando');
 
-    Nube.escuchar('pedidos', datos => {
-        pedidosNube = datos || {};
-        marcarEstadoNube('en-vivo');
-        renderResumenDia();
-        renderPedidos();
-        renderNumeros();
-    }, true);
+    /* La rama "pedidos" ya no se escucha: es de cuando el comensal
+       pedía directo y no existían las comandas. Hoy los números salen
+       de las comandas del mesero, y el panel ignoraba esa rama a
+       propósito para no contar dos veces el mismo pedido. Escucharla
+       solo gastaba una de las pocas conexiones que da el navegador. */
 
     // Las comandas del mesero: son la venta real del local
     if (typeof Servicio !== 'undefined') {
@@ -262,6 +263,7 @@ function escucharNube() {
 
     Nube.escuchar('vistas', datos => {
         vistasNube = datos || {};
+        podarVistas(datos);
         renderNumeros();
     }, true);
 
@@ -270,6 +272,37 @@ function escucharNube() {
         Store.aplicarOverridesRemotos(datos);
         renderEditorMenu();
     });
+}
+
+/* ------------------------------------------------------------
+   BARRER LAS MIRADAS VIEJAS
+
+   Cada visita al menú deja constancia de qué platos miró el comensal.
+   Es el dato que dice "esto lo mira mucha gente y no lo pide nadie", y
+   vale — pero nada lo borraba nunca, y el panel se baja la rama entera
+   cada vez que se abre. En un año eso es una pestaña que tarda medio
+   minuto en un celular con datos móviles.
+
+   Lo de hace tres meses ya no dice nada del menú de hoy. Se barre una
+   vez por sesión y solo lo hace el gerente, que es el único con
+   permiso para borrar ahí.
+   ------------------------------------------------------------ */
+
+const DIAS_VISTAS = 90;
+let vistasPodadas = false;
+
+function podarVistas(datos) {
+    if (vistasPodadas || !datos) return;
+    vistasPodadas = true;
+
+    const corte = Date.now() - DIAS_VISTAS * 24 * 3600 * 1000;
+    const borrar = {};
+    Object.keys(datos).forEach(k => {
+        const v = datos[k];
+        if (v && typeof v.cuando === 'number' && v.cuando < corte) borrar[k] = null;
+    });
+
+    if (Object.keys(borrar).length) Nube.parchear('vistas', borrar);
 }
 
 function marcarEstadoNube(estado) {

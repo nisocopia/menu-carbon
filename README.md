@@ -32,6 +32,10 @@ El sitio completo pesa **1.7 MB**.
    pueden leer `menu-data.js`. Si se olvida, el link compartido mostrará el
    nombre del restaurante anterior.
 6. `manifest.json` — nombre y nombre corto de la app.
+7. **Las cuentas del local** — una por celular, y sus identificadores en
+   `js/menu-data.js` (lista `EQUIPO`) y en `firebase-rules.json`. Es lo que
+   hace que la cocina no pueda tomar pedidos ni el asador ver la venta del
+   día. Los pasos están en [FIREBASE.md](FIREBASE.md).
 
 El resto (carrito, comanda, panel, juegos, tracker) se adapta solo.
 
@@ -82,6 +86,8 @@ orillas, que es justo lo que se cortaba antes.
 | `js/panel.js` | Lógica del panel del gerente. |
 | `js/tracker.js` | Aviso de "tu pedido va en camino". |
 | `js/games.js` | Juegos para la espera. |
+| `firebase-rules.json` | **Quién puede tocar qué.** La seguridad de verdad. |
+| `scripts/probar.js` | Comprobaciones antes de subir. `node scripts/probar.js` |
 
 ---
 
@@ -147,6 +153,30 @@ ilegible. Van escritas debajo, en palabras.
 | **Comanda** | Todo, más la cuenta. |
 
 Las bebidas no le llegan a ninguna estación: las sirve el mesero directo.
+
+### Quién puede tocar qué
+
+Cada celular entra con su propia cuenta, y cada cuenta manda en **una**
+pantalla. Las otras las puede mirar — saber si la carne ya salió le sirve
+a todos — pero no tocarlas. Dos manos sobre el mismo botón es como se
+pierde un plato.
+
+| Cuenta | Comanda | Parrilla | Cocina | Panel |
+|---|---|---|---|---|
+| **Gerente** | manda | manda | manda | manda |
+| **Mesero** | manda | mira | mira | — |
+| **Asador** | — | manda | mira | — |
+| **Cocina** | — | mira | manda | — |
+
+Cuando una cuenta solo mira, la pantalla se abre con una franja azul
+arriba y las tarjetas salen **sin botón**. No hay nada roto: es la
+pantalla de otro.
+
+Esto no se sostiene en el navegador, donde cualquiera podría editarlo.
+Cada pantalla manda a la nube **solo su campo** — el asador únicamente
+`sacado`, la cocina únicamente `estado` — y las reglas de Firebase lo
+comprueban del lado del servidor. Los detalles están en
+[FIREBASE.md](FIREBASE.md) y las cuentas de este local en `CUENTAS.md`.
 
 ### Quién borra qué
 
@@ -254,11 +284,29 @@ El ticket se mide **por mesa, no por tanda**. Una mesa que pidió tres veces es
 un cliente que gastó una vez, no tres clientes chicos: medirlo por tanda hacía
 parecer que el ticket bajaba justo cuando la gente pedía más.
 
+**Vaciar el servicio** borra las comandas, las mesas y los cobros de todo
+el local. Hay que escribir `BORRAR` a mano, y **solo lo puede hacer el
+gerente**: las reglas de Firebase se lo niegan a las demás cuentas.
+
 ### Para dejar los cambios fijos
 
-El botón **Descargar menu-data.js** genera el archivo con todo lo editado.
-Se reemplaza `js/menu-data.js` en el sitio y los cambios quedan permanentes
-para todos los clientes.
+Con Firebase configurado no hace falta: lo que el gerente cambia se aplica
+al instante en todos los celulares y se queda guardado en la nube. Por eso
+este bloque solo aparece en un local **sin** nube.
+
+Ahí el botón **Descargar menu-data.js** genera el archivo con todo lo
+editado. Se reemplaza `js/menu-data.js` en el sitio y los cambios quedan
+permanentes.
+
+> Ese archivo se genera copiando **todo** lo que hay, no una lista escrita
+> a mano de campos. Antes era una lista, y cada campo nuevo del sistema de
+> comandas (la estación de cada plato, las siglas, los atajos, las cuentas
+> de la nube) se quedaba fuera: el archivo se veía perfecto y dejaba el
+> local con el menú funcionando y las comandas muertas. `scripts/probar.js`
+> compara el archivo generado contra el original plato por plato.
+
+**Deshacer todos mis cambios** devuelve precios y agotados a como estaban
+en el archivo. Está siempre disponible, con nube o sin ella.
 
 ---
 
@@ -281,14 +329,41 @@ y el panel está fuera de Google (`robots.txt` + `noindex`).
 
 ### Hasta dónde protege
 
-Esto frena a un curioso, no a alguien decidido. En un sitio estático todo el
-código es visible y cualquier validación se puede saltar editando el navegador.
+**Con Firebase configurado** —que es como está este local— la clave del
+panel ya no se usa: se entra con la cuenta del dueño, y quien decide qué
+puede hacer cada cuenta son las **reglas de Firebase**. Eso lo revisa el
+servidor de Google contra un token firmado, así que no se puede saltar
+editando el navegador. Cambiar precios, ver la venta del día y vaciar el
+servicio son del gerente y de nadie más.
 
-Lo que de verdad protege hoy es que **el panel no controla nada crítico**: como
-cada dispositivo trabaja sobre su propia copia, un extraño que entrara solo
-vería y editaría lo suyo. No puede cambiar el menú real, ni ver pedidos, ni
-tocar precios para los demás.
+La pantalla de bloqueo del panel sigue ahí, pero es cortesía: sirve para
+que el asador que escribe la dirección a mano reciba un mensaje claro en
+vez de un panel vacío. Aunque alguien se la saltara, no podría escribir
+nada — la nube se lo negaría igual.
 
-Eso cambia el día que se conecte una base de datos compartida. Ahí el panel sí
-pasa a mandar sobre lo que ven todos, y la validación tiene que hacerse del lado
-del servidor (reglas de Firebase), no en el navegador.
+**Sin Firebase**, la clave con huella PBKDF2 es todo lo que hay, y frena a
+un curioso, no a alguien decidido: en un sitio estático el código es
+visible y cualquier validación del navegador se puede saltar. Lo que
+protege en ese caso es que no hay nada compartido que romper — cada
+dispositivo trabaja sobre su propia copia.
+
+---
+
+## Antes de subir cambios
+
+```bash
+node scripts/probar.js     # comprueba lo que no se ve mirando la pantalla
+python scripts/version.py  # obliga a los celulares a bajar el CSS y el JS nuevos
+```
+
+`probar.js` revisa las cosas que, si se rompen, no dan ningún error y se
+descubren en hora pico: que el archivo que descarga el gerente no pierda
+campos, que la cuenta de una mesa junte todas sus sesiones, que un pedido
+del comensal no se pueda confirmar dos veces, que cada pantalla escriba
+solo su campo y que cada cuenta llegue solo hasta donde le toca.
+
+> **Sube con el local cerrado y sin nada en rojo.** Lo que un celular dejó
+> encolado se manda con las reglas que había cuando se anotó. Si cambias
+> los permisos con pedidos todavía sin salir, esos pueden quedarse
+> rebotando y el contador rojo no se apaga. Antes de subir, mira que las
+> tres pantallas tengan el punto verde.
