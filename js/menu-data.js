@@ -295,11 +295,15 @@ const MENU = [
         // rato en la parrilla. Por eso siguen siendo editables después
         // del minuto de gracia.
         editableSiempre: true,
+        /* La guarnición de una porción es ella misma. Se declara porque
+           la cocina cuenta con esto el arroz que tiene pedido y todavía
+           no ha salido: un arroz suelto gasta olla igual que el de un
+           plato fuerte. */
         platos: [
-            { id: 'r1', nombre: 'Arroz',            precio: 1.50, atajo: 'ar' },
-            { id: 'r2', nombre: 'Menestra',         precio: 1.00, atajo: 'me' },
-            { id: 'r3', nombre: 'Arroz y Menestra', precio: 2.00, atajo: 'am' },
-            { id: 'r4', nombre: 'Patacones',        precio: 2.00, atajo: 'pt' }
+            { id: 'r1', nombre: 'Arroz',            precio: 1.50, atajo: 'ar', guarnicion: ['arroz'] },
+            { id: 'r2', nombre: 'Menestra',         precio: 1.00, atajo: 'me', guarnicion: ['menestra'] },
+            { id: 'r3', nombre: 'Arroz y Menestra', precio: 2.00, atajo: 'am', guarnicion: ['arroz', 'menestra'] },
+            { id: 'r4', nombre: 'Patacones',        precio: 2.00, atajo: 'pt', guarnicion: ['patacones'] }
         ]
     },
     {

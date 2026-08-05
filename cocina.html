@@ -14,9 +14,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Cocina">
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608050206">
-    <link rel="stylesheet" href="css/iconos.css?v=202608050206">
-    <link rel="stylesheet" href="css/servicio.css?v=202608050206">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608050214">
+    <link rel="stylesheet" href="css/iconos.css?v=202608050214">
+    <link rel="stylesheet" href="css/servicio.css?v=202608050214">
 </head>
 
 <body class="srv-body estacion">
@@ -49,6 +49,12 @@
         Toca aquí para activar el aviso sonoro
     </button>
 
+    <!-- Cuántas porciones de arroz están pedidas y todavía no han salido.
+         No es una estimación: se cuenta. Sube cuando entra un pedido
+         grande —que es cuando hay que poner la olla— y baja cuando se
+         marca entregado. -->
+    <div class="srv-arroz" id="arroz" hidden></div>
+
     <!-- Esta pantalla también la lee el que sirve los platos: por eso la
          mesa y los cubiertos van en grande, y no hay que tocar nada
          para verlos. -->
@@ -68,11 +74,11 @@
 
     <div class="srv-toast" id="toast"></div>
 
-    <script src="js/menu-data.js?v=202608050206"></script>
-    <script src="js/sync.js?v=202608050206"></script>
-    <script src="js/store.js?v=202608050206"></script>
-    <script src="js/servicio.js?v=202608050206"></script>
-    <script src="js/estacion.js?v=202608050206"></script>
+    <script src="js/menu-data.js?v=202608050214"></script>
+    <script src="js/sync.js?v=202608050214"></script>
+    <script src="js/store.js?v=202608050214"></script>
+    <script src="js/servicio.js?v=202608050214"></script>
+    <script src="js/estacion.js?v=202608050214"></script>
     <script>iniciarEstacion('cocina');</script>
 
 </body>
