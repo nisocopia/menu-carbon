@@ -1503,6 +1503,44 @@ body.hay-nuevo::after {
     color: #8a6a6a;
 }
 
+/* ============================================================
+   INSTALAR LA PANTALLA
+
+   Se ofrece una sola vez por aparato y luego no se vuelve a ver, asi
+   que puede permitirse ocupar sitio: es mas util una vez que un boton
+   diminuto que nadie encuentra nunca.
+
+   Sale solo cuando el navegador de verdad puede instalarla. Un boton
+   que a veces no hace nada ensena a no tocarlo.
+   ============================================================ */
+
+.srv-instalar {
+    display: block;
+    width: calc(100% - 32px);
+    margin: 20px 16px 0;
+    background: #10222e;
+    border: 1px solid #1d4e6b;
+    border-radius: 14px;
+    color: #cfe9ff;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: left;
+    padding: 14px 16px;
+    cursor: pointer;
+}
+
+.srv-instalar[hidden] { display: none; }
+.srv-instalar i { color: #7ec8ff; margin-right: 8px; }
+
+.srv-instalar span {
+    display: block;
+    margin-top: 3px;
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: #7d9db3;
+}
+
 /* Cerrar sesion: hace falta para cambiar de cuenta y para recuperarse de
    una sesion rota sin tener que borrar los datos del navegador. */
 .srv-salir {

@@ -1,0 +1,32 @@
+{
+  "name": "Comanda — Carbon",
+  "short_name": "Comanda",
+  "description": "Tomar pedidos, cobrar y cerrar mesas.",
+  "start_url": "comanda.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0d0d",
+  "theme_color": "#0d0d0d",
+  "lang": "es",
+  "dir": "ltr",
+  "categories": [
+    "food",
+    "business",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "img/app/comanda-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "img/app/comanda-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
