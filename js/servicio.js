@@ -675,14 +675,34 @@ const Servicio = (() => {
      * para poder tocar el suyo — y con eso el permiso ya no separaba
      * nada. Mandando solo el campo, cada pantalla necesita permiso
      * únicamente sobre lo que de verdad cambia.
+     *
+     * Y "de verdad" hay que tomárselo en serio: un campo que se manda
+     * con el mismo valor que ya tenía sigue pidiendo permiso sobre él.
+     * El mesero corregía una bebida y de paso reenviaba la nota sin
+     * tocarla; como la nota no era suya, Firebase rechazaba el envío
+     * ENTERO —es todo o nada— y la corrección se quedaba apartada
+     * diciendo "con esa cuenta no va a salir". Lo que no cambió no se
+     * manda, así que tampoco hace falta poder tocarlo.
      */
     function parchearComanda(id, patch) {
         const todas = getComandas();
         const c = todas[id];
         if (!c) return null;
-        Object.assign(c, patch);
+
+        const cambios = {};
+        Object.keys(patch).forEach(campo => {
+            /* null es "bórralo de la nube": se manda siempre, porque aquí
+               puede constar vacío y allá seguir estando. */
+            const igual = patch[campo] !== null &&
+                          JSON.stringify(patch[campo]) === JSON.stringify(c[campo]);
+            if (!igual) cambios[campo] = patch[campo];
+        });
+
+        if (!Object.keys(cambios).length) return c;   // nada que contar
+
+        Object.assign(c, cambios);
         write(K.comandas, todas);
-        encolar(`servicio/comandas/${id}`, patch, 'PATCH');
+        encolar(`servicio/comandas/${id}`, cambios, 'PATCH');
         alCambiar();
         return c;
     }
@@ -861,13 +881,21 @@ const Servicio = (() => {
         const copia = normalizarItems(items);
         ajustarTarrinas(copia);
 
-        return parchearComanda(id, {
+        const patch = {
             items: copia,
-            nota: nota != null ? nota : (c.nota || ''),
             cubiertos: cubiertosDe(copia),
             codigo: codigoDe({ ...c, items: copia }),
             editado: Date.now()
-        });
+        };
+
+        /* La nota solo va si de verdad se escribió algo distinto. La
+           pantalla llama sin nota cuando solo se corrigen platos, y
+           rellenarla con la de antes obligaba a pedir un permiso que esa
+           corrección no necesitaba. */
+        const notaNueva = nota != null ? nota : (c.nota || '');
+        if (notaNueva !== (c.nota || '')) patch.nota = notaNueva;
+
+        return parchearComanda(id, patch);
     }
 
     /* ============================================================

@@ -544,14 +544,14 @@ function probarMoverMesa() {
  * Deja en el celular una comanda de la mesa 3 —1 pollo y 4 chuletas—
  * como si hubiera llegado de la nube. Son 15,50 en total.
  */
-function sembrarComanda(corre) {
-    const comandas = { k1: {
+function sembrarComanda(corre, extra) {
+    const comandas = { k1: Object.assign({
         id: 'k1', sesion: 's1', mesa: 3, tanda: 0, creado: Date.now(),
         estado: 'nuevo', sacado: false, codigo: 'M3 · 1PO 4CH',
         items: [
             { uid: 'i1', platoId: 'p5', nombre: 'Pollo Asado', cantidad: 1, precio: 3.5, estacion: 'asador' },
             { uid: 'i2', platoId: 'p2', nombre: 'Chuleta',     cantidad: 4, precio: 4,   estacion: 'asador' }
-        ] } };
+        ] }, extra || {}) };
     corre(`localStorage.setItem('srv_comandas', ${JSON.stringify(JSON.stringify(comandas))})`);
 }
 
@@ -585,6 +585,113 @@ function probarChecklist() {
         [...new Set(propio.enviado.map(e => e.rama))], ['servicio/comandas/k1/listos']);
     comprobar('y siempre por PATCH',
         [...new Set(propio.enviado.map(e => e.metodo))], ['PATCH']);
+}
+
+/* ============================================================
+   CADA CAMPO CON SU LLAVE
+
+   En Firebase el permiso no baja del padre a las hijas, pero un campo
+   SIN regla propia acaba pidiendo la del padre — y la del padre, en una
+   comanda que ya existe, es solo del gerente. Como un envío es todo o
+   nada, basta un campo sin llave para tumbar la corrección entera.
+
+   Eso le pasaba al mesero: corregía una bebida, se reenviaba la nota
+   sin haberla tocado, y le salía "con esa cuenta no va a salir".
+
+   Aquí se leen las reglas de verdad, campo por campo, y se comprueba
+   que quien manda cada uno pueda mandarlo. Los uid salen de EQUIPO en
+   menu-data.js, que ya los tiene: no se repiten aquí.
+   ============================================================ */
+
+function llavesDeComanda() {
+    const campos = JSON.parse(fuente('firebase-rules.json'))
+                       .rules.servicio.comandas.$comanda;
+
+    const ctx = vm.createContext({ console });
+    vm.runInContext(fuente('js/menu-data.js'), ctx);
+    const equipo = vm.runInContext('EQUIPO', ctx);            // uid -> rol
+    const uidDe = rol => Object.keys(equipo).find(u => equipo[u] === rol);
+
+    return (campo, rol) => {
+        const regla = (campos[campo] && campos[campo]['.write']) || '';
+        return regla.includes(uidDe(rol));
+    };
+}
+
+/** Qué manda cada pantalla sobre una comanda que YA existe. */
+const MANDA = {
+    items:     ['mesero', 'parrilla'],              // corregir los platos
+    cubiertos: ['mesero', 'parrilla'],
+    codigo:    ['mesero', 'parrilla'],
+    editado:   ['mesero', 'parrilla'],
+    nota:      ['mesero', 'parrilla'],
+    mesa:      ['mesero'],                          // cambio de mesa
+    anulado:   ['mesero', 'parrilla'],
+    motivo:    ['mesero', 'parrilla'],
+    estado:    ['mesero', 'parrilla', 'cocina'],
+    entregado: ['cocina'],
+    sacado:    ['parrilla'],
+    listos:    ['cocina']
+};
+
+function probarLlavesDeCampos() {
+    console.log('\n--- Cada campo que se manda tiene su llave ---');
+    const puede = llavesDeComanda();
+
+    Object.keys(MANDA).forEach(campo => {
+        // El gerente manda en todo, siempre
+        const sinLlave = ['gerente'].concat(MANDA[campo]).filter(rol => !puede(campo, rol));
+        comprobar(`"${campo}" lo puede mandar quien lo manda`, sinLlave, []);
+    });
+}
+
+/* ============================================================
+   EL MESERO CORRIGE UNA TANDA QUE EL ASADOR YA SACÓ
+   ============================================================ */
+
+async function probarCorreccionDelMesero() {
+    console.log('\n--- El mesero cambia el jugo por una cola ---');
+    nubeLimpia();
+    const puede = llavesDeComanda();
+    const { corre, propio } = celular('mesero');
+
+    // Una tanda con su bebida, y el asador ya la sacó de la parrilla
+    sembrarComanda(corre, { sacado: true });
+    corre(`(() => {
+        const t = Servicio.getComandas();
+        t.k1.items.push({ uid:'i3', platoId:'b1', nombre:'Jugo', cantidad:1, precio:1.5, estacion:'barra' });
+        localStorage.setItem('srv_comandas', JSON.stringify(t));
+    })()`);
+
+    corre(`Servicio.editarComanda('k1', [
+        { platoId:'p5', nombre:'Pollo Asado', cantidad:1, precio:3.5 },
+        { platoId:'p2', nombre:'Chuleta',     cantidad:4, precio:4   },
+        { platoId:'b3', nombre:'Cola 1L',     cantidad:1, precio:2   }
+    ])`);
+    await respirar();
+
+    comprobar('la corrección sale', propio.enviado.length, 1);
+
+    const mandados = Object.keys((propio.enviado[0] || {}).valor || {});
+    comprobar('y no manda ningún campo que no sea suyo',
+        mandados.filter(campo => !puede(campo, 'mesero')), []);
+    comprobar('la nota no se reenvía sin haberla tocado',
+        mandados.includes('nota'), false);
+
+    comprobar('el jugo ya no está',
+        corre(`Servicio.getComandas()['k1'].items.some(i => i.nombre === 'Jugo')`), false);
+    comprobar('y la cola sí',
+        corre(`Servicio.getComandas()['k1'].items.some(i => i.nombre === 'Cola 1L')`), true);
+    comprobar('el asador conserva su "ya lo saqué"',
+        corre(`Servicio.getComandas()['k1'].sacado`), true);
+
+    // Si de verdad se escribe una nota, esa sí tiene que salir
+    corre(`Servicio.editarComanda('k1', Servicio.getComandas()['k1'].items, 'sin cebolla')`);
+    await respirar();
+    comprobar('pero una nota nueva sí sale',
+        Object.keys(propio.enviado[1].valor).includes('nota'), true);
+    comprobar('y sigue sin mandar nada ajeno',
+        Object.keys(propio.enviado[1].valor).filter(c => !puede(c, 'mesero')), []);
 }
 
 /* ============================================================
@@ -815,6 +922,8 @@ async function main() {
     probarEdicion();
     probarMoverMesa();
     probarChecklist();
+    probarLlavesDeCampos();
+    await probarCorreccionDelMesero();
     probarEcoDeLaNube();
     await probarEnviosJuntos();
     probarTomarPedido();
