@@ -15,36 +15,58 @@
         ".write": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
 
         "$comanda": {
-          ".write": "auth != null && ( auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || (!data.exists() && auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1') )",
+          ".write": "auth != null && ( auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || (!data.exists() && (auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')) )",
           ".validate": "newData.hasChildren(['id', 'items', 'creado', 'estado'])",
 
           "sacado": {
             ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
             ".validate": "newData.isBoolean()"
           },
+          "listos": {
+            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'rgi36tpn1KNHeDEqJN17dpbWguy2')",
+            "$item": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 50" }
+          },
           "estado": {
-            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'rgi36tpn1KNHeDEqJN17dpbWguy2' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1')",
+            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'rgi36tpn1KNHeDEqJN17dpbWguy2' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
             ".validate": "newData.isString() && newData.val().length < 20"
           },
           "entregado": {
             ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'rgi36tpn1KNHeDEqJN17dpbWguy2')"
           },
+
+          "items": {
+            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')"
+          },
+          "cubiertos": {
+            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99"
+          },
+          "codigo": {
+            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
+            ".validate": "newData.isString() && newData.val().length < 90"
+          },
+          "editado": {
+            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
+            ".validate": "newData.isNumber()"
+          },
+          "mesa": {
+            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1')",
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99"
+          },
+
           "anulado": {
-            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1')"
+            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')"
           },
           "motivo": {
-            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1')",
+            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
             ".validate": "newData.isString() && newData.val().length < 200"
           },
 
-          "mesa": {
-            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99"
-          },
           "creado": {
             ".validate": "newData.isNumber()"
           },
-          "codigo": {
-            ".validate": "newData.isString() && newData.val().length < 90"
+          "nombre": {
+            ".validate": "newData.isString() && newData.val().length < 40"
           },
           "nota": {
             ".validate": "newData.isString() && newData.val().length < 300"
@@ -54,7 +76,11 @@
 
       "sesiones": {
         ".read": "auth != null",
-        ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1')"
+        ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
+        "$sesion": {
+          "nombre": { ".validate": "newData.isString() && newData.val().length < 40" },
+          "mesa":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99" }
+        }
       },
 
       "pagos": {
@@ -76,14 +102,14 @@
 
       "extras": {
         ".read": "auth != null",
-        ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1')"
+        ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')"
       },
 
       "entrantes": {
         ".read": "auth != null",
         ".write": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
         "$entrante": {
-          ".write": "!data.exists() || (auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1'))",
+          ".write": "!data.exists() || (auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1'))",
           ".validate": "newData.hasChildren(['items', 'creado'])",
           "mesa": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99"
@@ -116,7 +142,7 @@
         ".read": "auth != null",
         ".write": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
         "$llave": {
-          ".write": "auth != null && !data.exists() && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1')",
+          ".write": "auth != null && !data.exists() && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
           ".validate": "newData.hasChildren(['cuando'])",
           "cuando": { ".validate": "newData.isNumber()" },
           "por":    { ".validate": "newData.isString() && newData.val().length < 90" }

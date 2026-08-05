@@ -324,11 +324,11 @@ function probarPermisos() {
     console.log('\n--- Quién puede qué ---');
     nubeLimpia();
     const esperado = {
-        gerente:  ['todo', 'todo', 'todo'],
-        mesero:   ['todo', 'ver',  'ver' ],
-        cocina:   ['no',   'todo', 'ver' ],
-        parrilla: ['no',   'ver',  'todo'],
-        intruso:  ['no',   'no',   'no'  ]     // una cuenta que no está en EQUIPO
+        gerente:  ['todo',   'todo', 'todo'],
+        mesero:   ['todo',   'ver',  'ver' ],
+        cocina:   ['no',     'todo', 'ver' ],
+        parrilla: ['anotar', 'ver',  'todo'],   // anota pedidos, pero no cobra
+        intruso:  ['no',     'no',   'no'  ]    // una cuenta que no está en EQUIPO
     };
     Object.keys(esperado).forEach(rol => {
         const { corre } = celular(rol);
@@ -336,6 +336,230 @@ function probarPermisos() {
             corre(`[Servicio.permisoEn('comanda'), Servicio.permisoEn('cocina'), Servicio.permisoEn('asador')]`),
             esperado[rol]);
     });
+
+    const A = celular('parrilla');
+    comprobar('el asador puede anotar pero no cobrar',
+        A.corre('[Servicio.puedeAnotar(), Servicio.puedeCobrar()]'), [true, false]);
+
+    const B = celular('cocina');
+    comprobar('la cocina no anota ni cobra',
+        B.corre('[Servicio.puedeAnotar(), Servicio.puedeCobrar()]'), [false, false]);
+}
+
+/* ============================================================
+   PEDIDOS PARA LLEVAR CON NOMBRE
+   ============================================================ */
+
+function probarParaLlevar() {
+    console.log('\n--- Pedidos para llevar ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    const c1 = corre(`Servicio.enviarComanda({ mesa: 0, nombre: 'Carlos',
+        items: [{ platoId:'p5', nombre:'Pollo Asado', precio:3.5, cantidad:2, llevar:true }] })`);
+    const c2 = corre(`Servicio.enviarComanda({ mesa: 0, nombre: 'Luis',
+        items: [{ platoId:'p1', nombre:'Carne Asada', precio:3.5, cantidad:1, llevar:true }] })`);
+
+    comprobar('cada nombre abre su propia cuenta', c1.sesion !== c2.sesion, true);
+    comprobar('los dos siguen abiertos y con su nombre',
+        corre(`Servicio.llevarAbiertos().map(s => s.nombre)`), ['Carlos', 'Luis']);
+
+    // Antes todos caían en la misma cuenta: la de Carlos traía lo de Luis
+    comprobar('la cuenta de Carlos NO incluye lo de Luis',
+        corre(`Servicio.cuentaDe({ sesion: '${c1.sesion}' }).total`), 7.5);   // 2 pollos + 2 tarrinas
+
+    comprobar('la segunda tanda de Carlos va a su cuenta',
+        corre(`Servicio.enviarComanda({ mesa: 0, nombre: 'carlos',
+            items: [{ platoId:'b3', nombre:'Cola personal', precio:0.5, cantidad:1 }] }).sesion`),
+        c1.sesion);
+
+    comprobar('y su código sigue la serie', corre(`Servicio.tandasDe({ sesion: '${c1.sesion}' })[1].codigo`),
+        'LLb · 1 Cola personal');
+
+    comprobar('el nombre viaja en la comanda, no solo en la sesión', c1.nombre, 'Carlos');
+
+    // Cobrar uno no toca al otro
+    corre(`(() => { const c = Servicio.cuentaDe({ sesion: '${c1.sesion}' });
+        Servicio.registrarPago({ sesion: '${c1.sesion}', forma:'efectivo',
+            lineas: c.items.map(l => ({ platoId:l.platoId, precio:l.precio, cantidad:l.pendiente })) }); })()`);
+
+    comprobar('cobrar a Carlos deja a Luis abierto',
+        corre(`Servicio.llevarAbiertos().map(s => s.nombre)`), ['Luis']);
+}
+
+/* ============================================================
+   LA TARRINA
+   ============================================================ */
+
+function probarTarrina() {
+    console.log('\n--- La tarrina se pone sola ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    const total = its => corre(`(() => {
+        const it = ${JSON.stringify(its)};
+        Servicio.ajustarTarrinas(it);
+        return [it.reduce((s,x) => s + x.precio*x.cantidad, 0), Servicio.tarrinasDe(it)];
+    })()`);
+
+    comprobar('2 pollos para llevar: 2 tarrinas',
+        total([{ platoId: 'p5', nombre: 'Pollo', precio: 3.5, cantidad: 2, llevar: true }]), [7.5, 2]);
+
+    comprobar('en la mesa no se cobra tarrina',
+        total([{ platoId: 'p5', nombre: 'Pollo', precio: 3.5, cantidad: 2, llevar: false }]), [7, 0]);
+
+    comprobar('la chuleta no lleva tarrina, aunque se la lleven',
+        total([{ platoId: 'p2', nombre: 'Chuleta', precio: 4, cantidad: 1, llevar: true }]), [4, 0]);
+
+    comprobar('el junior sí lleva',
+        total([{ platoId: 'j1', nombre: 'Junior de Pollo', precio: 2.5, cantidad: 1, llevar: true }]), [2.75, 1]);
+
+    comprobar('una cola para llevar no lleva tarrina',
+        total([{ platoId: 'b3', nombre: 'Cola', precio: 0.5, cantidad: 3, llevar: true }]), [1.5, 0]);
+
+    // Recalcular no debe acumular: es el error clásico de sumar en vez de rehacer
+    const dosVeces = corre(`(() => {
+        const it = [{ platoId:'p5', nombre:'Pollo', precio:3.5, cantidad:1, llevar:true }];
+        Servicio.ajustarTarrinas(it); Servicio.ajustarTarrinas(it); Servicio.ajustarTarrinas(it);
+        return it.filter(x => x.platoId === 't1').length;
+    })()`);
+    comprobar('recalcular tres veces deja UNA línea de tarrina', dosVeces, 1);
+
+    // Y la tarrina no le llega a ninguna estación
+    comprobar('la tarrina no va a la parrilla ni a la cocina',
+        corre(`Servicio.estacionDe('t1')`), 'barra');
+}
+
+/* ============================================================
+   EL MINUTO DE GRACIA Y LA ANULACIÓN
+   ============================================================ */
+
+function probarEdicion() {
+    console.log('\n--- Hasta cuándo se puede tocar una tanda ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    const c = corre(`Servicio.enviarComanda({ mesa: 4, items: [
+        { platoId:'p5', nombre:'Pollo Asado', precio:3.5, cantidad:1 }] })`);
+
+    comprobar('recién enviada se puede tocar entera', corre(`Servicio.edicionDe(Servicio.getComandas()['${c.id}'])`), 'todo');
+    comprobar('y queda cuenta regresiva', corre(`Servicio.graciaRestante(Servicio.getComandas()['${c.id}']) > 55`), true);
+
+    // Se envejece la comanda a mano: pasó el minuto
+    corre(`(() => { const t = Servicio.getComandas();
+        t['${c.id}'].creado = Date.now() - 90000;
+        localStorage.setItem('srv_comandas', JSON.stringify(t)); })()`);
+
+    comprobar('pasado el minuto, solo agregados',
+        corre(`Servicio.edicionDe(Servicio.getComandas()['${c.id}'])`), 'agregados');
+
+    comprobar('la cola se puede agregar siempre',      corre(`Servicio.editableSiempre('b3')`), true);
+    comprobar('el arroz suelto también',               corre(`Servicio.editableSiempre('r1')`), true);
+    comprobar('la porción de proteína NO',             corre(`Servicio.editableSiempre('q1')`), false);
+    comprobar('el pollo asado NO',                     corre(`Servicio.editableSiempre('p5')`), false);
+    comprobar('una bebida de la tienda sí',            corre(`Servicio.editableSiempre('x123')`), true);
+
+    // Anular: se puede hasta que alguien la toque
+    comprobar('todavía se puede anular', corre(`Servicio.puedeAnular(Servicio.getComandas()['${c.id}']).ok`), true);
+
+    corre(`Servicio.marcarSacado('${c.id}', true)`);
+    const bloqueada = corre(`Servicio.puedeAnular(Servicio.getComandas()['${c.id}'])`);
+    comprobar('si el asador ya la sacó, no se anula', bloqueada.ok, false);
+    comprobar('y dice con quién hablar', /asador/i.test(bloqueada.motivo), true);
+
+    corre(`Servicio.marcarSacado('${c.id}', false)`);
+    corre(`Servicio.marcarEntregado('${c.id}')`);
+    comprobar('si la cocina ya entregó, tampoco',
+        corre(`Servicio.puedeAnular(Servicio.getComandas()['${c.id}']).ok`), false);
+
+    // Editar conserva identidad
+    nubeLimpia();
+    const B = celular('mesero');
+    const c2 = B.corre(`Servicio.enviarComanda({ mesa: 6, items: [
+        { platoId:'p5', nombre:'Pollo Asado', precio:3.5, cantidad:1 }] })`);
+    const editada = B.corre(`Servicio.editarComanda('${c2.id}', [
+        { platoId:'p2', nombre:'Chuleta', precio:4, cantidad:2 }])`);
+
+    comprobar('editar conserva el id',      editada.id, c2.id);
+    comprobar('editar conserva la tanda',   editada.tanda, c2.tanda);
+    comprobar('y rehace el código',         editada.codigo, 'M6 · 2CH');
+    comprobar('los platos nuevos traen su estación',
+        editada.items.map(i => i.estacion), ['asador']);
+}
+
+/* ============================================================
+   CAMBIO DE MESA
+   ============================================================ */
+
+function probarMoverMesa() {
+    console.log('\n--- Cambiar de mesa ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    corre(`Servicio.enviarComanda({ mesa: 5, items: [{ platoId:'p5', nombre:'Pollo', precio:3.5, cantidad:2 }] })`);
+    corre(`Servicio.enviarComanda({ mesa: 5, items: [{ platoId:'r1', nombre:'Arroz', precio:1.5, cantidad:1 }] })`);
+
+    comprobar('la mesa 5 tiene dos tandas', corre(`Servicio.tandasDe({ mesa: 5 }).length`), 2);
+
+    const ocupada = corre(`(() => { Servicio.enviarComanda({ mesa: 2,
+        items: [{ platoId:'p1', nombre:'Carne', precio:3.5, cantidad:1 }] });
+        return Servicio.moverMesa(5, 2); })()`);
+    comprobar('no deja mover a una mesa ocupada', ocupada.ok, false);
+    comprobar('y explica por qué', /ocupada/i.test(ocupada.motivo), true);
+
+    comprobar('mover a una libre funciona', corre(`Servicio.moverMesa(5, 9).ok`), true);
+    comprobar('la 5 queda libre',           corre(`Servicio.sesionDeMesa(5)`), null);
+    comprobar('la cuenta se fue entera',    corre(`Servicio.cuentaDe({ mesa: 9 }).total`), 8.5);
+    // El pollo lleva sigla (PO); el arroz no, y sale con su nombre
+    comprobar('los códigos se rehacen',     corre(`Servicio.tandasDe({ mesa: 9 }).map(c => c.codigo)`),
+        ['M9 · 2PO', 'M9b · 1 Arroz']);
+    comprobar('sin perder ninguna tanda',   corre(`Servicio.tandasDe({ mesa: 9 }).length`), 2);
+}
+
+/* ============================================================
+   LA COCINA MARCA PLATO POR PLATO
+   ============================================================ */
+
+function probarChecklist() {
+    console.log('\n--- La cocina marca plato por plato ---');
+    nubeLimpia();
+    const { corre, propio } = celular('cocina');
+
+    // Se mete una comanda como si hubiera llegado de la nube
+    corre(`localStorage.setItem('srv_comandas', JSON.stringify({ k1: {
+        id:'k1', sesion:'s1', mesa:3, tanda:0, creado: Date.now(), estado:'nuevo', sacado:false,
+        codigo:'M3 · 1PO 4CH',
+        items: [
+            { uid:'i1', platoId:'p5', nombre:'Pollo Asado', cantidad:1, precio:3.5, estacion:'asador' },
+            { uid:'i2', platoId:'p2', nombre:'Chuleta',     cantidad:4, precio:4,   estacion:'asador' }
+        ] } }))`);
+
+    const c = () => corre(`Servicio.getComandas()['k1']`);
+
+    comprobar('al principio no está listo',   corre(`Servicio.todoListo(Servicio.getComandas()['k1'])`), false);
+
+    corre(`Servicio.marcarListo('k1', 'i1', 1)`);
+    comprobar('el pollo queda marcado',       corre(`Servicio.listasDe(Servicio.getComandas()['k1'], 'i1')`), 1);
+    comprobar('pero la chuleta falta',        corre(`Servicio.todoListo(Servicio.getComandas()['k1'])`), false);
+
+    corre(`Servicio.marcarListo('k1', 'i2', 3)`);
+    comprobar('3 de 4 chuletas: aún no',      corre(`Servicio.todoListo(Servicio.getComandas()['k1'])`), false);
+
+    corre(`Servicio.marcarListo('k1', 'i2', 4)`);
+    comprobar('con las 4, ya está todo',      corre(`Servicio.todoListo(Servicio.getComandas()['k1'])`), true);
+
+    // Destocar vuelve atrás
+    corre(`Servicio.marcarListo('k1', 'i2', 2)`);
+    comprobar('destocar vuelve a bloquear',   corre(`Servicio.todoListo(Servicio.getComandas()['k1'])`), false);
+
+    comprobar('no se puede marcar más de lo que hay',
+        corre(`(() => { Servicio.marcarListo('k1','i2', 99);
+                        return Servicio.listasDe(Servicio.getComandas()['k1'],'i2'); })()`), 4);
+
+    comprobar('a la nube solo va la rama listos',
+        [...new Set(propio.enviado.map(e => e.rama))], ['servicio/comandas/k1/listos']);
+    comprobar('y siempre por PATCH',
+        [...new Set(propio.enviado.map(e => e.metodo))], ['PATCH']);
 }
 
 async function main() {
@@ -345,6 +569,11 @@ async function main() {
     await probarEscrituras();
     await probarColaTrabada();
     probarPermisos();
+    probarParaLlevar();
+    probarTarrina();
+    probarEdicion();
+    probarMoverMesa();
+    probarChecklist();
 
     console.log(fallos ? `\n${fallos} comprobación(es) FALLARON. No subas todavía.` : '\nTodo bien.');
     process.exit(fallos ? 1 : 0);

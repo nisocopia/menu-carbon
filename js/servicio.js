@@ -50,9 +50,10 @@ const Servicio = (() => {
        salió sirve a todos, pero no tocarlas: dos manos sobre el mismo
        botón es como se pierde un plato.
 
-         todo  manda en esa pantalla
-         ver   la abre y la lee, pero no puede tocar nada
-         no    ni siquiera la abre
+         todo    manda en esa pantalla
+         anotar  puede tomar pedidos, pero no toca el dinero
+         ver     la abre y la lee, pero no puede tocar nada
+         no      ni siquiera la abre
 
        Esto ordena las pantallas. La seguridad de verdad son las reglas
        de Firebase, que revisan lo mismo del lado del servidor: aquí se
@@ -60,10 +61,13 @@ const Servicio = (() => {
        ============================================================ */
 
     const PERMISOS = {
-        gerente:  { comanda: 'todo', cocina: 'todo', parrilla: 'todo' },
-        mesero:   { comanda: 'todo', cocina: 'ver',  parrilla: 'ver'  },
-        cocina:   { comanda: 'no',   cocina: 'todo', parrilla: 'ver'  },
-        parrilla: { comanda: 'no',   cocina: 'ver',  parrilla: 'todo' }
+        gerente:  { comanda: 'todo',   cocina: 'todo', parrilla: 'todo' },
+        mesero:   { comanda: 'todo',   cocina: 'ver',  parrilla: 'ver'  },
+        cocina:   { comanda: 'no',     cocina: 'todo', parrilla: 'ver'  },
+        /* Al asador le llegan pedidos directos y tiene que poder
+           anotarlos sin ir a buscar al mesero. Cobrar es otra cosa: el
+           dinero se queda donde estaba. */
+        parrilla: { comanda: 'anotar', cocina: 'ver',  parrilla: 'todo' }
     };
 
     /** El rol de quien entró en este celular, o null si no entró nadie. */
@@ -86,6 +90,12 @@ const Servicio = (() => {
     }
 
     const puedeTocar = pantalla => permisoEn(pantalla) === 'todo';
+
+    /** ¿Puede entrar a la comanda, aunque sea solo a anotar? */
+    const puedeAnotar = () => ['todo', 'anotar'].includes(permisoEn('comanda'));
+
+    /** ¿Puede cobrar y cerrar mesas? El asador anota, pero no toca el dinero. */
+    const puedeCobrar = () => permisoEn('comanda') === 'todo';
 
     let alCambiar = () => {};
     let enLinea   = true;
@@ -369,6 +379,63 @@ const Servicio = (() => {
     }
 
     /* ============================================================
+       LA TARRINA
+
+       Lo que se lleva a la casa va en tarrina, y la tarrina cuesta. El
+       mesero no tiene por qué acordarse ni sacar la cuenta con seis
+       mesas esperando: se agrega sola, una por unidad, y se ve en el
+       total mientras todavía se está armando el pedido.
+
+       No es un recargo escondido: es un plato más de la carta interna
+       (menu-data.js, categoría "extras"). Sale con su nombre en la
+       cuenta, así el comensal ve por qué paga 25 centavos más.
+       ============================================================ */
+
+    const TARRINA = 't1';
+
+    /** ¿A este plato hay que ponerle tarrina si se lo llevan? */
+    function llevaTarrina(platoId) {
+        const p = Store.findPlato(platoId);
+        if (p && p.tarrina !== undefined) return !!p.tarrina;
+        const cat = categoriaDe(platoId);
+        return !!(cat && cat.tarrina);
+    }
+
+    /** Cuántas tarrinas necesita esta lista. Solo cuenta lo que se llevan. */
+    const tarrinasDe = items => (items || []).reduce((n, it) =>
+        (it.llevar && it.platoId !== TARRINA && llevaTarrina(it.platoId)) ? n + it.cantidad : n, 0);
+
+    /**
+     * Deja la línea de tarrinas al día dentro de una lista de ítems.
+     *
+     * Se recalcula entera en vez de ir sumando y restando: así no
+     * importa por dónde se llegó —agregar un pollo, marcar "para
+     * llevar", quitar una unidad— y nunca queda descuadrada.
+     *
+     * Devuelve true si algo cambió, para no repintar de más.
+     */
+    function ajustarTarrinas(items) {
+        if (!items) return false;
+        const plato = Store.findPlato(TARRINA);
+        if (!plato) return false;                 // el local no cobra tarrina
+
+        const hacen = tarrinasDe(items);
+        const i = items.findIndex(it => it.platoId === TARRINA);
+        const tiene = i >= 0 ? items[i].cantidad : 0;
+        if (hacen === tiene) return false;
+
+        if (i >= 0) items.splice(i, 1);
+        if (hacen > 0) {
+            items.push({
+                uid: nuevoId(), platoId: TARRINA, nombre: plato.nombre,
+                precio: plato.precio, cantidad: hacen,
+                sin: [], termino: '', llevar: true, nota: '', elegidas: [], automatico: true
+            });
+        }
+        return true;
+    }
+
+    /* ============================================================
        SESIONES DE MESA
        ============================================================ */
 
@@ -391,6 +458,59 @@ const Servicio = (() => {
             .sort((a, b) => a.creado - b.creado || String(a.id).localeCompare(String(b.id)));
     }
 
+    /* ------------------------------------------------------------
+       PEDIDOS PARA LLEVAR
+
+       Antes todos compartían la mesa 0, o sea una sola cuenta para
+       todos: el de Carlos y el de Uber caían en el mismo saco y no
+       había forma de cobrar uno sin el otro. Peor todavía, como el cero
+       no cuenta como mesa, la pantalla ni siquiera los dibujaba — el
+       pedido se mandaba y desaparecía.
+
+       Ahora cada pedido para llevar es su propia cuenta y lo que la
+       distingue es el nombre de quien lo va a recoger. Es lo mismo que
+       hace cualquiera con un papelito pegado a la funda.
+       ------------------------------------------------------------ */
+
+    /** "  Carlos " y "carlos" son el mismo pedido. */
+    const claveNombre = n => String(n || '').trim().toLowerCase();
+
+    const esLlevar = s => !s.mesa;
+
+    /** Los pedidos para llevar que todavía no se han cobrado. */
+    const llevarAbiertos = () => Object.values(getSesiones())
+        .filter(s => esLlevar(s) && s.abierta)
+        .sort((a, b) => a.creado - b.creado);
+
+    const llevarPorNombre = nombre =>
+        llevarAbiertos().find(s => claveNombre(s.nombre) === claveNombre(nombre)) || null;
+
+    /* ------------------------------------------------------------
+       UNA CUENTA ES LO QUE SE COBRA JUNTO
+
+       Puede ser una mesa —con sus sesiones, que a veces son dos— o un
+       pedido para llevar. Todo lo que sigue trabaja con una referencia,
+       `{ mesa: 3 }` o `{ sesion: 'abc' }`, y no le importa cuál sea:
+       así la pantalla de cobrar, la de tandas previas y la cuenta son
+       las mismas para los dos casos, no dos copias que se desincronizan.
+       ------------------------------------------------------------ */
+
+    function sesionesDe(ref) {
+        if (!ref) return [];
+        if (ref.sesion) {
+            const s = getSesiones()[ref.sesion];
+            return s ? [s] : [];
+        }
+        return sesionesAbiertasDeMesa(ref.mesa);
+    }
+
+    /** Cómo se llama esta cuenta en pantalla: "Mesa 3" o "Carlos". */
+    function nombreDeCuenta(ref) {
+        const ses = sesionesDe(ref);
+        if (!ses.length) return ref && ref.mesa ? 'Mesa ' + ref.mesa : 'Para llevar';
+        return esLlevar(ses[0]) ? (ses[0].nombre || 'Para llevar') : 'Mesa ' + ses[0].mesa;
+    }
+
     /**
      * La sesión con la que se anota lo nuevo de esa mesa: la más vieja.
      *
@@ -401,11 +521,18 @@ const Servicio = (() => {
      */
     const sesionDeMesa = mesa => sesionesAbiertasDeMesa(mesa)[0] || null;
 
-    function abrirSesion(mesa) {
-        const ya = sesionDeMesa(mesa);
+    /**
+     * La cuenta con la que anotar. Para una mesa, la suya. Para llevar,
+     * la que tenga ese nombre — y si no existe, una nueva.
+     */
+    function abrirSesion(mesa, nombre) {
+        const ya = mesa ? sesionDeMesa(mesa) : (nombre ? llevarPorNombre(nombre) : null);
         if (ya) return ya;
 
-        const sesion = { id: nuevoId(), mesa, abierta: true, creado: Date.now(), cerrado: null };
+        const sesion = {
+            id: nuevoId(), mesa: mesa || 0, nombre: String(nombre || '').trim(),
+            abierta: true, creado: Date.now(), cerrado: null
+        };
         const todas = getSesiones();
         todas[sesion.id] = sesion;
         write(K.sesiones, todas);
@@ -423,24 +550,28 @@ const Servicio = (() => {
         encolar(`servicio/sesiones/${sesionId}`, s);
     }
 
-    /** La mesa quedó pagada: se liberan todas sus sesiones, no solo una. */
-    function cerrarMesa(mesa) {
-        sesionesAbiertasDeMesa(mesa).forEach(s => cerrarSesion(s.id));
+    /** La cuenta quedó pagada: se liberan todas sus sesiones, no solo una. */
+    function cerrarCuenta(ref) {
+        sesionesDe(ref).forEach(s => cerrarSesion(s.id));
         alCambiar();
     }
+
+    const cerrarMesa = mesa => cerrarCuenta({ mesa });
 
     const comandasDeSesion = sesionId =>
         Object.values(getComandas())
             .filter(c => c.sesion === sesionId)
             .sort((a, b) => a.creado - b.creado);
 
-    /** Lo que pidió la mesa, venga de la sesión que venga. */
-    function comandasDeMesa(mesa) {
-        const ids = new Set(sesionesAbiertasDeMesa(mesa).map(s => s.id));
+    /** Las tandas de una cuenta, en el orden en que se pidieron. */
+    function tandasDe(ref) {
+        const ids = new Set(sesionesDe(ref).map(s => s.id));
         return Object.values(getComandas())
             .filter(c => ids.has(c.sesion))
             .sort((a, b) => a.creado - b.creado);
     }
+
+    const comandasDeMesa = mesa => tandasDe({ mesa });
 
     const pagosDeSesion = sesionId =>
         Object.values(getPagos())
@@ -455,33 +586,52 @@ const Servicio = (() => {
        una vez.
        ============================================================ */
 
-    function enviarComanda({ mesa, items, nota, origen }) {
+    /**
+     * Deja los ítems como los guarda una comanda: cada uno con su
+     * identificador propio y con la estación ya resuelta.
+     *
+     * Se usa al mandar y al editar. Cuando eran dos copias, editar una
+     * comanda le borraba la estación a los platos y el pedido dejaba de
+     * aparecer en la parrilla.
+     */
+    const normalizarItems = items => (items || []).map(it => ({
+        uid: it.uid || nuevoId(),
+        platoId: it.platoId,
+        nombre: it.nombre,
+        precio: it.precio,
+        cantidad: it.cantidad,
+        estacion: estacionDe(it.platoId),
+        sin: it.sin || [],               // guarniciones que se quitan
+        termino: it.termino || '',
+        llevar: !!it.llevar,
+        nota: it.nota || '',
+        elegidas: it.elegidas || [],     // las carnes de un mixto
+        automatico: !!it.automatico      // la tarrina, que se puso sola
+    }));
+
+    function enviarComanda({ mesa, nombre, items, nota, origen }) {
         if (!items || !items.length) return null;
 
-        const sesion = abrirSesion(mesa);
-        // La letra se cuenta sobre la MESA: si la mesa quedó con dos
+        const sesion = abrirSesion(mesa, nombre);
+        // La letra se cuenta sobre la CUENTA: si la mesa quedó con dos
         // sesiones abiertas, sus tandas siguen siendo M3, M3b, M3c y no
         // dos series que empiezan de cero y se pisan.
-        const tanda  = comandasDeMesa(mesa).length;
+        const ref    = mesa ? { mesa } : { sesion: sesion.id };
+        const tanda  = tandasDe(ref).length;
+
+        const copia = normalizarItems(items);
+        ajustarTarrinas(copia);
 
         const comanda = {
             id: nuevoId(),
             sesion: sesion.id,
-            mesa,
+            mesa: mesa || 0,
+            // El nombre de quien recoge. Va también en la comanda y no
+            // solo en la sesión, porque la parrilla y la cocina reciben
+            // comandas sueltas: no leen las sesiones.
+            nombre: sesion.nombre || '',
             tanda,
-            items: items.map(it => ({
-                uid: nuevoId(),
-                platoId: it.platoId,
-                nombre: it.nombre,
-                precio: it.precio,
-                cantidad: it.cantidad,
-                estacion: estacionDe(it.platoId),
-                sin: it.sin || [],           // guarniciones que se quitan
-                termino: it.termino || '',
-                llevar: !!it.llevar,
-                nota: it.nota || '',
-                elegidas: it.elegidas || []  // las carnes de un mixto
-            })),
+            items: copia,
             nota: nota || '',
             origen: origen || 'mesero',
             creado: Date.now(),
@@ -530,9 +680,179 @@ const Servicio = (() => {
     /** El asador limpia su tarjeta sin tocarle nada a la cocina. */
     const marcarSacado = (id, valor) => parchearComanda(id, { sacado: valor !== false });
 
+    /* ============================================================
+       PLATO POR PLATO
+
+       Un pedido de tres cosas se entregaba de un solo toque, así que
+       bastaba con despistarse para que saliera la mesa sin la chuleta.
+       Ahora cada unidad se marca aparte y ENTREGADO no se enciende
+       hasta que estén todas: la pantalla no deja cerrar lo que no está.
+
+       Se guarda como { uid del ítem: cuántas unidades van listas }, y se
+       manda solo esa rama. Así la cocina no necesita permiso sobre nada
+       más de la comanda.
+       ============================================================ */
+
+    function marcarListo(comandaId, uid, cuantos) {
+        const todas = getComandas();
+        const c = todas[comandaId];
+        if (!c) return null;
+
+        const it = (c.items || []).find(x => x.uid === uid);
+        const tope = it ? it.cantidad : 0;
+        const n = Math.max(0, Math.min(tope, cuantos));
+
+        c.listos = Object.assign({}, c.listos);
+        if (n > 0) c.listos[uid] = n;
+        else delete c.listos[uid];
+
+        write(K.comandas, todas);
+        encolar(`servicio/comandas/${comandaId}/listos`, { [uid]: n > 0 ? n : null }, 'PATCH');
+        alCambiar();
+        return c;
+    }
+
+    /** Cuántas unidades de ese ítem están marcadas. */
+    const listasDe = (c, uid) => ((c && c.listos) || {})[uid] || 0;
+
+    /**
+     * ¿Está todo marcado? Se le pasan los ítems que esa pantalla ve, no
+     * los de la comanda: la cocina no ve las bebidas, y esperar a que
+     * alguien marque una cola que nunca le llegó dejaría el botón
+     * apagado para siempre.
+     */
+    const todoListo = (c, items) =>
+        (items || (c && c.items) || []).every(it => listasDe(c, it.uid) >= it.cantidad);
+
+    /* ============================================================
+       CAMBIAR DE MESA
+
+       La gente se cambia de mesa a mitad de la comida y hasta ahora eso
+       obligaba a cobrar y volver a anotar todo. Se mueve la cuenta
+       entera —sesiones, tandas y cobros van pegados a ella— y se
+       reescribe el código de cada tanda, porque un papel que dice M5
+       encima de la mesa 2 es peor que no tener papel.
+       ============================================================ */
+
+    function moverMesa(origen, destino) {
+        if (!destino || origen === destino) return { ok: false, motivo: 'Escoge una mesa distinta.' };
+
+        const sesiones = sesionesAbiertasDeMesa(origen);
+        if (!sesiones.length) return { ok: false, motivo: `La mesa ${origen} está libre.` };
+
+        if (sesionesAbiertasDeMesa(destino).length) {
+            return { ok: false, motivo: `La mesa ${destino} está ocupada. Cóbrala primero o escoge otra.` };
+        }
+
+        const todas = getSesiones();
+        sesiones.forEach(s => {
+            todas[s.id].mesa = destino;
+            todas[s.id].movida = Date.now();
+        });
+        write(K.sesiones, todas);
+        sesiones.forEach(s => encolar(`servicio/sesiones/${s.id}`, todas[s.id]));
+
+        // El código se rehace con la mesa nueva, conservando la letra:
+        // M5b pasa a ser M2b y sigue siendo la segunda tanda.
+        tandasDe({ mesa: destino }).forEach(c => {
+            parchearComanda(c.id, { mesa: destino, codigo: codigoDe({ ...c, mesa: destino }) });
+        });
+
+        alCambiar();
+        return { ok: true, motivo: '' };
+    }
+
     /** Corregir un pedido mal tomado: se anula entero y se vuelve a mandar. */
     const anularComanda = (id, motivo) =>
         parchearComanda(id, { estado: 'anulado', anulado: Date.now(), motivo: motivo || '' });
+
+    /* ============================================================
+       HASTA CUÁNDO SE PUEDE TOCAR UNA TANDA
+
+       El error de tomar el pedido se descubre enseguida: "era chuleta,
+       no pollo". Para eso hay un minuto de gracia en el que se puede
+       cambiar todo. Pasado ese minuto la carne ya está en la parrilla y
+       cambiarla es como no haberla pedido nunca — pero la gente sigue
+       pidiendo colas y porciones a mitad de la comida, y eso no le
+       cuesta nada a nadie.
+
+       Por eso son dos permisos distintos, no uno:
+
+         todo       el minuto de gracia: se cambia lo que sea
+         agregados  después: solo lo que no se cocina (ver menu-data.js,
+                    campo editableSiempre)
+         no         ya se pagó, ya se entregó, o está anulada
+       ============================================================ */
+
+    const MINUTO_DE_GRACIA = 60000;
+
+    /** Lo que queda del minuto de gracia, en segundos. 0 si ya pasó. */
+    const graciaRestante = c =>
+        Math.max(0, Math.ceil((MINUTO_DE_GRACIA - (Date.now() - c.creado)) / 1000));
+
+    function edicionDe(c) {
+        if (!c || c.estado === 'anulado' || c.estado === 'entregado') return 'no';
+
+        const s = getSesiones()[c.sesion];
+        if (!s || !s.abierta) return 'no';          // ya se cobró y se cerró
+
+        // Si el asador ya la sacó, la proteína existe: no hay nada que cambiar
+        if (c.sacado) return 'agregados';
+
+        return graciaRestante(c) > 0 ? 'todo' : 'agregados';
+    }
+
+    /**
+     * ¿Este plato se puede seguir tocando pasado el minuto?
+     *
+     * Lo decide menu-data.js y por omisión es NO, que es lo seguro: un
+     * plato nuevo que alguien agregue mañana queda bloqueado hasta que
+     * se diga lo contrario, en vez de quedar abierto sin que nadie lo note.
+     */
+    function editableSiempre(platoId) {
+        if (String(platoId).startsWith('x')) return true;   // bebidas de la tienda
+        const p = Store.findPlato(platoId);
+        if (p && p.editableSiempre !== undefined) return !!p.editableSiempre;
+        const cat = categoriaDe(platoId);
+        return !!(cat && cat.editableSiempre);
+    }
+
+    /**
+     * Si se puede anular, y si no, por qué.
+     *
+     * El motivo importa tanto como la respuesta: "no se puede" a secas
+     * hace que el mesero lo intente tres veces y termine yendo a la
+     * cocina igual. Decirle quién ya tocó el pedido lo manda directo a
+     * hablar con la persona correcta.
+     */
+    function puedeAnular(c) {
+        if (!c)                        return { ok: false, motivo: 'Esa tanda ya no existe.' };
+        if (c.estado === 'anulado')    return { ok: false, motivo: 'Ya está anulada.' };
+        if (c.estado === 'entregado')  return { ok: false, motivo: 'La cocina ya la entregó. Habla con la cocina.' };
+        if (c.sacado)                  return { ok: false, motivo: 'El asador ya la sacó de la parrilla. Habla con él.' };
+        return { ok: true, motivo: '' };
+    }
+
+    /**
+     * Guarda una tanda editada. Conserva el identificador y el número de
+     * tanda: para la cocina sigue siendo el mismo pedido, corregido, no
+     * uno nuevo que aparece de la nada mientras el otro desaparece.
+     */
+    function editarComanda(id, items, nota) {
+        const c = getComandas()[id];
+        if (!c || !items || !items.length) return null;
+
+        const copia = normalizarItems(items);
+        ajustarTarrinas(copia);
+
+        return parchearComanda(id, {
+            items: copia,
+            nota: nota != null ? nota : (c.nota || ''),
+            cubiertos: cubiertosDe(copia),
+            codigo: codigoDe({ ...c, items: copia }),
+            editado: Date.now()
+        });
+    }
 
     /* ============================================================
        LO QUE VE CADA ESTACIÓN
@@ -563,7 +883,7 @@ const Servicio = (() => {
        ============================================================ */
 
     /** Junta lo pedido en varias sesiones y le descuenta lo ya pagado. */
-    function cuentaDe(sesionIds) {
+    function sumarCuenta(sesionIds) {
         const ids = new Set(sesionIds);
         const lineas = new Map();
 
@@ -591,27 +911,30 @@ const Servicio = (() => {
         return { items, total, cobrado, saldo: total - cobrado };
     }
 
-    const cuentaDeSesion = sesionId => cuentaDe([sesionId]);
+    const cuentaDeSesion = sesionId => sumarCuenta([sesionId]);
 
     /**
-     * La cuenta que se cobra: la de la MESA entera.
+     * La cuenta que se cobra. Da igual si es una mesa o un pedido para
+     * llevar: es lo mismo, y por eso la pantalla de cobrar es una sola.
      *
-     * Es la que ve el mesero y la que decide cuándo se libera la mesa.
-     * Si la mesa quedó con dos sesiones abiertas, aquí salen las dos
+     * Si una mesa quedó con dos sesiones abiertas, aquí salen las dos
      * juntas y no hay platos escondidos.
      */
-    const cuentaDeMesa = mesa => cuentaDe(sesionesAbiertasDeMesa(mesa).map(s => s.id));
+    const cuentaDe = ref => sumarCuenta(sesionesDe(ref).map(s => s.id));
 
-    function registrarPago({ mesa, lineas, forma }) {
-        const abiertas = sesionesAbiertasDeMesa(mesa);
+    const cuentaDeMesa = mesa => cuentaDe({ mesa });
+
+    function registrarPago({ mesa, sesion, lineas, forma }) {
+        const ref = sesion ? { sesion } : { mesa };
+        const abiertas = sesionesDe(ref);
         if (!abiertas.length) return null;
 
         const monto = lineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
         const pago = {
             // El cobro se anota en la sesión con la que se viene
-            // anotando todo lo de esa mesa, para que quede junto.
-            id: nuevoId(), sesion: abiertas[0].id, mesa, lineas, monto,
-            forma: forma || 'efectivo', cuando: Date.now()
+            // anotando todo lo de esa cuenta, para que quede junto.
+            id: nuevoId(), sesion: abiertas[0].id, mesa: abiertas[0].mesa || 0,
+            lineas, monto, forma: forma || 'efectivo', cuando: Date.now()
         };
 
         const todos = getPagos();
@@ -619,8 +942,8 @@ const Servicio = (() => {
         write(K.pagos, todos);
         encolar(`servicio/pagos/${pago.id}`, pago);
 
-        // Si ya no queda saldo, la mesa se libera sola — entera
-        if (cuentaDeMesa(mesa).saldo <= 0.001) cerrarMesa(mesa);
+        // Si ya no queda saldo, la cuenta se libera sola — entera
+        if (cuentaDe(ref).saldo <= 0.001) cerrarCuenta(ref);
         else alCambiar();
 
         return pago;
@@ -993,11 +1316,19 @@ const Servicio = (() => {
         sesionDeMesa, sesionesAbiertasDeMesa, cuentaDeSesion, cuentaDeMesa, pagosDeSesion,
         estacionDe, guarnicionDe, categoriaDe, codigoDe, etiquetaDe,
         cubiertosDe, nombreCorto, resumirItems,
+        // una cuenta: una mesa o un pedido para llevar
+        sesionesDe, tandasDe, cuentaDe, nombreDeCuenta, llevarAbiertos, llevarPorNombre,
+        // reglas de lo que todavía se puede tocar
+        edicionDe, graciaRestante, editableSiempre, puedeAnular,
+        // la tarrina, que se pone sola
+        ajustarTarrinas, tarrinasDe, llevaTarrina,
+        // plato por plato en la cocina
+        marcarListo, listasDe, todoListo,
         // quién puede qué
-        rol, permisoEn, puedeTocar,
+        rol, permisoEn, puedeTocar, puedeAnotar, puedeCobrar,
         // hacer
-        enviarComanda, marcarEntregado, devolverANuevo, marcarSacado, anularComanda,
-        abrirSesion, cerrarSesion, cerrarMesa, registrarPago,
+        enviarComanda, editarComanda, marcarEntregado, devolverANuevo, marcarSacado, anularComanda,
+        abrirSesion, cerrarSesion, cerrarMesa, cerrarCuenta, moverMesa, registrarPago,
         getExtras, guardarExtra,
         // lo que manda el comensal
         enviarEntrante, getEntrantes, confirmarEntrante, descartarEntrante,

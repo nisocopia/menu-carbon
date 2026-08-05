@@ -189,6 +189,57 @@
     cursor: pointer;
 }
 
+/* ------------------------------------------------------------
+   LOS PARA LLEVAR QUE SIGUEN ABIERTOS
+
+   Van justo debajo del botón porque son lo mismo que una mesa: una
+   cuenta que hay que cerrar. Antes se mandaban y desaparecían, y para
+   saber si el de Carlos ya había salido había que ir a la cocina.
+   ------------------------------------------------------------ */
+
+.llevar-titulo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #7ec8ff;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 18px 16px 8px;
+}
+
+.llevar-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+    margin: 0 16px;
+}
+
+.llevar-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: #10222e;
+    border: 1px solid #1d4e6b;
+    border-radius: 12px;
+    color: #fff;
+    font-family: inherit;
+    text-align: left;
+    padding: 12px;
+    cursor: pointer;
+}
+
+.llevar-nombre {
+    font-size: 1.05rem;
+    font-weight: 700;
+    /* Un nombre largo no debe romper la tarjeta ni empujar el saldo */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.llevar-saldo { font-size: 0.95rem; font-weight: 600; color: #FFC107; }
+.llevar-tiempo { font-size: 0.68rem; color: #7d9db3; }
+
 /* ---------- Enlaces entre pantallas ---------- */
 
 .srv-links {
@@ -267,6 +318,86 @@
 
 .previa-cuenta span { font-size: 0.8rem; color: #999; }
 .previa-cuenta strong { font-size: 1.15rem; color: #FFC107; margin-left: auto; }
+
+/* ------------------------------------------------------------
+   HASTA CUÁNDO SE PUEDE TOCAR UNA TANDA
+
+   La cuenta regresiva se ve mientras corre, para que uno sepa que
+   todavía está a tiempo sin tener que probar. Y cuando ya no se puede,
+   en vez del botón va escrito el motivo: un botón que rebota enseña a
+   desconfiar de la pantalla.
+   ------------------------------------------------------------ */
+
+.previa-gracia {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #1b2a1b;
+    border-radius: 8px;
+    color: #9ccc65;
+    font-size: 0.75rem;
+    padding: 6px 8px;
+    margin-top: 8px;
+}
+
+.previa-gracia b { color: #cddc39; }
+
+.previa-btns {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.previa-editar {
+    background: #22303d;
+    border: 1px solid #35566e;
+    border-radius: 8px;
+    color: #9ecbff;
+    font-family: inherit;
+    font-size: 0.78rem;
+    padding: 7px 12px;
+    cursor: pointer;
+}
+
+.previa-nopuede {
+    font-size: 0.72rem;
+    color: #8a8a8a;
+    line-height: 1.35;
+}
+
+.btn-mover {
+    width: 100%;
+    background: #1a1a1a;
+    border: 1px solid #2f2f2f;
+    border-radius: 10px;
+    color: #bbb;
+    font-family: inherit;
+    font-size: 0.82rem;
+    padding: 11px;
+    margin-top: 8px;
+    cursor: pointer;
+}
+
+.mover-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.mover-mesa {
+    background: #1f1f1f;
+    border: 1px solid #333;
+    border-radius: 12px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 1.3rem;
+    font-weight: 700;
+    padding: 16px 0;
+    cursor: pointer;
+}
 
 .btn-cobrar-abrir {
     background: #FFC107;
@@ -459,6 +590,34 @@
 .bitem-det .falta { color: #ff9800; }
 .bitem-pre { font-size: 0.85rem; color: #999; white-space: nowrap; }
 
+/* Lo que el sistema puso solo (la tarrina) y lo que ya está en la
+   parrilla se ven, suman en el total, pero no se tocan. Atenuados y sin
+   los botones de más y menos: no hay nada que probar. */
+.bitem.automatico,
+.bitem.bloqueado { opacity: 0.62; border-style: dashed; }
+
+.bitem.automatico .bitem-cant,
+.bitem.bloqueado .bitem-cant { justify-content: center; }
+
+.bitem.automatico .bitem-info,
+.bitem.bloqueado .bitem-info { cursor: default; }
+
+.editando-aviso {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #22303d;
+    border: 1px solid #35566e;
+    border-radius: 10px;
+    color: #9ecbff;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+}
+
+.editando-aviso b { color: #fff; }
+
 /* ---------- El pie fijo ---------- */
 
 .srv-pie {
@@ -469,11 +628,45 @@
     z-index: 60;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 12px;
     background: #161616;
     border-top: 1px solid #2a2a2a;
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
 }
+
+/* ------------------------------------------------------------
+   EL NOMBRE DEL PEDIDO PARA LLEVAR
+
+   Un pedido para llevar sin nombre es una funda sin dueño. El campo
+   ocupa el renglón entero del pie, justo encima del botón, porque es lo
+   único que falta para poder enviar.
+   ------------------------------------------------------------ */
+
+.pie-nombre {
+    order: -1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.pie-nombre[hidden] { display: none; }
+
+.pie-nombre span { font-size: 0.72rem; color: #7ec8ff; font-weight: 600; }
+
+.pie-nombre input {
+    background: #10222e;
+    border: 1px solid #1d4e6b;
+    border-radius: 10px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 1.05rem;
+    padding: 12px;
+    width: 100%;
+}
+
+.pie-nombre input::placeholder { color: #5d7d92; }
 
 .srv-pie[hidden] { display: none; }
 
@@ -495,6 +688,13 @@
 }
 
 .btn-enviar:active { background: #43a047; }
+
+/* Todavía falta el nombre. No dice "error": dice qué falta. */
+.btn-enviar:disabled {
+    background: #2a2a2a;
+    color: #888;
+    cursor: default;
+}
 
 /* ============================================================
    HOJAS QUE SUBEN DESDE ABAJO
@@ -716,13 +916,63 @@
 .ticket-top {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     gap: 10px;
     margin-bottom: 6px;
 }
 
 .ticket-mesa { font-size: 1.6rem; font-weight: 700; line-height: 1; }
-.ticket-hora { font-size: 0.75rem; color: #888; white-space: nowrap; }
+.ticket-hora { font-size: 0.75rem; color: #888; white-space: nowrap; margin-left: auto; }
+
+/* Para llevar el nombre manda: es lo que se grita al entregar. */
+.ticket-mesa.llevar { font-size: 1.35rem; color: #7ec8ff; }
+.ticket-nombre { color: #7ec8ff; margin-left: 6px; }
+
+/* ------------------------------------------------------------
+   EL PUESTO EN LA FILA
+
+   Ordenar por hora no alcanza. En una tablet, con cuatro tarjetas del
+   mismo tamaño una al lado de otra, saber cuál sigue obligaba a
+   comparar relojes. El número se lee de lejos y no se discute.
+   ------------------------------------------------------------ */
+
+.ticket-turno {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #2a2a2a;
+    color: #ddd;
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* El que va ahora se distingue del resto sin leer nada. */
+.ticket.ahora {
+    border-color: #FFC107;
+    box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.35);
+}
+
+.ticket.ahora .ticket-turno { background: #FFC107; color: #111; }
+
+.ticket-ahora {
+    background: #FFC107;
+    border-radius: 6px;
+    color: #111;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    padding: 3px 8px;
+    display: inline-block;
+}
+
+/* Lo ya resuelto, plegado abajo, no compite por la atención. */
+.ticket.sacada .ticket-turno,
+.ticket.sacada .ticket-ahora { display: none; }
 
 .ticket-codigo {
     font-size: 0.9rem;
@@ -804,7 +1054,51 @@
     margin-top: 10px;
 }
 
+/* ------------------------------------------------------------
+   UNA CASILLA POR UNIDAD (COCINA)
+
+   "4x Chuleta" se lee de un vistazo y se olvida igual de rápido: se
+   emplatan tres y la cuarta se queda en la plancha. Cuatro casillas no
+   se despachan de un toque, y la que falta se ve desde la puerta.
+   ------------------------------------------------------------ */
+
+.ticket-item.tarea {
+    align-items: center;
+    cursor: pointer;
+    /* Blanco generoso a los lados: se toca con el canto del dedo, de
+       prisa y a veces con guante. */
+    margin: 0 -6px;
+    padding: 10px 6px;
+    border-radius: 10px;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.ticket-item.tarea:active { background: #202020; }
+
+.ti-caja {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 2px solid #555;
+    border-radius: 8px;
+    color: #111;
+    font-size: 1rem;
+}
+
+.ticket-item.tarea.hecha .ti-caja { background: #4caf50; border-color: #4caf50; }
+
+/* Marcado se atenúa pero NO se tacha entero: sigue habiendo que
+   emplatarlo y leerlo, solo que ya está cocinado. */
+.ticket-item.tarea.hecha .ti-nom { color: #666; }
+.ticket-item.tarea.hecha .ti-det { color: #6b5d2a; }
+
+.ti-de { color: #888; font-size: 0.8rem; font-style: normal; }
+
 .ticket-btn {
+    position: relative;
+    overflow: hidden;
     width: 100%;
     background: #2a2a2a;
     border: none;
@@ -819,6 +1113,82 @@
 }
 
 .ticket-btn:active { background: #4caf50; }
+
+/* Apagado mientras falten platos por marcar. La pantalla no deja
+   cerrar lo que no está hecho: eso es lo que se olvidaba. */
+.ticket-btn.pendiente {
+    background: #1e1e1e;
+    color: #777;
+    cursor: default;
+}
+
+.ticket-btn.pendiente:active { background: #1e1e1e; }
+
+/* ------------------------------------------------------------
+   MANTENER APRETADO
+
+   Un toque suelto sobre una pantalla con las manos ocupadas sacaba
+   pedidos que seguían en el fuego. La barra que avanza dice que algo
+   está pasando: sin ella, mantener el dedo parece que se colgó.
+   ------------------------------------------------------------ */
+
+.ticket-btn.largo { background: #33291a; }
+.ticket-btn.largo:active { background: #33291a; }
+
+.ticket-btn-texto { position: relative; z-index: 1; }
+
+.ticket-btn-progreso {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: #4caf50;
+}
+
+.ticket-btn.sosteniendo .ticket-btn-progreso {
+    animation: llenar var(--duracion, 2000ms) linear forwards;
+}
+
+@keyframes llenar { to { width: 100%; } }
+
+/* ============================================================
+   TABLERO EN TABLET Y PC
+
+   Una sola columna en una tablet horizontal deja tres cuartos de
+   pantalla vacíos y obliga a hacer scroll con las manos ocupadas. En
+   rejilla caben cuatro o seis pedidos a la vez — pero entonces todas
+   las tarjetas pesan lo mismo y el orden se pierde.
+
+   Por eso el primero ocupa el ancho entero: es el único que se lee
+   antes de mirar ningún número.
+   ============================================================ */
+
+@media (min-width: 820px) {
+    .estacion .tablero {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 14px;
+        align-items: start;
+        padding: 16px;
+    }
+
+    .estacion .tablero .ticket { margin-bottom: 0; }
+
+    .estacion .tablero .ticket.ahora {
+        grid-column: 1 / -1;
+        border-left-width: 8px;
+    }
+
+    .estacion .tablero .ticket.ahora .ticket-mesa { font-size: 2.1rem; }
+    .estacion .tablero .ticket.ahora .ticket-turno { width: 48px; height: 48px; font-size: 1.6rem; }
+
+    /* El separador de "para llevar" corta la rejilla entera */
+    .estacion .tablero .separador-llevar,
+    .estacion .tablero .vacio { grid-column: 1 / -1; }
+
+    /* En pantalla grande el dedo está más lejos: casillas más altas */
+    .ticket-item.tarea { padding: 12px 8px; }
+    .ti-caja { width: 38px; height: 38px; }
+}
 
 .separador-llevar {
     display: flex;

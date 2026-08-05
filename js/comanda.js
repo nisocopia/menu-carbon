@@ -10,10 +10,31 @@
    ============================================================ */
 
 let CFG = {};
-let mesaActual  = null;      // número de mesa, o 0 si es para llevar
+
+/**
+ * En qué cuenta se está trabajando. Una cuenta es lo que se cobra
+ * junto, y puede ser de dos clases:
+ *
+ *     { mesa: 3 }              una mesa
+ *     { sesion: 'abc' }        un pedido para llevar que ya tiene nombre
+ *     { nuevoLlevar: true }    uno que se está armando y todavía no lo tiene
+ *
+ * Todo lo de abajo trabaja con esta referencia y no pregunta de qué
+ * clase es. Por eso la pantalla de cobrar, las tandas previas y la
+ * cuenta son las mismas para la mesa y para el pedido de Carlos.
+ */
+let refActual    = null;
+let nombreLlevar = '';       // lo que se está escribiendo en "nombre del pedido"
+
 let borrador    = [];        // la tanda que se está armando
-let editando    = null;      // uid del ítem abierto en la hoja
+let editando    = null;      // uid del ítem abierto en la hoja de modificar
+let editandoTanda = null;    // { id, modo } cuando se está corrigiendo una tanda ya enviada
 let seleccion   = new Map(); // lo que se va a cobrar
+
+/** La referencia que entiende Servicio; null mientras el pedido no tenga nombre. */
+const ref = () => (refActual && !refActual.nuevoLlevar) ? refActual : null;
+
+const esLlevar = () => !!(refActual && (refActual.sesion || refActual.nuevoLlevar));
 
 const money = n => (CFG.moneda || '$') + Number(n || 0).toFixed(2);
 const tienePrecio = p => typeof p.precio === 'number' && !isNaN(p.precio);
@@ -84,7 +105,10 @@ function negarPaso() {
 }
 
 function abrirApp() {
-    if (Servicio.permisoEn('comanda') !== 'todo') { negarPaso(); return; }
+    /* El asador entra a anotar: le llegan pedidos directos y tiene que
+       poder tomarlos sin ir a buscar al mesero. Cobrar es otra cosa —
+       eso lo filtra puedeCobrar() en cada botón de dinero. */
+    if (!Servicio.puedeAnotar()) { negarPaso(); return; }
 
     $('lock').hidden = true;
     ajustarSegunPermiso();
@@ -238,7 +262,7 @@ function pintarMesas() {
         // La cuenta es de la MESA: si por lo que sea quedó con dos
         // sesiones abiertas, aquí salen las dos sumadas y no se pierde
         // de vista lo que comió nadie.
-        const cuenta = sesion ? Servicio.cuentaDeMesa(n) : null;
+        const cuenta = sesion ? Servicio.cuentaDe({ mesa: n }) : null;
         const ocupada = !!sesion;
 
         // Cuánto lleva sentada la mesa: ayuda a saber a quién atender
@@ -255,17 +279,56 @@ function pintarMesas() {
     }
 
     $('mesas-grid').innerHTML = html.join('');
+    pintarLlevar();
+}
+
+/**
+ * Los pedidos para llevar que están en marcha, justo debajo del botón
+ * de "Para llevar".
+ *
+ * Antes no se veían por ninguna parte: se mandaban y desaparecían de la
+ * pantalla, así que nadie podía responder "¿el de Carlos ya salió?" sin
+ * ir a preguntar a la cocina. Ahora se leen como mesas, porque para el
+ * mesero son exactamente eso: cuentas abiertas que hay que cerrar.
+ */
+function pintarLlevar() {
+    const cont = $('llevar-abiertos');
+    if (!cont) return;
+
+    const abiertos = Servicio.llevarAbiertos();
+    if (!abiertos.length) { cont.innerHTML = ''; return; }
+
+    cont.innerHTML = `
+        <h2 class="llevar-titulo">
+            <i class="fas fa-bag-shopping"></i>
+            ${abiertos.length} para llevar sin cobrar
+        </h2>
+        <div class="llevar-lista">
+            ${abiertos.map(s => {
+                const cuenta = Servicio.cuentaDe({ sesion: s.id });
+                const desde  = Math.round((Date.now() - s.creado) / 60000);
+                return `
+                <button class="llevar-card" data-sesion="${s.id}">
+                    <span class="llevar-nombre">${s.nombre || 'Sin nombre'}</span>
+                    <span class="llevar-saldo">${money(cuenta.saldo)}</span>
+                    <span class="llevar-tiempo">${desde} min</span>
+                </button>`;
+            }).join('')}
+        </div>`;
 }
 
 /* ============================================================
    4. VISTA: TOMAR EL PEDIDO
    ============================================================ */
 
-function verMesa(n) {
-    mesaActual = n;
+function abrirCuenta(nueva) {
+    refActual = nueva;
     borrador = [];
+    editandoTanda = null;
+    if (nueva.nuevoLlevar) nombreLlevar = '';
+
     mostrarVista('mesa');
-    $('titulo').textContent = n ? 'Mesa ' + n : 'Para llevar';
+    $('titulo').textContent = nueva.nuevoLlevar ? 'Para llevar' : Servicio.nombreDeCuenta(nueva);
     $('volver').hidden = false;
     pintarRapidos();
     pintarTodoElMenu();
@@ -274,43 +337,88 @@ function verMesa(n) {
     $('tecleo-lectura').innerHTML = '';
 }
 
+const verMesa       = n  => abrirCuenta({ mesa: n });
+const verLlevar     = id => abrirCuenta({ sesion: id });
+const verLlevarNuevo = () => abrirCuenta({ nuevoLlevar: true });
+
 function pintarMesa() {
     pintarTandasPrevias();
     pintarBorrador();
 }
 
-/* ---------- Lo que esta mesa ya mandó ---------- */
+/* ---------- Lo que esta cuenta ya mandó ---------- */
 
 function pintarTandasPrevias() {
     const cont = $('tandas-previas');
-    const sesion = mesaActual ? Servicio.sesionDeMesa(mesaActual) : null;
+    const r = ref();
 
-    if (!sesion) { cont.innerHTML = ''; return; }
+    if (!r || !Servicio.sesionesDe(r).length) { cont.innerHTML = ''; return; }
 
-    const tandas = Servicio.comandasDeMesa(mesaActual).filter(c => c.estado !== 'anulado');
-    const cuenta = Servicio.cuentaDeMesa(mesaActual);
+    const tandas = Servicio.tandasDe(r).filter(c => c.estado !== 'anulado');
+    const cuenta = Servicio.cuentaDe(r);
 
     if (!tandas.length) { cont.innerHTML = ''; return; }
 
+    const esMesa = !!r.mesa;
+
     cont.innerHTML = `
         <div class="previas">
-            ${tandas.map(c => `
-                <div class="previa ${c.estado === 'entregado' ? 'entregada' : ''}">
-                    <div class="previa-top">
-                        <strong>${c.codigo || Servicio.codigoDe(c)}</strong>
-                        <span class="previa-estado">${c.estado === 'entregado' ? 'Entregado' : 'En preparación'}</span>
-                    </div>
-                    <div class="previa-items">${c.items.map(lineaCorta).join(' · ')}</div>
-                    ${c.estado !== 'entregado'
-                        ? `<button class="previa-anular" data-anular="${c.id}">Anular</button>` : ''}
-                </div>`).join('')}
+            ${tandas.map(previaHtml).join('')}
 
             <div class="previa-cuenta">
-                <span>Cuenta de la mesa</span>
+                <span>${esMesa ? 'Cuenta de la mesa' : 'Cuenta de ' + Servicio.nombreDeCuenta(r)}</span>
                 <strong>${money(cuenta.saldo)}</strong>
-                <button class="btn-cobrar-abrir" data-cobrar="${mesaActual}">
-                    <i class="fas fa-cash-register"></i> Cobrar
-                </button>
+                ${Servicio.puedeCobrar() ? `
+                    <button class="btn-cobrar-abrir" data-cobrar="1">
+                        <i class="fas fa-cash-register"></i> Cobrar
+                    </button>` : ''}
+            </div>
+
+            ${esMesa && Servicio.puedeCobrar() ? `
+                <button class="btn-mover" data-mover="${r.mesa}">
+                    <i class="fas fa-right-left"></i> Cambiar de mesa
+                </button>` : ''}
+        </div>`;
+}
+
+/**
+ * Una tanda ya enviada, con lo que todavía se le puede hacer.
+ *
+ * Los botones no aparecen "por si acaso": si el asador ya sacó la
+ * carne, el de anular no se dibuja y en su lugar se lee por qué. Un
+ * botón que rebota enseña a desconfiar de la pantalla.
+ */
+function previaHtml(c) {
+    const modo   = Servicio.edicionDe(c);
+    const quedan = Servicio.graciaRestante(c);
+    const anular = Servicio.puedeAnular(c);
+
+    return `
+        <div class="previa ${c.estado === 'entregado' ? 'entregada' : ''}">
+            <div class="previa-top">
+                <strong>${c.codigo || Servicio.codigoDe(c)}</strong>
+                <span class="previa-estado">
+                    ${c.estado === 'entregado' ? 'Entregado' : c.sacado ? 'Ya salió' : 'En preparación'}
+                </span>
+            </div>
+            <div class="previa-items">${c.items.map(lineaCorta).join(' · ')}</div>
+
+            ${modo === 'todo' ? `
+                <div class="previa-gracia">
+                    <i class="fas fa-stopwatch"></i>
+                    Se puede corregir entero <b>${quedan}s</b>
+                </div>` : ''}
+
+            <div class="previa-btns">
+                ${modo !== 'no' ? `
+                    <button class="previa-editar" data-editar="${c.id}">
+                        <i class="fas fa-pen"></i>
+                        ${modo === 'todo' ? 'Editar' : 'Agregar bebida o porción'}
+                    </button>` : ''}
+                ${anular.ok
+                    ? `<button class="previa-anular" data-anular="${c.id}">Anular</button>`
+                    : (c.estado !== 'entregado'
+                        ? `<span class="previa-nopuede">${anular.motivo}</span>` : '')}
             </div>
         </div>`;
 }
@@ -419,10 +527,25 @@ function pintarTodoElMenu() {
 
 /* ---------- El borrador ---------- */
 
+/** ¿Se puede meter este plato ahora mismo? */
+function admitido(platoId) {
+    if (!editandoTanda || editandoTanda.modo !== 'agregados') return true;
+    if (Servicio.editableSiempre(platoId)) return true;
+    toast('Ya pasó el minuto: aquí solo entran bebidas y porciones');
+    return false;
+}
+
 function agregarAlBorrador(plato, cantidad) {
+    if (!admitido(plato.id)) return;
+
+    // En un pedido para llevar todo va para llevar. Marcarlo plato por
+    // plato era pedirle al mesero que repita lo que ya dijo al entrar,
+    // y de ahí salían las tarrinas que no se cobraban.
+    const paraLlevar = esLlevar();
+
     // Si ya está y nadie lo modificó, se suma en la misma línea
-    const igual = borrador.find(i => i.platoId === plato.id && !i.sin.length &&
-                                     !i.termino && !i.llevar && !i.nota && !i.elegidas.length);
+    const igual = borrador.find(i => i.platoId === plato.id && !i.bloqueado && !i.sin.length &&
+                                     !i.termino && i.llevar === paraLlevar && !i.nota && !i.elegidas.length);
     if (igual) {
         igual.cantidad += (cantidad || 1);
     } else {
@@ -432,7 +555,7 @@ function agregarAlBorrador(plato, cantidad) {
             nombre: plato.nombre,
             precio: plato.precio,
             cantidad: cantidad || 1,
-            sin: [], termino: '', llevar: false, nota: '', elegidas: []
+            sin: [], termino: '', llevar: paraLlevar, nota: '', elegidas: []
         });
     }
     pintarBorrador();
@@ -441,37 +564,113 @@ function agregarAlBorrador(plato, cantidad) {
 function pintarBorrador() {
     const cont = $('borrador');
 
+    // La tarrina se pone sola antes de dibujar, así el mesero ve el
+    // total de verdad mientras todavía está armando el pedido y no una
+    // sorpresa al cobrar.
+    Servicio.ajustarTarrinas(borrador);
+
     if (!borrador.length) {
         cont.innerHTML = '';
         $('pie-mesa').hidden = true;
+        pintarPie();
         return;
     }
 
     cont.innerHTML = `
-        <h2 class="borrador-titulo">Esta tanda</h2>
-        ${borrador.map(it => {
-            const p = Store.findPlato(it.platoId);
-            const faltaElegir = p && p.elegir && it.elegidas.length !== p.elegir.cuantas;
-            return `
-            <div class="bitem ${faltaElegir ? 'incompleto' : ''}" data-uid="${it.uid}">
-                <div class="bitem-cant">
-                    <button data-menos="${it.uid}" aria-label="Quitar uno">−</button>
-                    <span>${it.cantidad}</span>
-                    <button data-mas="${it.uid}" aria-label="Agregar uno">+</button>
-                </div>
-                <div class="bitem-info" data-mod="${it.uid}">
-                    <span class="bitem-nom">${it.nombre}</span>
-                    ${detalleItem(it, faltaElegir)}
-                </div>
-                <span class="bitem-pre">${money(it.precio * it.cantidad)}</span>
-            </div>`;
-        }).join('')}`;
+        ${editandoTanda ? `
+            <div class="editando-aviso">
+                <i class="fas fa-pen"></i>
+                Corrigiendo <b>${editandoTanda.codigo}</b>
+                ${editandoTanda.modo === 'agregados'
+                    ? '— solo se pueden agregar bebidas y porciones' : ''}
+            </div>` : ''}
+        <h2 class="borrador-titulo">${editandoTanda ? 'Cómo queda la tanda' : 'Esta tanda'}</h2>
+        ${borrador.map(bitemHtml).join('')}`;
 
     const total = borrador.reduce((s, i) => s + i.precio * i.cantidad, 0);
-    const n = borrador.reduce((s, i) => s + i.cantidad, 0);
+    const n = borrador.filter(i => !i.automatico).reduce((s, i) => s + i.cantidad, 0);
     $('borrador-resumen').textContent = n === 1 ? '1 plato' : n + ' platos';
     $('borrador-total').textContent = money(total);
     $('pie-mesa').hidden = false;
+    pintarPie();
+}
+
+function bitemHtml(it) {
+    const p = Store.findPlato(it.platoId);
+    const faltaElegir = p && p.elegir && it.elegidas.length !== p.elegir.cuantas;
+
+    /* La tarrina la puso el sistema y no se toca a mano: si se pudiera,
+       al siguiente repintado volvería a cuadrarse sola y parecería que
+       la pantalla deshace lo que uno hace. Se muestra para que se vea
+       de dónde salen los centavos, nada más. */
+    if (it.automatico) {
+        return `
+        <div class="bitem automatico">
+            <div class="bitem-cant"><span>${it.cantidad}</span></div>
+            <div class="bitem-info">
+                <span class="bitem-nom">${it.nombre}</span>
+                <span class="bitem-det">se agrega sola para lo que se llevan</span>
+            </div>
+            <span class="bitem-pre">${money(it.precio * it.cantidad)}</span>
+        </div>`;
+    }
+
+    // Lo que ya estaba en la tanda cuando pasó el minuto: se ve, no se toca
+    if (it.bloqueado) {
+        return `
+        <div class="bitem bloqueado">
+            <div class="bitem-cant"><span>${it.cantidad}</span></div>
+            <div class="bitem-info">
+                <span class="bitem-nom">${it.nombre}</span>
+                ${detalleItem(it, false) || '<span class="bitem-det">ya está en la parrilla</span>'}
+            </div>
+            <span class="bitem-pre">${money(it.precio * it.cantidad)}</span>
+        </div>`;
+    }
+
+    return `
+        <div class="bitem ${faltaElegir ? 'incompleto' : ''}" data-uid="${it.uid}">
+            <div class="bitem-cant">
+                <button data-menos="${it.uid}" aria-label="Quitar uno">−</button>
+                <span>${it.cantidad}</span>
+                <button data-mas="${it.uid}" aria-label="Agregar uno">+</button>
+            </div>
+            <div class="bitem-info" data-mod="${it.uid}">
+                <span class="bitem-nom">${it.nombre}</span>
+                ${detalleItem(it, faltaElegir)}
+            </div>
+            <span class="bitem-pre">${money(it.precio * it.cantidad)}</span>
+        </div>`;
+}
+
+/* ---------- El pie: el nombre del pedido y el botón ----------
+
+   Un pedido para llevar sin nombre es una funda sin dueño. Por eso el
+   botón de enviar no existe hasta que hay nombre: no se apaga ni avisa
+   después, sencillamente todavía no es el momento de enviar. El campo
+   ocupa su lugar y dice qué falta.                                   */
+
+function pintarPie() {
+    const campo = $('pie-nombre');
+    const boton = $('btn-enviar');
+    if (!campo || !boton) return;
+
+    const pideNombre = refActual && refActual.nuevoLlevar;
+    campo.hidden = !pideNombre;
+
+    if (!pideNombre) {
+        boton.disabled = false;
+        boton.innerHTML = editandoTanda
+            ? '<i class="fas fa-check"></i> Guardar cambios'
+            : '<i class="fas fa-paper-plane"></i> Enviar';
+        return;
+    }
+
+    const listo = !!nombreLlevar.trim();
+    boton.disabled = !listo;
+    boton.innerHTML = listo
+        ? '<i class="fas fa-paper-plane"></i> Enviar'
+        : '<i class="fas fa-user-pen"></i> Escribe el nombre';
 }
 
 /** La línea chica de abajo: lo que se le quitó, el término, si es para llevar. */
@@ -491,7 +690,7 @@ function detalleItem(it, faltaElegir) {
 
 function abrirMod(uid) {
     const it = borrador.find(i => i.uid === uid);
-    if (!it) return;
+    if (!it || it.bloqueado || it.automatico) return;
     editando = uid;
 
     const plato = Store.findPlato(it.platoId);
@@ -615,6 +814,43 @@ function agregarBebidaNueva() {
     $('hoja-bebida').classList.remove('open');
 }
 
+/* ---------- Corregir una tanda ya enviada ---------- */
+
+/**
+ * Reabre una tanda para arreglarla.
+ *
+ * Dentro del minuto de gracia se puede tocar todo. Después, lo que ya
+ * está cocinándose entra al borrador marcado como bloqueado: se ve,
+ * suma en el total, pero no se puede cambiar. Así el mesero mira la
+ * tanda completa mientras le agrega la cola, en vez de trabajar a
+ * ciegas sobre un pedido que no ve.
+ */
+function abrirEdicion(id) {
+    const c = Servicio.getComandas()[id];
+    if (!c) return;
+
+    const modo = Servicio.edicionDe(c);
+    if (modo === 'no') { toast('Esta tanda ya no se puede tocar'); return; }
+
+    editandoTanda = { id, modo, codigo: c.codigo || Servicio.codigoDe(c) };
+    borrador = c.items
+        .filter(it => !it.automatico)          // la tarrina se recalcula sola
+        .map(it => ({
+            ...it,
+            sin: it.sin || [], elegidas: it.elegidas || [],
+            bloqueado: modo === 'agregados' && !Servicio.editableSiempre(it.platoId)
+        }));
+
+    pintarBorrador();
+    window.scrollTo(0, 0);
+}
+
+function cancelarEdicion() {
+    editandoTanda = null;
+    borrador = [];
+    pintarMesa();
+}
+
 /* ---------- Enviar ---------- */
 
 function enviar() {
@@ -628,11 +864,34 @@ function enviar() {
     });
     if (incompleto) { toast('Falta escoger las carnes del ' + incompleto.nombre); abrirMod(incompleto.uid); return; }
 
+    // Corrigiendo una tanda: se guarda encima, conservando su código
+    if (editandoTanda) {
+        const c = Servicio.editarComanda(editandoTanda.id, borrador);
+        editandoTanda = null;
+        borrador = [];
+        pintarMesa();
+        if (c) toast((c.codigo || '') + ' corregido');
+        return;
+    }
+
+    if (refActual.nuevoLlevar && !nombreLlevar.trim()) {
+        toast('Escribe a nombre de quién va el pedido');
+        return;
+    }
+
     const comanda = Servicio.enviarComanda({
-        mesa: mesaActual,
+        mesa: refActual.mesa || 0,
+        nombre: refActual.mesa ? '' : (nombreLlevar || Servicio.nombreDeCuenta(refActual)),
         items: borrador,
         origen: 'mesero'
     });
+
+    // El pedido para llevar ya tiene cuenta propia: se sigue trabajando
+    // sobre ella, para poder agregarle otra tanda o cobrarla sin salir.
+    if (comanda && refActual.nuevoLlevar) {
+        refActual = { sesion: comanda.sesion };
+        $('titulo').textContent = Servicio.nombreDeCuenta(refActual);
+    }
 
     borrador = [];
     pintarMesa();
@@ -643,22 +902,23 @@ function enviar() {
    5. VISTA: COBRAR
    ============================================================ */
 
-/* Se cobra la MESA, no una sesión suelta: es lo que el mesero tiene
-   delante y es lo único que garantiza que no queden platos sin cobrar
-   en una segunda sesión que nadie está mirando. */
-let mesaCobrando = null;
+/* Se cobra la CUENTA entera —la mesa con todas sus sesiones, o el
+   pedido para llevar— porque es lo que el mesero tiene delante y es lo
+   único que garantiza que no queden platos sin cobrar en una segunda
+   sesión que nadie está mirando. */
+let refCobrando = null;
 
-function verCobrar(mesa) {
-    mesaCobrando = mesa;
+function verCobrar(r) {
+    refCobrando = r;
     seleccion = new Map();
     mostrarVista('cobrar');
-    $('titulo').textContent = 'Cobrar';
+    $('titulo').textContent = 'Cobrar · ' + Servicio.nombreDeCuenta(r);
     $('volver').hidden = false;
     pintarCobrar();
 }
 
 function pintarCobrar() {
-    const cuenta = Servicio.cuentaDeMesa(mesaCobrando);
+    const cuenta = Servicio.cuentaDe(refCobrando);
 
     $('cobrar-lista').innerHTML = cuenta.items.filter(l => l.pendiente > 0).map(l => {
         const clave = l.platoId + '|' + l.precio;
@@ -697,11 +957,51 @@ function cobrar(forma) {
 
     if (!lineas.length) { toast('Toca primero lo que se va a cobrar.'); return; }
 
-    Servicio.registrarPago({ mesa: mesaCobrando, lineas, forma });
+    Servicio.registrarPago(Object.assign({ lineas, forma }, refCobrando));
 
-    const cuenta = Servicio.cuentaDeMesa(mesaCobrando);
-    if (cuenta.saldo <= 0.001) { toast('Mesa cerrada'); verMesas(); }
+    const cuenta = Servicio.cuentaDe(refCobrando);
+    if (cuenta.saldo <= 0.001) { toast(refCobrando.mesa ? 'Mesa cerrada' : 'Pedido cobrado'); verMesas(); }
     else { seleccion = new Map(); pintarCobrar(); toast('Cobrado · faltan ' + money(cuenta.saldo)); }
+}
+
+/* ============================================================
+   CAMBIAR DE MESA
+
+   La gente se cambia de mesa a mitad de la comida. Hasta ahora eso
+   obligaba a cobrar y volver a anotar todo desde cero. Se mueve la
+   cuenta entera y solo se ofrecen las mesas libres: escoger una
+   ocupada y que rebote no le sirve a nadie.
+   ============================================================ */
+
+function abrirMover(desde) {
+    const total = Number(CFG.mesas) || 11;
+    const libres = [];
+    for (let n = 1; n <= total; n++) {
+        if (n !== desde && !Servicio.sesionDeMesa(n)) libres.push(n);
+    }
+
+    $('mover-titulo').textContent = 'Mover la mesa ' + desde;
+    $('mover-cuerpo').innerHTML = libres.length
+        ? `<p class="mod-nota">Se lleva todo: las tandas, la cuenta y lo que falta cobrar.</p>
+           <div class="mover-grid">
+               ${libres.map(n => `<button class="mover-mesa" data-destino="${n}">${n}</button>`).join('')}
+           </div>`
+        : `<p class="mod-nota">No hay ninguna mesa libre ahora mismo.</p>`;
+
+    $('hoja-mover').classList.add('open');
+}
+
+function moverA(destino) {
+    const desde = refActual && refActual.mesa;
+    if (!desde) return;
+
+    const r = Servicio.moverMesa(desde, destino);
+    $('hoja-mover').classList.remove('open');
+
+    if (!r.ok) { alert(r.motivo); return; }
+
+    abrirCuenta({ mesa: destino });
+    toast(`Mesa ${desde} → mesa ${destino}`);
 }
 
 /* ============================================================
@@ -725,8 +1025,11 @@ function conectarEventos() {
     $('lock-clave').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
 
     $('volver').addEventListener('click', () => {
-        if (!$('vista-cobrar').hidden && mesaActual) verMesa(mesaActual);
-        else verMesas();
+        // Salir de una corrección a medias no debe salir de la cuenta:
+        // lo primero que uno quiere es volver a ver la tanda entera.
+        if (editandoTanda) return cancelarEdicion();
+        if (!$('vista-cobrar').hidden && ref()) return abrirCuenta(ref());
+        verMesas();
     });
 
     /* Sin esto no habia forma de cambiar de cuenta ni de recuperarse de
@@ -736,7 +1039,17 @@ function conectarEventos() {
         if (confirm('Cerrar sesion en este celular?')) { Sync.salir(); location.reload(); }
     });
 
-    $('btn-llevar').addEventListener('click', () => verMesa(0));
+    $('btn-llevar').addEventListener('click', verLlevarNuevo);
+
+    // El botón de enviar aparece en cuanto hay nombre, sin tocar nada más
+    const campoNombre = $('nombre-llevar');
+    if (campoNombre) {
+        campoNombre.addEventListener('input', e => { nombreLlevar = e.target.value; pintarPie(); });
+        campoNombre.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && nombreLlevar.trim()) { e.preventDefault(); enviar(); }
+        });
+    }
+
     $('tecleo').addEventListener('input', leerTecleo);
     $('tecleo').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarDesdeTecleo(); } });
     $('tecleo-add').addEventListener('click', agregarDesdeTecleo);
@@ -770,6 +1083,9 @@ function conectarEventos() {
         const mesa = t.closest('[data-mesa]');
         if (mesa) return verMesa(Number(mesa.dataset.mesa));
 
+        const llevar = t.closest('[data-sesion]');
+        if (llevar) return verLlevar(llevar.dataset.sesion);
+
         const plato = t.closest('[data-plato]');
         if (plato) {
             const p = Store.findPlato(plato.dataset.plato);
@@ -798,8 +1114,18 @@ function conectarEventos() {
         const mod = t.closest('[data-mod]');
         if (mod) return abrirMod(mod.dataset.mod);
 
+        const editar = t.closest('[data-editar]');
+        if (editar) return abrirEdicion(editar.dataset.editar);
+
         const anular = t.closest('[data-anular]');
         if (anular) {
+            const c = Servicio.getComandas()[anular.dataset.anular];
+            const puede = Servicio.puedeAnular(c);
+            // Se vuelve a preguntar aquí y no solo al dibujar: entre que
+            // se pintó el botón y el dedo llegó, el asador pudo haberla
+            // sacado. Un segundo basta.
+            if (!puede.ok) { alert('No se puede anular.\n\n' + puede.motivo); redibujar(); return; }
+
             if (confirm('¿Anular esta tanda? Desaparece de la parrilla y de la cocina.')) {
                 Servicio.anularComanda(anular.dataset.anular);
                 toast('Tanda anulada');
@@ -807,8 +1133,16 @@ function conectarEventos() {
             return;
         }
 
+        const mover = t.closest('[data-mover]');
+        if (mover) return abrirMover(Number(mover.dataset.mover));
+
+        const destino = t.closest('[data-destino]');
+        if (destino) return moverA(Number(destino.dataset.destino));
+
+        if (t.closest('#mover-cerrar')) return $('hoja-mover').classList.remove('open');
+
         const abrirCobro = t.closest('[data-cobrar]');
-        if (abrirCobro) return verCobrar(Number(abrirCobro.dataset.cobrar));
+        if (abrirCobro) return verCobrar(ref());
 
         const confirmar = t.closest('[data-confirmar]');
         if (confirmar) {
@@ -887,7 +1221,7 @@ function conectarEventos() {
         }
 
         if (t.closest('#cobrar-todo')) {
-            Servicio.cuentaDeMesa(mesaCobrando).items.forEach(l => {
+            Servicio.cuentaDe(refCobrando).items.forEach(l => {
                 if (l.pendiente > 0) seleccion.set(l.platoId + '|' + l.precio, l.pendiente);
             });
             pintarCobrar();
@@ -909,7 +1243,7 @@ function conectarEventos() {
 
 function cambiarCantidad(uid, delta) {
     const it = borrador.find(i => i.uid === uid);
-    if (!it) return;
+    if (!it || it.bloqueado || it.automatico) return;
     it.cantidad += delta;
     if (it.cantidad <= 0) borrador = borrador.filter(i => i.uid !== uid);
     pintarBorrador();
