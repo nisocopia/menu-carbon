@@ -903,6 +903,136 @@ async function probarEnviosJuntos() {
    ya está NUNCA se mueva de sitio.
    ============================================================ */
 
+/* ============================================================
+   EL TABLERO DE LA PARRILLA Y DE LA COCINA
+
+   Aquí pasó el peor error del servicio de verdad: el mesero mandó una
+   chuleta sin arroz y otra sin plátano, la parrilla las pintó como dos
+   renglones idénticos —lo que se quita no se muestra ahí— y el asador
+   leyó el primero, llevó una chuleta y dejó la otra.
+
+   Esta pantalla no tenía ninguna prueba.
+   ============================================================ */
+
+function pantallaEstacion(cual) {
+    const guardado = {};
+
+    const nodo = () => ({
+        innerHTML: '', textContent: '', value: '', hidden: false, disabled: false,
+        dataset: {}, style: { setProperty() {} },
+        classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+        addEventListener() {}, focus() {}, closest: () => null, querySelectorAll: () => []
+    });
+
+    const ctx = vm.createContext({
+        console, Date, Math, JSON, Promise, Number, String, Array, Object, Map, Set,
+        isNaN, parseFloat, parseInt,
+        Sync: {
+            activo: true, haySesion: () => true, correoSesion: () => cual + '@gmail.com',
+            uidSesion: () => 'u', rolSesion: () => (cual === 'asador' ? 'parrilla' : 'cocina'),
+            escuchar: () => (() => {}), leer: async () => undefined,
+            guardar: async () => true, parchear: async () => true, agregar: async () => true,
+            reclamar: async () => ({ ok: true, status: 200 }),
+            enviar: async () => ({ ok: true, status: 200 }),
+            ramaViva: () => true, desdeUltimoContacto: () => 0, fallo: () => '',
+            salir() {}, entrar: async () => ({})
+        },
+        document: { getElementById: nodo, addEventListener() {}, querySelectorAll: () => [],
+                    createElement: nodo, hidden: false },
+        window: { addEventListener() {}, scrollTo() {} },
+        navigator: {},
+        setInterval: () => 0, setTimeout: () => 0, clearTimeout() {},
+        confirm: () => true, alert() {}, prompt: () => '',
+        localStorage: {
+            getItem: k => (k in guardado ? guardado[k] : null),
+            setItem: (k, v) => { guardado[k] = String(v); },
+            removeItem: k => { delete guardado[k]; }
+        }
+    });
+
+    ['js/menu-data.js', 'js/store.js', 'js/servicio.js', 'js/estacion.js']
+        .forEach(f => vm.runInContext(fuente(f), ctx));
+    vm.runInContext(`ESTACION = '${cual}'; PUEDE = true;`, ctx);
+
+    return { corre: e => vm.runInContext(e, ctx) };
+}
+
+/** Una comanda con las dos chuletas que se confundieron, y dos pollos. */
+const PEDIDO_CONFUSO = JSON.stringify({
+    id: 'x1', sesion: 's1', mesa: 4, tanda: 0, creado: Date.now(),
+    estado: 'nuevo', sacado: false, codigo: 'M4 · 2CH 2PO', items: [
+        { uid: 'a', platoId: 'p2', nombre: 'Chuleta', cantidad: 1, precio: 4,
+          estacion: 'asador', sin: ['arroz'],   elegidas: [], termino: '' },
+        { uid: 'b', platoId: 'p2', nombre: 'Chuleta', cantidad: 1, precio: 4,
+          estacion: 'asador', sin: ['platano'], elegidas: [], termino: '' },
+        { uid: 'c', platoId: 'p5', nombre: 'Pollo Asado', cantidad: 2, precio: 3.5,
+          estacion: 'asador', sin: [], elegidas: [], termino: '' }
+    ]
+});
+
+function probarTableroParrilla() {
+    console.log('\n--- La parrilla junta lo que se ve igual ---');
+    const { corre } = pantallaEstacion('asador');
+    corre(`const C = ${PEDIDO_CONFUSO}`);
+
+    comprobar('las dos chuletas salen en un solo renglón',
+        corre(`itemsDeLaVista(C).map(i => i.cantidad + ' ' + i.nombre)`),
+        ['2 Chuleta', '2 Pollo Asado']);
+
+    /* La regla, dicha sobre lo que de verdad se dibuja: en la tarjeta
+       terminada no puede haber dos renglones iguales. Esto es lo que
+       falló en el salón, y se comprueba sobre el HTML, no sobre una
+       lista intermedia. */
+    const filas = corre(`tarjeta(Object.assign({}, C), 1)`)
+        .split('<li').slice(1).map(f => f.replace(/\s+/g, ' ').trim());
+
+    comprobar('la tarjeta dibuja dos renglones, no tres', filas.length, 2);
+    comprobar('y ninguno es igual a otro', filas.length, [...new Set(filas)].length);
+
+    // Lo que sí cambia el trabajo sigue separando
+    corre(`C.items[0].termino = 'tres cuartos'`);
+    comprobar('un término distinto no se junta',
+        corre(`itemsDeLaVista(C).map(i => i.cantidad + ' ' + i.nombre)`),
+        ['1 Chuleta', '1 Chuleta', '2 Pollo Asado']);
+    comprobar('y se ve por qué son dos',
+        corre(`detallesDe(itemsDeLaVista(C)[0]).join('')`),
+        '<b class="det-fuerte">tres cuartos</b>');
+
+    console.log('\n--- La cocina NO junta: cada casilla es suya ---');
+    const cocina = pantallaEstacion('cocina');
+    cocina.corre(`const C = ${PEDIDO_CONFUSO}`);
+    comprobar('la cocina sigue viendo las dos chuletas por separado',
+        cocina.corre(`itemsDeLaVista(C).length`), 3);
+    comprobar('porque ahí sí se ve la diferencia',
+        cocina.corre(`itemsDeLaVista(C).slice(0,2).map(i => detallesDe(i).join(''))`),
+        ['sin arroz', 'sin plátano']);
+}
+
+function probarEscaleraDeTurnos() {
+    console.log('\n--- El orden se ve de lejos, sin leer el número ---');
+    const { corre } = pantallaEstacion('asador');
+    corre(`const C = ${PEDIDO_CONFUSO}`);
+
+    const clases = turno =>
+        corre(`tarjeta(Object.assign({}, C), ${turno})`)
+            .match(/class="ticket ([^"]*)"/)[1].trim().replace(/\s+/g, ' ');
+
+    comprobar('el primero va encendido y avisa',   clases(1), 'turno-1 ahora');
+    comprobar('el segundo baja un punto',          clases(2), 'turno-2');
+    comprobar('el tercero otro punto',             clases(3), 'turno-3');
+    comprobar('del cuarto en adelante, todos igual', clases(4), 'turno-4');
+    comprobar('el séptimo también',                clases(7), 'turno-4');
+
+    // Lo ya resuelto se pliega abajo sin puesto en la fila
+    comprobar('lo plegado no entra en la escalera', clases(0), '');
+
+    /* Con el reloj no se juega: el CSS le devuelve el brillo entero a lo
+       que lleva 25 minutos, esté donde esté en la fila. */
+    const css = fuente('css/servicio.css');
+    comprobar('y un pedido de 25 minutos nunca se apaga',
+        /\.ticket\.roja\s*\{\s*opacity:\s*1;/.test(css), true);
+}
+
 function pantallaComanda() {
     const guardado = {};
     const elementos = {};
@@ -1017,6 +1147,8 @@ async function main() {
     await probarCorreccionDelMesero();
     probarEcoDeLaNube();
     await probarEnviosJuntos();
+    probarTableroParrilla();
+    probarEscaleraDeTurnos();
     probarTomarPedido();
 
     console.log(fallos ? `\n${fallos} comprobación(es) FALLARON. No subas todavía.` : '\nTodo bien.');
