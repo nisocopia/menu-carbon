@@ -1652,7 +1652,27 @@ async function probarRecepcionDeAvisos() {
 function probarPermisosDeAvisos() {
     console.log('\n--- La nube solo deja apuntar lo que es ---');
 
-    const reglas = JSON.parse(fuente('firebase-rules.json').replace(/^\s*"\/\/[^"]*":\s*"[^"]*",?\s*$/gm, ''));
+    const crudo = fuente('firebase-rules.json');
+
+    /* NADA DE COMENTARIOS AQUÍ DENTRO.
+
+       Firebase no lee este archivo como un texto con notas: cada clave
+       es el nombre de una rama de la base. Una línea `"//": "explicación"`
+       no es un comentario — es una rama que se llama `//`, y su valor
+       tendría que ser un objeto. La consola la rechaza entera con
+       "Expected '{'" y señalando una línea que no dice nada.
+
+       Ya pasó una vez. Las explicaciones van en FIREBASE.md, que es
+       donde se pueden escribir sin romper nada. */
+    const comentarios = (crudo.match(/^\s*"\/\/\d*"\s*:/gm) || []).length;
+    comprobar('las reglas no llevan comentarios: Firebase los lee como ramas',
+        comentarios, 0);
+
+    let reglas = null;
+    try { reglas = JSON.parse(crudo); } catch (e) { /* lo dice la comprobación */ }
+    comprobar('y son un JSON que se puede guardar tal cual', !!reglas, true);
+    if (!reglas) return;
+
     const avisos = reglas.rules.avisos;
     const aparato = avisos.$rol.$aparato;
 
