@@ -562,6 +562,118 @@ function probarChecklist() {
         [...new Set(propio.enviado.map(e => e.metodo))], ['PATCH']);
 }
 
+/* ============================================================
+   LA PANTALLA DE TOMAR PEDIDO
+
+   Hasta ahora solo se probaba la lógica. Esta parte levanta comanda.js
+   con un DOM de mentira y repite los toques del mesero, porque el peor
+   fallo que ha tenido este sistema no estaba en las cuentas sino en el
+   dibujo: la línea de la tarrina se sacaba y se volvía a poner al final
+   en cada plato nuevo, así que las filas de abajo subían un renglón
+   justo mientras el dedo bajaba — y el toque terminaba en el "−" de
+   otro plato, que lo borraba.
+
+   Lo que se comprueba es simple y es lo que importa: que una fila que
+   ya está NUNCA se mueva de sitio.
+   ============================================================ */
+
+function pantallaComanda() {
+    const guardado = {};
+    const elementos = {};
+
+    const nodo = id => elementos[id] || (elementos[id] = {
+        id, innerHTML: '', textContent: '', value: '', hidden: false, disabled: false,
+        dataset: {}, style: {},
+        classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+        addEventListener() {}, focus() {}, closest: () => null, querySelectorAll: () => []
+    });
+
+    const ctx = vm.createContext({
+        console, Date, Math, JSON, Promise, Number, String, Array, Object, isNaN, parseFloat, parseInt,
+        Sync: {
+            activo: true, haySesion: () => true, correoSesion: () => 'mesa@gmail.com',
+            uidSesion: () => 'u', rolSesion: () => 'mesero',
+            escuchar: () => (() => {}), leer: async () => undefined,
+            guardar: async () => true, parchear: async () => true, agregar: async () => true,
+            reclamar: async () => ({ ok: true, status: 200 }),
+            enviar: async () => ({ ok: true, status: 200 }),
+            ramaViva: () => true, desdeUltimoContacto: () => 0, fallo: () => '',
+            salir() {}, entrar: async () => ({})
+        },
+        document: { getElementById: nodo, addEventListener() {}, querySelectorAll: () => [],
+                    createElement: () => nodo('tmp') },
+        window: { addEventListener() {}, scrollTo() {} },
+        setInterval: () => 0, setTimeout: () => 0, clearTimeout() {},
+        confirm: () => true, alert() {}, prompt: () => '',
+        localStorage: {
+            getItem: k => (k in guardado ? guardado[k] : null),
+            setItem: (k, v) => { guardado[k] = String(v); },
+            removeItem: k => { delete guardado[k]; }
+        }
+    });
+
+    ['js/menu-data.js', 'js/store.js', 'js/servicio.js', 'js/comanda.js']
+        .forEach(f => vm.runInContext(fuente(f), ctx));
+    vm.runInContext('CFG = Store.getConfig()', ctx);
+
+    return { nodo, corre: e => vm.runInContext(e, ctx) };
+}
+
+function probarTomarPedido() {
+    console.log('\n--- Tomando un pedido para llevar en la pantalla ---');
+    const { nodo, corre } = pantallaComanda();
+
+    corre('verLlevarNuevo()');
+
+    comprobar('el pie sale de una, para poder escribir el nombre', nodo('pie-mesa').hidden, false);
+    comprobar('y pide el nombre antes que nada',
+        /Escribe el nombre/.test(nodo('btn-enviar').innerHTML), true);
+
+    const filas = () => corre(`borrador.map(i => i.nombre)`);
+    const platos = ['p5', 'p1', 'p2', 'p3', 'b3', 'r1'];
+    const esperado = [];
+    let estable = true;
+
+    platos.forEach(id => {
+        const antes = filas();
+        corre(`agregarAlBorrador(Store.findPlato('${id}'), 1)`);
+        const ahora = filas();
+        // Lo que ya estaba tiene que seguir en el mismo orden y sitio
+        if (JSON.stringify(ahora.slice(0, antes.length)) !== JSON.stringify(antes)) estable = false;
+        esperado.push(Store_nombre(corre, id));
+    });
+
+    comprobar('ninguna fila se mueve de sitio al agregar', estable, true);
+    comprobar('están los 6 platos y ninguno se borró', filas().length, 6);
+    comprobar('en el orden en que se tocaron', filas(), esperado);
+
+    // La tarrina se ve pero no vive en el borrador: si viviera, volvería
+    // a reordenar la lista en cada plato nuevo.
+    comprobar('la tarrina NO está en el borrador',
+        corre(`borrador.some(i => i.platoId === 't1')`), false);
+    comprobar('pero sí se ve en la lista',
+        /Tarrina/.test(nodo('borrador').innerHTML), true);
+
+    // 1 pollo (0.25) + 1 carne (0.25) = 2 tarrinas. El resto no lleva.
+    const suma = 3.5 + 3.5 + 4 + 5.5 + 0.5 + 1.5 + 0.5;
+    comprobar('y sí se cobra en el total', nodo('borrador-total').textContent, '$' + suma.toFixed(2));
+
+    comprobar('sin nombre no deja enviar', nodo('btn-enviar').disabled, true);
+    corre(`nombreLlevar = 'Carlos'; pintarPie()`);
+    comprobar('con nombre ya dice Enviar',
+        /Enviar/.test(nodo('btn-enviar').innerHTML) && !nodo('btn-enviar').disabled, true);
+
+    corre('enviar()');
+    const c = corre('Object.values(Servicio.getComandas())[0]');
+    comprobar('la comanda sale con el nombre', c.nombre, 'Carlos');
+    comprobar('y con sus 2 tarrinas',
+        (c.items.find(i => i.platoId === 't1') || {}).cantidad, 2);
+    comprobar('todo lo del pedido va marcado para llevar',
+        c.items.every(i => i.llevar), true);
+}
+
+const Store_nombre = (corre, id) => corre(`Store.findPlato('${id}').nombre`);
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -574,6 +686,7 @@ async function main() {
     probarEdicion();
     probarMoverMesa();
     probarChecklist();
+    probarTomarPedido();
 
     console.log(fallos ? `\n${fallos} comprobación(es) FALLARON. No subas todavía.` : '\nTodo bien.');
     process.exit(fallos ? 1 : 0);
