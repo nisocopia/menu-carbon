@@ -114,7 +114,7 @@ const FIREBASE = {
    ------------------------------------------------------------ */
 
 const PUSH = {
-    clave: '',
+    clave: 'BEZrNXnlXpcamw6irGHLvm3OUWiD2qmtqZfKs-wJYc-Z17kdtfNOavOE3Dhe7vxVK7WvlbQjhxfQtjER5n4b2z4',
 
     /* A quién escribirle si un aviso da problemas. Lo exige el estándar
        y lo lee una persona de Google, no un programa. */
