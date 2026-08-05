@@ -389,43 +389,64 @@ function pintar() {
                        Pregunta antes de dar por hecho que no hay nada.</small>
             </div>`;
     } else {
+        // La numeración sigue de corrido: lo diferido va al final de la
+        // fila, no en una fila aparte que empiece otra vez por el uno.
         tablero.innerHTML =
-            activas.map(tarjeta).join('') +
+            activas.map((c, i) => tarjeta(c, i + 1)).join('') +
             (diferidas.length ? `
                 <div class="separador-llevar">
                     <i class="fas fa-bag-shopping"></i> Para llevar — al final
-                </div>` + diferidas.map(tarjeta).join('') : '');
+                </div>` + diferidas.map((c, i) => tarjeta(c, activas.length + i + 1)).join('') : '');
     }
 
     const caja = $('sacadas-caja');
     if (caja) {
         caja.hidden = !plegadas.length;
         $('sacadas-n').textContent = plegadas.length;
-        $('sacadas').innerHTML = plegadas.map(tarjeta).join('');
+        // Lo ya resuelto no lleva número: ahí el orden ya no importa
+        $('sacadas').innerHTML = plegadas.map(c => tarjeta(c, 0)).join('');
     }
 }
 
-/* ---------- Una tarjeta ---------- */
+/* ---------- Una tarjeta ----------
 
-function tarjeta(c) {
+   `turno` es el puesto en la fila: 1 es el que va ahora. Antes solo
+   estaban ordenadas por hora y en una tablet, con cuatro tarjetas del
+   mismo tamaño una al lado de otra, no había forma de saber cuál seguía
+   sin ponerse a comparar relojes. El número lo dice de lejos.          */
+
+function tarjeta(c, turno) {
     const min  = minutosDe(c);
     const hora = new Date(c.creado).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
 
     // El color avisa sin que nadie tenga que mirar el reloj
     const urgencia = min >= 25 ? 'roja' : min >= 15 ? 'ambar' : '';
+    const ahora    = turno === 1;
+
+    // Para llevar, el nombre manda: es lo que se grita al entregar
+    const quien = c.mesa ? 'Mesa ' + c.mesa
+                : c.nombre ? c.nombre
+                : 'LLEVAR';
 
     return `
-    <article class="ticket ${urgencia} ${apagada(c) ? 'sacada' : ''}" data-id="${c.id}">
+    <article class="ticket ${urgencia} ${apagada(c) ? 'sacada' : ''} ${ahora ? 'ahora' : ''}"
+             data-id="${c.id}">
         <div class="ticket-top">
-            <span class="ticket-mesa">${c.mesa ? 'Mesa ' + c.mesa : 'LLEVAR'}</span>
+            ${turno ? `<span class="ticket-turno">${turno}</span>` : ''}
+            <span class="ticket-mesa ${c.mesa ? '' : 'llevar'}">${quien}</span>
             <span class="ticket-hora">${hora} · ${min} min</span>
         </div>
+
+        ${ahora ? '<div class="ticket-ahora">EMPIEZA POR ESTE</div>' : ''}
 
         <!-- El código guardado, no uno recalculado con lo que ve esta
              pantalla: si el asador dijera "M9 · 2PO" y la cocina
              "M9 · 2PO 2 Jugo", serían dos nombres para el mismo pedido
              y no habría forma de cantarlo en voz alta. -->
-        <div class="ticket-codigo">${c.codigo || Servicio.codigoDe(c)}</div>
+        <div class="ticket-codigo">
+            ${c.codigo || Servicio.codigoDe(c)}
+            ${!c.mesa && c.nombre ? `<b class="ticket-nombre">${c.nombre}</b>` : ''}
+        </div>
 
         ${ESTACION === 'cocina' && c.cubiertos
             ? `<div class="ticket-cubiertos">
@@ -433,20 +454,54 @@ function tarjeta(c) {
                </div>` : ''}
 
         <ul class="ticket-items">
-            ${c.items.map(itemHtml).join('')}
+            ${c.items.map(it => itemHtml(it, c)).join('')}
         </ul>
 
         ${c.nota ? `<div class="ticket-nota"><i class="fas fa-note-sticky"></i> ${c.nota}</div>` : ''}
 
-        ${PUEDE ? `
-        <button class="ticket-btn" data-accion="${c.id}">
-            ${ESTACION === 'asador'
-                ? (c.sacado ? '<i class="fas fa-rotate-left"></i> Devolver' : '<i class="fas fa-check"></i> Ya lo saqué')
-                : (c.estado === 'entregado'
-                    ? '<i class="fas fa-rotate-left"></i> Devolver'
-                    : '<i class="fas fa-check"></i> ENTREGADO')}
-        </button>` : ''}
+        ${PUEDE ? botonDe(c) : ''}
     </article>`;
+}
+
+/**
+ * El botón de cerrar el pedido, distinto en cada pantalla.
+ *
+ * En la cocina no se enciende hasta que todos los platos estén
+ * marcados: la pantalla no deja cerrar lo que no está hecho, que es
+ * justo lo que se olvidaba.
+ *
+ * En la parrilla hay que mantenerlo apretado dos segundos. Un toque
+ * suelto en una pantalla llena de grasa sacaba pedidos que seguían en
+ * el fuego, y deshacerlo obligaba a ir a buscar la tarjeta plegada.
+ */
+function botonDe(c) {
+    if (ESTACION === 'asador') {
+        return c.sacado
+            ? `<button class="ticket-btn" data-accion="${c.id}">
+                   <i class="fas fa-rotate-left"></i> Devolver
+               </button>`
+            : `<button class="ticket-btn largo" data-largo="${c.id}">
+                   <span class="ticket-btn-progreso"></span>
+                   <span class="ticket-btn-texto">
+                       <i class="fas fa-check"></i> Mantén 2s — Ya lo saqué
+                   </span>
+               </button>`;
+    }
+
+    if (c.estado === 'entregado') {
+        return `<button class="ticket-btn" data-accion="${c.id}">
+                    <i class="fas fa-rotate-left"></i> Devolver
+                </button>`;
+    }
+
+    const faltan = c.items.reduce((n, it) => n + (it.cantidad - Servicio.listasDe(c, it.uid)), 0);
+    return faltan
+        ? `<button class="ticket-btn pendiente" disabled>
+               Faltan ${faltan} por marcar
+           </button>`
+        : `<button class="ticket-btn" data-accion="${c.id}">
+               <i class="fas fa-check"></i> ENTREGADO
+           </button>`;
 }
 
 /**
@@ -458,7 +513,7 @@ function apagada(c) {
     return ESTACION === 'asador' ? !!c.sacado : c.estado === 'entregado';
 }
 
-function itemHtml(it) {
+function detallesDe(it) {
     const detalles = [];
 
     // Al asador solo le importan el término y si es para llevar.
@@ -473,15 +528,49 @@ function itemHtml(it) {
     }
     if (it.nota) detalles.push(it.nota);
 
-    return `
-    <li class="ticket-item ${it.llevar ? 'llevar' : ''}">
-        <span class="ti-cant">${it.cantidad}</span>
-        <span class="ti-nom">
-            ${it.nombre}
-            ${it.llevar ? '<span class="ti-llevar">🥡 llevar</span>' : ''}
-            ${detalles.length ? `<span class="ti-det">${detalles.join(' · ')}</span>` : ''}
-        </span>
-    </li>`;
+    return detalles;
+}
+
+/**
+ * En la parrilla, una línea por ítem con su cantidad delante.
+ *
+ * En la cocina, UNA LÍNEA POR UNIDAD. "4x Chuleta" se lee de un vistazo
+ * y se olvida igual de rápido: se emplatan tres y la cuarta se queda en
+ * la plancha. Cuatro casillas no se pueden despachar de un toque, y la
+ * que falta se ve desde la puerta.
+ */
+function itemHtml(it, c) {
+    const detalles = detallesDe(it);
+    const cola = `
+        ${it.llevar ? '<span class="ti-llevar">🥡 llevar</span>' : ''}
+        ${detalles.length ? `<span class="ti-det">${detalles.join(' · ')}</span>` : ''}`;
+
+    if (ESTACION !== 'cocina' || !PUEDE) {
+        return `
+        <li class="ticket-item ${it.llevar ? 'llevar' : ''}">
+            <span class="ti-cant">${it.cantidad}</span>
+            <span class="ti-nom">${it.nombre}${cola}</span>
+        </li>`;
+    }
+
+    const listas = Servicio.listasDe(c, it.uid);
+
+    /* Cada unidad se marca sola. Tocar la número 3 marca de la 1 a la 3
+       y destocarla las deja en 2: así seguir el orden natural —de
+       izquierda a derecha— siempre hace lo esperado, y corregirse es un
+       solo toque en vez de deshacer una por una. */
+    return Array.from({ length: it.cantidad }, (_, i) => {
+        const hecha = i < listas;
+        return `
+        <li class="ticket-item tarea ${hecha ? 'hecha' : ''} ${it.llevar ? 'llevar' : ''}"
+            data-tarea="${c.id}" data-uid="${it.uid}" data-n="${hecha ? i : i + 1}">
+            <span class="ti-caja">${hecha ? '<i class="fas fa-check"></i>' : ''}</span>
+            <span class="ti-nom">
+                ${it.nombre}${it.cantidad > 1 ? ` <em class="ti-de">${i + 1} de ${it.cantidad}</em>` : ''}
+                ${cola}
+            </span>
+        </li>`;
+    }).join('');
 }
 
 /* ============================================================
@@ -508,6 +597,54 @@ function resolverRechazadas(que) {
     toast('Descartado');
 }
 
+/* ============================================================
+   MANTENER APRETADO PARA SACAR DE LA PARRILLA
+
+   Un toque suelto sobre una pantalla con las manos ocupadas sacaba
+   pedidos que seguían en el fuego. Dos segundos no se dan por
+   accidente, y la barra que avanza dice que algo está pasando — sin
+   ella, mantener el dedo parece que la pantalla se colgó.
+   ============================================================ */
+
+const SOSTENER = 2000;
+let sosteniendo = null;   // { id, reloj, boton }
+
+function empezarSostener(boton) {
+    if (sosteniendo) return;
+    const id = boton.dataset.largo;
+
+    boton.classList.add('sosteniendo');
+    boton.style.setProperty('--duracion', SOSTENER + 'ms');
+
+    sosteniendo = {
+        id, boton,
+        reloj: setTimeout(() => {
+            sosteniendo = null;
+            boton.classList.remove('sosteniendo');
+            const c = Servicio.getComandas()[id];
+            Servicio.marcarSacado(id, true);
+            if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) {}
+            toast(Servicio.etiquetaDe(c) + ' sacado');
+        }, SOSTENER)
+    };
+}
+
+function soltarSostener() {
+    if (!sosteniendo) return;
+    clearTimeout(sosteniendo.reloj);
+    sosteniendo.boton.classList.remove('sosteniendo');
+    sosteniendo = null;
+}
+
+/* ============================================================
+   MARCAR PLATO POR PLATO (COCINA)
+   ============================================================ */
+
+function marcarTarea(li) {
+    if (!PUEDE) return;
+    Servicio.marcarListo(li.dataset.tarea, li.dataset.uid, Number(li.dataset.n));
+}
+
 function accion(id) {
     /* El botón ni se dibuja cuando la cuenta es de mirar, pero la
        comprobación se repite aquí: el dibujo se puede editar desde el
@@ -519,6 +656,8 @@ function accion(id) {
     if (!c) return;
 
     if (ESTACION === 'asador') {
+        // Sacar necesita mantener apretado; devolver es de un toque,
+        // porque deshacer no rompe nada.
         Servicio.marcarSacado(id, !c.sacado);
         toast(c.sacado ? 'Vuelve a la parrilla' : Servicio.etiquetaDe(c) + ' sacado');
     } else if (c.estado === 'entregado') {
@@ -558,7 +697,24 @@ function iniciarEstacion(cual) {
                 if (confirm('Cerrar sesion en este celular?')) { Sync.salir(); location.reload(); }
         });
 
+        /* La pulsación larga se escucha con eventos de puntero, no de
+           clic: hay que saber cuándo empieza y cuándo se suelta, y si el
+           dedo se corre fuera del botón la acción se cancela. */
+        document.addEventListener('pointerdown', e => {
+            const largo = e.target.closest('[data-largo]');
+            if (largo) { e.preventDefault(); empezarSostener(largo); }
+        });
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev =>
+            document.addEventListener(ev, soltarSostener));
+        // Si el dedo se sale del botón sin soltar, tampoco cuenta
+        document.addEventListener('pointermove', e => {
+            if (sosteniendo && !e.target.closest('[data-largo]')) soltarSostener();
+        });
+
         document.addEventListener('click', e => {
+            const tarea = e.target.closest('[data-tarea]');
+            if (tarea) { marcarTarea(tarea); return; }
+
             const btn = e.target.closest('[data-accion]');
             if (btn) { accion(btn.dataset.accion); return; }
 

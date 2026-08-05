@@ -171,6 +171,83 @@ mesero), manda un pedido desde el celular de un cliente a la mesa 4.
 - [ ] Ninguna otra cuenta llega a esa pantalla, y aunque llegara, la nube
       le negaria el borrado
 
+## 13. Un pedido para llevar
+
+**En el celular del mesero:** toca **Pedido para llevar**, escribe `2p`.
+
+- [ ] El boton de abajo **no dice Enviar**: dice "Escribe el nombre"
+- [ ] Escribe `Carlos` → el boton pasa a **Enviar**
+- [ ] En el total aparecen **2 tarrinas** ($0.50) sin haberlas pedido
+- [ ] **Asador:** la tarjeta dice **CARLOS** en grande, no "LLEVAR"
+- [ ] **Cocina:** tambien ve el nombre, y **no** ve la tarrina
+
+Ahora manda otro para llevar a nombre de `Luis`, con `1c`.
+
+- [ ] En la pantalla de mesas, debajo del boton, aparecen **los dos**
+      con su nombre y su saldo
+- [ ] Tocas el de Carlos → ves solo lo suyo, no lo de Luis
+- [ ] Lo cobras → desaparece de la lista y el de Luis **sigue ahi**
+
+## 14. Corregir a tiempo, y no poder despues
+
+**En el celular del mesero:** mesa 4, escribe `1p`, Enviar.
+
+- [ ] Debajo de la tanda sale **"Se puede corregir entero"** con los
+      segundos bajando
+- [ ] Tocas **Editar**, cambias el pollo por chuleta, Guardar cambios
+- [ ] **Asador:** la tarjeta se actualiza sola, con el **mismo codigo**
+
+Espera un minuto largo y vuelve a esa mesa.
+
+- [ ] Ahora el boton dice **"Agregar bebida o porcion"**
+- [ ] Al abrirlo, la chuleta esta ahi pero **no se puede tocar**
+- [ ] Agregas una cola → si deja
+- [ ] Intentas agregar otro pollo → dice que ya paso el minuto
+
+## 15. Que no se pueda anular lo que ya salio
+
+**En el asador:** manten apretado **2 segundos** en un pedido de la mesa 4.
+
+- [ ] Se ve una **barra que avanza**; si sueltas antes, no pasa nada
+- [ ] Al completarse, sale del tablero
+
+**En el mesero:** vuelve a la mesa 4.
+
+- [ ] Ya **no hay boton de Anular**: en su lugar dice que el asador ya lo saco
+
+## 16. La cocina marca plato por plato
+
+**En el mesero:** mesa 7, escribe `1p 4ch`, Enviar.
+
+- [ ] **Cocina:** ve **cuatro renglones de Chuleta**, no "4x Chuleta"
+- [ ] El boton de abajo dice **"Faltan 5 por marcar"** y esta apagado
+- [ ] Marcas el pollo y tres chuletas → dice "Falta 1 por marcar"
+- [ ] Marcas la cuarta → recien ahi se enciende **ENTREGADO**
+
+## 17. El orden, en la tablet
+
+**En la tablet de la cocina**, con tres o cuatro pedidos en pantalla:
+
+- [ ] Cada tarjeta tiene su numero **1, 2, 3** en un circulo
+- [ ] El primero dice **EMPIEZA POR ESTE** y ocupa el ancho entero
+- [ ] Se sabe cual sigue **sin mirar ninguna hora**
+
+## 18. El asador tomando un pedido
+
+**En el celular del asador:** toca **Tomar pedido**.
+
+- [ ] Entra, y puede anotar mesa o para llevar igual que el mesero
+- [ ] En una mesa con cuenta abierta, **no le aparece el boton Cobrar**
+
+## 19. Cambiar de mesa
+
+**En el mesero:** mesa 5, manda `2p`. Luego entra a la mesa 5.
+
+- [ ] Abajo hay **Cambiar de mesa**
+- [ ] Solo salen las mesas **libres**
+- [ ] Escoges la 9 → la 5 queda libre y la 9 tiene la cuenta entera
+- [ ] **Asador:** el codigo paso de `M5` a `M9`
+
 ---
 
 ## Dejar limpio

@@ -165,8 +165,14 @@ pierde un plato.
 |---|---|---|---|---|
 | **Gerente** | manda | manda | manda | manda |
 | **Mesero** | manda | mira | mira | — |
-| **Asador** | — | manda | mira | — |
+| **Asador** | **anota** | manda | mira | — |
 | **Cocina** | — | mira | manda | — |
+
+**Anota** quiere decir que el asador toma pedidos igual que el mesero
+—mesa o para llevar, con el mismo flujo y la misma pantalla— pero **no
+cobra**: no le aparece el botón, no cierra mesas y la nube le niega
+escribir en los cobros. A veces le llegan pedidos directos y no tiene por
+qué ir a buscar a nadie; el dinero se queda donde estaba.
 
 Cuando una cuenta solo mira, la pantalla se abre con una franja azul
 arriba y las tarjetas salen **sin botón**. No hay nada roto: es la
@@ -178,12 +184,74 @@ Cada pantalla manda a la nube **solo su campo** — el asador únicamente
 comprueban del lado del servidor. Los detalles están en
 [FIREBASE.md](FIREBASE.md) y las cuentas de este local en `CUENTAS.md`.
 
+### Pedidos para llevar
+
+Cada uno es **su propia cuenta**, y lo que la distingue es el nombre de
+quien va a recoger: `Carlos`, `Uber`, `Luis`. Antes todos compartían la
+mesa 0, así que el de Carlos y el de Uber caían en el mismo saco y no
+había forma de cobrar uno sin el otro.
+
+El botón de enviar **no dice Enviar hasta que hay nombre**. Un pedido para
+llevar sin nombre es una funda sin dueño.
+
+El nombre no reemplaza al código: `LL · 2PO` sigue siendo el código, y el
+nombre va al lado, en grande, en la parrilla y en la cocina. Los que
+siguen sin cobrar se ven en la pantalla de mesas, debajo del botón, como
+si fueran mesas — porque para el mesero son exactamente eso.
+
+### La tarrina se cobra sola
+
+Lo que se llevan va en tarrina, y la tarrina cuesta **$0.25**. Se agrega
+sola, una por unidad, en el pollo asado, la carne asada y los juniors. El
+mesero no saca cuentas y el total se ve mientras todavía se está armando
+el pedido.
+
+No es un recargo escondido: la tarrina es un plato más de la carta
+interna, así que sale con su nombre en la cuenta y el gerente le cambia
+el precio desde el panel el día que suban.
+
+### Hasta cuándo se puede corregir
+
+Al enviar una tanda arranca **un minuto de gracia**. Durante ese minuto
+se puede cambiar todo: era chuleta, no pollo. La pantalla muestra la
+cuenta regresiva.
+
+Pasado el minuto, la carne ya está en la parrilla. Ahí solo se pueden
+**agregar bebidas y porciones** — lo que no se cocina — y los platos que
+ya estaban se ven pero no se tocan. Las porciones de proteína cuentan
+como proteína: también se bloquean.
+
+**Anular** se puede hasta que alguien la haya tocado. Si el asador ya
+marcó "Ya lo saqué" o la cocina ya marcó ENTREGADO, no se anula y en el
+lugar del botón se lee con quién hay que hablar.
+
+### Cambiar de mesa
+
+Los clientes se pasan de la 5 a la 2 y se mueve la cuenta entera:
+tandas, cobros y lo que falta. Los códigos se rehacen (`M5b` pasa a ser
+`M2b`), porque un papel que dice M5 encima de la mesa 2 es peor que no
+tener papel. Solo se ofrecen las mesas libres.
+
 ### Quién borra qué
 
 | Toca | Pasa |
 |---|---|
-| **Asador: "Ya lo saqué"** | Limpia **solo su** tarjeta, y queda plegada abajo por si preguntan. La cocina todavía tiene que emplatar y servir. |
-| **Cocina: ENTREGADO** | El plato salió: desaparece de **las dos** pantallas y queda plegado abajo, en "entregadas". |
+| **Asador: "Ya lo saqué"** | Hay que **mantener apretado 2 segundos**, con una barra que avanza. Limpia **solo su** tarjeta, y queda plegada abajo por si preguntan. La cocina todavía tiene que emplatar y servir. |
+| **Cocina: marca cada plato** | Cada unidad es una casilla. `4 Chuletas` son cuatro renglones, no "4x Chuleta". |
+| **Cocina: ENTREGADO** | **No se enciende hasta que todo esté marcado.** Después, el plato salió: desaparece de **las dos** pantallas y queda plegado abajo. |
+
+Los dos gestos que cierran un pedido cuestan trabajo a propósito. Un
+toque suelto en una pantalla con las manos ocupadas sacaba carne que
+seguía en el fuego, y un solo toque para entregar hacía que se olvidara
+la cuarta chuleta. La pantalla ya no deja cerrar lo que no está hecho.
+
+### El orden se ve, no se deduce
+
+Cada tarjeta lleva su **puesto en la fila** en un círculo grande: 1, 2,
+3. El primero va marcado **EMPIEZA POR ESTE** y, en tablet o PC, ocupa el
+ancho entero mientras el resto va en rejilla. Ordenar por hora no
+alcanzaba: con cuatro tarjetas iguales una al lado de otra había que
+comparar relojes.
 
 Cada pantalla solo atenúa lo que ella misma resolvió: que el asador saque
 la carne no apaga nada en la cocina, donde el plato todavía está por

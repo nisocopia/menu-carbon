@@ -134,6 +134,14 @@ const GUARNICIONES = {
    - atajo:     lo que se teclea al tomar el pedido. "3p" = 3 pollos.
    - minutos:   cuánto demora, para decirle la verdad al comensal
    - termino:   true si se le puede pedir el término (solo la carne)
+   - tarrina:   true si al llevárselo hay que ponerle tarrina. Se cobra
+                sola, una por unidad: el mesero no hace cuentas.
+   - editableSiempre: true deja seguir tocando ese plato después del
+                minuto de gracia. Es para lo que no se cocina —bebidas y
+                porciones sueltas—, que se piden a mitad de la comida.
+                Lo que NO lo lleva queda bloqueado pasado el minuto, que
+                es lo seguro: cuando la proteína ya está en la parrilla,
+                cambiarla es como no haberla pedido.
    ------------------------------------------------------------ */
 
 const MENU = [
@@ -147,11 +155,11 @@ const MENU = [
         cubierto: true,
         guarnicion: ['arroz', 'menestra', 'ensalada', 'platano'],
         platos: [
-            { id: 'p1', nombre: 'Carne Asada',  precio: 3.50, img: 'img/productos/carneasada.webp',    destacado: true, sigla: 'CA', atajo: 'c',  minutos: 8,  termino: true },
+            { id: 'p1', nombre: 'Carne Asada',  precio: 3.50, img: 'img/productos/carneasada.webp',    destacado: true, sigla: 'CA', atajo: 'c',  minutos: 8,  termino: true, tarrina: true },
             { id: 'p2', nombre: 'Chuleta',      precio: 4.00, img: 'img/productos/chuletaas.webp',                      sigla: 'CH', atajo: 'ch', minutos: 10 },
             { id: 'p3', nombre: 'Costilla',     precio: 5.50, img: 'img/productos/costillaasada.webp',                  sigla: 'CO', atajo: 'co', minutos: 20 },
             { id: 'p4', nombre: 'Matambre',     precio: 5.00, img: '',                                                  sigla: 'MA', atajo: 'ma', minutos: 15 },
-            { id: 'p5', nombre: 'Pollo Asado',  precio: 3.50, img: 'img/productos/polloasado.webp',    destacado: true, sigla: 'PO', atajo: 'p',  minutos: 15 }
+            { id: 'p5', nombre: 'Pollo Asado',  precio: 3.50, img: 'img/productos/polloasado.webp',    destacado: true, sigla: 'PO', atajo: 'p',  minutos: 15, tarrina: true }
         ]
     },
     {
@@ -189,6 +197,7 @@ const MENU = [
         soloMesero: true,
         estacion: 'asador',                 // los de parrilla; los otros lo cambian abajo
         cubierto: true,                     // el niño se sienta a comer: cuenta cubierto
+        tarrina: true,                      // porción de niño, pero si se la llevan va en tarrina
         guarnicion: ['arroz', 'menestra', 'ensalada', 'platano'],
         platos: [
             { id: 'j1', nombre: 'Junior de Pollo',   precio: 2.50, sigla: 'JPO', atajo: 'jp',  minutos: 10 },
@@ -282,6 +291,10 @@ const MENU = [
         estilo: 'lista',
         estacion: 'cocina',
         sugerible: true,          // <- estas aparecen como sugerencia al cerrar el pedido
+        // Se piden a mitad de la comida, cuando el plato fuerte ya lleva
+        // rato en la parrilla. Por eso siguen siendo editables después
+        // del minuto de gracia.
+        editableSiempre: true,
         platos: [
             { id: 'r1', nombre: 'Arroz',            precio: 1.50, atajo: 'ar' },
             { id: 'r2', nombre: 'Menestra',         precio: 1.00, atajo: 'me' },
@@ -314,6 +327,7 @@ const MENU = [
         estilo: 'lista',
         estacion: 'barra',        // no van a ninguna pantalla: las sirve el mesero
         sugerible: true,
+        editableSiempre: true,    // una cola se pide en cualquier momento
         platos: [
             // Los jugos son del propio negocio, por eso van destacados arriba
             { id: 'b1', nombre: 'Jugo de Maracuyá',  precio: 1.00, atajo: 'jma', destacado: true },
@@ -330,6 +344,30 @@ const MENU = [
             // con el botón "Otra bebida" de la comanda, que las va guardando.
             { id: 'b10', nombre: 'Cervezas' },
             { id: 'b11', nombre: 'Agua' }
+        ]
+    },
+    {
+        /* LA TARRINA ES UN PLATO, NO UNA CUENTA APARTE.
+
+           Podría haberse sumado a mano al total, escondida en el código.
+           Puesta aquí, entra por el camino que ya existe: sale en la
+           cuenta con su nombre, el comensal ve por qué paga 25 centavos
+           más, y el gerente le cambia el precio desde el panel el día
+           que suban las tarrinas. Nada de eso hubo que programarlo.
+
+           'barra' para que no le llegue a la parrilla ni a la cocina —
+           nadie la prepara — y soloMesero para que no salga en la carta:
+           no es algo que se pida, es algo que se cobra. */
+        id: 'extras',
+        nombre: 'Extras',
+        icono: 'fa-box',
+        descripcion: 'Se agregan solos cuando hacen falta.',
+        estilo: 'lista',
+        estacion: 'barra',
+        soloMesero: true,
+        editableSiempre: true,
+        platos: [
+            { id: 't1', nombre: 'Tarrina', precio: 0.25, atajo: 'ta' }
         ]
     }
 ];

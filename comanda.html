@@ -14,9 +14,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Comanda">
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608042158">
-    <link rel="stylesheet" href="css/iconos.css?v=202608042158">
-    <link rel="stylesheet" href="css/servicio.css?v=202608042158">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608042358">
+    <link rel="stylesheet" href="css/iconos.css?v=202608042358">
+    <link rel="stylesheet" href="css/servicio.css?v=202608042358">
 </head>
 
 <body class="srv-body">
@@ -55,6 +55,11 @@
         <button class="btn-llevar" id="btn-llevar">
             <i class="fas fa-bag-shopping"></i> Pedido para llevar
         </button>
+
+        <!-- Los pedidos para llevar que siguen sin cobrar, justo debajo del
+             botón: son cuentas abiertas igual que las mesas y hay que poder
+             responder "¿el de Carlos ya salió?" sin ir a la cocina. -->
+        <div id="llevar-abiertos"></div>
 
         <nav class="srv-links">
             <a href="parrilla.html"><i class="fas fa-fire"></i> Parrilla</a>
@@ -99,6 +104,15 @@
                 <span id="borrador-resumen">0 platos</span>
                 <strong id="borrador-total">$0.00</strong>
             </div>
+
+            <!-- Un pedido para llevar sin nombre es una funda sin dueño.
+                 Hasta que se escriba, el botón de abajo no dice Enviar. -->
+            <label class="pie-nombre" id="pie-nombre" hidden>
+                <span>Nombre del pedido</span>
+                <input type="text" id="nombre-llevar" placeholder="Carlos, Uber, Luis…"
+                       autocomplete="off" autocapitalize="words" spellcheck="false" maxlength="30">
+            </label>
+
             <button class="btn-enviar" id="btn-enviar">
                 <i class="fas fa-paper-plane"></i> Enviar
             </button>
@@ -173,13 +187,26 @@
         </div>
     </div>
 
+    <!-- ============ HOJA: CAMBIAR DE MESA ============
+         Solo salen las mesas libres. Ofrecer una ocupada y que rebote
+         después de tocarla no le sirve a nadie. -->
+    <div class="hoja-overlay" id="hoja-mover">
+        <div class="hoja">
+            <div class="hoja-head">
+                <h2 id="mover-titulo">Mover la mesa</h2>
+                <button class="hoja-close" id="mover-cerrar" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="hoja-cuerpo" id="mover-cuerpo"></div>
+        </div>
+    </div>
+
     <div class="srv-toast" id="toast"></div>
 
-    <script src="js/menu-data.js?v=202608042158"></script>
-    <script src="js/sync.js?v=202608042158"></script>
-    <script src="js/store.js?v=202608042158"></script>
-    <script src="js/servicio.js?v=202608042158"></script>
-    <script src="js/comanda.js?v=202608042158"></script>
+    <script src="js/menu-data.js?v=202608042358"></script>
+    <script src="js/sync.js?v=202608042358"></script>
+    <script src="js/store.js?v=202608042358"></script>
+    <script src="js/servicio.js?v=202608042358"></script>
+    <script src="js/comanda.js?v=202608042358"></script>
 
 </body>
 
