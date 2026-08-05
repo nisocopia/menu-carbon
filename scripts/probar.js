@@ -1649,6 +1649,44 @@ async function probarRecepcionDeAvisos() {
     comprobar('sin abrir una segunda', a.abiertasNuevas, []);
 }
 
+/**
+ * La clave de los avisos: que sea la que va, y no la otra.
+ *
+ * generar-clave-push.js imprime DOS, y se parecen lo bastante como para
+ * confundirlas. Pegar la equivocada tiene dos consecuencias y ninguna
+ * salta a la vista:
+ *
+ *   1. el navegador no deja apuntar ningún aparato — y el mensaje que
+ *      da no dice que la clave esté mal;
+ *   2. menu-data.js se publica entero, así que la clave con la que se
+ *      puede hacer sonar cualquier pantalla del local queda a la vista
+ *      de cualquiera que abra el sitio.
+ *
+ * Se distinguen por el tamaño y no hay que adivinar: la pública son 65
+ * bytes y empieza por 4; la privada son 32.
+ */
+function probarClaveDeAvisos() {
+    console.log('\n--- La clave de los avisos ---');
+
+    const fuenteDatos = fuente('js/menu-data.js');
+    const bloque = /const PUSH\s*=\s*\{[\s\S]*?\n\};/.exec(fuenteDatos);
+    comprobar('menu-data.js tiene el apartado de avisos', !!bloque, true);
+    if (!bloque) return;
+
+    const clave = (/clave:\s*'([^']*)'/.exec(bloque[0]) || [])[1];
+
+    // Vacío es una respuesta válida: el local no los usa todavía
+    if (!clave) {
+        console.log('OK    sin clave: los avisos están apagados, y eso está bien');
+        return;
+    }
+
+    const bytes = Buffer.from(clave, 'base64url');
+
+    comprobar('es la PÚBLICA y no la privada (65 bytes, no 32)', bytes.length, 65);
+    comprobar('y está bien formada: empieza por 4', bytes[0], 4);
+}
+
 function probarPermisosDeAvisos() {
     console.log('\n--- La nube solo deja apuntar lo que es ---');
 
@@ -1930,6 +1968,7 @@ async function main() {
     await probarAvisoIndependienteDelDibujo();
     await probarAyudante();
     probarInstalable();
+    probarClaveDeAvisos();
     probarCifradoDeAvisos();
     await probarRecepcionDeAvisos();
     probarPermisosDeAvisos();
