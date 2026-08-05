@@ -24,7 +24,7 @@
 /* Lo reescribe scripts/version.py en cada publicación. Al cambiar,
    cambia el nombre de la caja y la anterior se tira entera: así una
    pantalla nunca mezcla el HTML nuevo con el JavaScript viejo. */
-const VERSION = '202608051718';
+const VERSION = '202608051744';
 
 const CAJA = 'carbon-' + VERSION;
 
@@ -137,4 +137,63 @@ self.addEventListener('fetch', e => {
     else if (esVersionado(url))          e.respondWith(primeroLoGuardado(req));
     else if (esFoto(url) || esFuente(url)) e.respondWith(deLaCajaYRefrescar(req));
     else                                 e.respondWith(primeroLaRed(req));
+});
+
+/* ============================================================
+   LOS AVISOS QUE DESPIERTAN EL CELULAR
+
+   Esto es lo único de todo el sitio que corre con la aplicación
+   cerrada. Cuando llega un aviso, Android arranca este archivo, le
+   entrega el mensaje y lo vuelve a apagar en cuanto termina.
+
+   Por eso aquí no se puede dar nada por hecho: no hay pantalla, no hay
+   pestaña abierta, no hay nada de lo que sabía la página. Solo lo que
+   venga dentro del aviso.
+   ============================================================ */
+
+self.addEventListener('push', e => {
+    /* Al aceptar los avisos se prometió ENSEÑAR todos. No es una
+       formalidad: un programa que recibe avisos sin mostrar nada es una
+       forma de seguir a la gente por detrás, y si se incumple el
+       navegador deja de repartirlos — sin decir por qué. Así que pase lo
+       que pase con el mensaje, algo se muestra. */
+    let d = {};
+    try { d = e.data ? e.data.json() : {}; } catch (err) { /* llegó vacío o roto */ }
+
+    const titulo = d.titulo || 'Pedido nuevo';
+
+    e.waitUntil(self.registration.showNotification(titulo, {
+        body: d.cuerpo || 'Entró un pedido. Abre la pantalla para verlo.',
+        icon: d.icono || 'img/app/cocina-192.png',
+        badge: d.icono || 'img/app/cocina-192.png',
+
+        /* Dos avisos del mismo sitio se pisan en vez de apilarse: con
+           seis mesas seguidas, seis avisos idénticos tapan la pantalla y
+           el celular tarda medio minuto en dejar de sonar. */
+        tag: d.grupo || 'pedido',
+        renotify: true,
+
+        /* No se va solo. Un aviso que se desvanece a los cinco segundos
+           mientras la cocina tiene las manos en la plancha no lo ve
+           nadie: se queda hasta que alguien lo toque. */
+        requireInteraction: true,
+
+        vibrate: [220, 90, 220, 90, 320],
+        data: { destino: d.destino || 'cocina.html' }
+    }));
+});
+
+self.addEventListener('notificationclick', e => {
+    e.notification.close();
+    const destino = (e.notification.data && e.notification.data.destino) || 'cocina.html';
+
+    /* Si la pantalla ya está abierta se trae al frente en vez de abrir
+       otra. Dos pestañas de la misma cocina son dos tableros que hay que
+       mirar, y el pedido siempre está en el otro. */
+    e.waitUntil((async () => {
+        const abiertas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        const suya = abiertas.find(c => c.url.includes(destino));
+        if (suya) return suya.focus();
+        return self.clients.openWindow(destino);
+    })());
 });

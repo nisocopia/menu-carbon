@@ -88,6 +88,9 @@ orillas, que es justo lo que se cortaba antes.
 | `js/tracker.js` | Aviso de "tu pedido va en camino". |
 | `js/games.js` | Juegos para la espera. |
 | `js/pwa.js` | Registra el ayudante y enciende el botón de instalar. |
+| `js/aviso.js` | Apunta el aparato para recibir avisos con la app cerrada. |
+| `scripts/avisar.js` | Cifra y firma un aviso. Web Push a mano, sin librerías. |
+| `scripts/enviar-aviso.js` | Mandar un aviso a mano, para probar. |
 | `sw.js` | El ayudante: deja instalar las pantallas y guarda lo ya bajado. |
 | `manifest.json` | El menú del comensal, como aplicación. |
 | `manifest-cocina.json` · `-parrilla` · `-comanda` | Una aplicación por pantalla. |
@@ -121,6 +124,77 @@ iguales en la misma pantalla de inicio son tres iconos inservibles:
 Los dibuja `python scripts/generar-iconos-app.py` con el mismo símbolo que
 lleva la pantalla en su cabecera, sacado de la misma fuente que usa el
 sitio. Solo hay que volver a correrlo si cambia un color o un símbolo.
+
+## Avisos que despiertan el celular
+
+El aviso sonoro de la cocina **solo suena con la pantalla encendida y la
+aplicación a la vista**. No es un descuido y no se puede arreglar desde la
+página: si Android congela la aplicación, no queda nada corriendo que
+pueda sonar. Con el celular en el bolsillo, no se entera nadie.
+
+Lo único que despierta un celular dormido es un aviso que llegue de fuera.
+Eso lo reparte Google y va cifrado y firmado, para que no lo pueda usar
+cualquiera.
+
+### Montarlo (una vez por restaurante)
+
+```bash
+node scripts/generar-clave-push.js
+```
+
+Imprime dos claves. **La pública** se pega en `js/menu-data.js`, en `PUSH`.
+**La privada no va al repositorio**: con ella se puede hacer sonar
+cualquier pantalla del local, así que se guarda donde las contraseñas y
+solo la tiene quien mande los avisos.
+
+Después hay que **subir las reglas nuevas a Firebase** (`firebase-rules.json`
+trae la rama `avisos`). Sin eso, los aparatos no se pueden apuntar.
+
+Si `PUSH.clave` se deja vacío no pasa nada: todo sigue igual que antes,
+solo que sin avisar con el celular guardado.
+
+### Apuntar un celular
+
+Se abre la pantalla, se entra con la cuenta, y sale un botón amarillo:
+**"Avisarme aunque esté guardado"**. Hay que tocarlo — la página no puede
+preguntar sola, porque Chrome le contesta que no automáticamente y ese
+"no" ya no se deshace sin ir a los ajustes del sistema.
+
+Cada aparato queda apuntado **bajo el papel de quien entró** (cocina,
+parrilla, mesero). Eso es lo que después permite avisar solo a quien le
+toca.
+
+### Probar que funciona
+
+```bash
+$env:CLAVE_PUSH    = '...'   # la privada
+$env:CORREO_PUSH   = '...'   # la cuenta del gerente
+$env:CLAVE_GERENTE = '...'
+
+node scripts/enviar-aviso.js --lista    # quién está apuntado
+node scripts/enviar-aviso.js cocina     # mandarle uno
+```
+
+**La prueba de verdad es con la pantalla apagada y el celular en el
+bolsillo.** Si suena así, funciona.
+
+### Por qué está escrito a mano
+
+Hay una librería de Google que hace esto, pero son ~150 KB que habría que
+traer de su CDN — y este sitio no le pide nada a nadie: la fuente, los
+iconos y hasta el acceso a Firebase están hechos aquí.
+
+Resulta que no hace falta. Un aviso a Chrome en Android llega **por FCM de
+todas formas**; la librería solo cambia cómo se habla con esa tubería. Con
+el estándar Web Push, que el navegador ya trae, el resultado es idéntico,
+no hay nada que configurar en la consola de Firebase y el sitio no crece
+ni un byte.
+
+`scripts/avisar.js` implementa los tres RFC (8188, 8291, 8292) en unas cien
+líneas, y está **comprobado byte por byte contra el ejemplo oficial del RFC
+8291**. Esa prueba importa más de lo que parece: si el cifrado se desviara
+aunque fuera un byte, Google aceptaría el aviso y contestaría que todo
+bien, pero el celular no lo podría abrir y lo tiraría sin decir nada.
 
 ### Qué hace y qué NO hace el ayudante
 
