@@ -261,7 +261,12 @@ function escucharNube() {
         });
     }
 
-    Nube.escuchar('vistas', datos => {
+    /* Solo el recuento completo. Cada visita de un comensal llega como un
+       aviso suelto de UNA vista, y tomarlo por el total dejaba el contador
+       marcando 1 hasta recargar. Aquí no hace falta que sea al segundo:
+       es un número para mirar, no para trabajar. */
+    Nube.escuchar('vistas', (datos, ruta) => {
+        if (ruta && ruta !== '/') return;
         vistasNube = datos || {};
         podarVistas(datos);
         renderNumeros();
