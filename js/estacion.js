@@ -470,7 +470,7 @@ function tarjeta(c, turno) {
  * marcados: la pantalla no deja cerrar lo que no está hecho, que es
  * justo lo que se olvidaba.
  *
- * En la parrilla hay que mantenerlo apretado dos segundos. Un toque
+ * En la parrilla hay que mantenerlo apretado un segundo. Un toque
  * suelto en una pantalla llena de grasa sacaba pedidos que seguían en
  * el fuego, y deshacerlo obligaba a ir a buscar la tarjeta plegada.
  */
@@ -483,7 +483,7 @@ function botonDe(c) {
             : `<button class="ticket-btn largo" data-largo="${c.id}">
                    <span class="ticket-btn-progreso"></span>
                    <span class="ticket-btn-texto">
-                       <i class="fas fa-check"></i> Mantén 2s — Ya lo saqué
+                       <i class="fas fa-check"></i> Mantén ${SOSTENER / 1000}s — Ya lo saqué
                    </span>
                </button>`;
     }
@@ -601,12 +601,16 @@ function resolverRechazadas(que) {
    MANTENER APRETADO PARA SACAR DE LA PARRILLA
 
    Un toque suelto sobre una pantalla con las manos ocupadas sacaba
-   pedidos que seguían en el fuego. Dos segundos no se dan por
-   accidente, y la barra que avanza dice que algo está pasando — sin
-   ella, mantener el dedo parece que la pantalla se colgó.
+   pedidos que seguían en el fuego. Un segundo no se da por accidente,
+   y la barra que avanza dice que algo está pasando — sin ella,
+   mantener el dedo parece que la pantalla se colgó.
+
+   Empezó en dos segundos y en la parrilla se hicieron largos: con
+   ocho tarjetas que sacar son ocho esperas, y el asador tiene las
+   manos en otra cosa.
    ============================================================ */
 
-const SOSTENER = 2000;
+const SOSTENER = 1000;
 let sosteniendo = null;   // { id, reloj, boton }
 
 function empezarSostener(boton) {
