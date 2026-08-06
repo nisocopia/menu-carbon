@@ -1110,7 +1110,43 @@ function guardarEdicion() {
 
 /* ---------- Enviar ---------- */
 
-function enviar() {
+/**
+ * Lo que otro se llevó mientras este pedido se escribía.
+ *
+ * No es un aviso que se va solo: hay que volver a la mesa a decirlo. Se
+ * queda en pantalla hasta que lo toquen, y dice las dos cosas por
+ * separado —lo que SÍ salió y lo que no— porque lo primero que va a
+ * preguntar el cliente es "¿entonces qué me van a traer?".
+ */
+function avisarRecorte(recortes, quedoAlgo) {
+    const nada  = recortes.filter(r => r.entraron === 0);
+    const medio = recortes.filter(r => r.entraron > 0);
+
+    $('recorte-cuerpo').innerHTML = `
+        <p class="recorte-por">
+            Otro celular acaba de tomar
+            ${[...new Set(recortes.map(r => r.producto.toLowerCase()))].join(' y ')}
+            mientras escribías este pedido.
+        </p>
+
+        <div class="recorte-bloque malo">
+            <h3>NO se mandó</h3>
+            <ul>
+                ${nada.map(r => `<li>${r.pedidos} ${r.nombre}</li>`).join('')}
+                ${medio.map(r => `<li>${r.pedidos - r.entraron} de ${r.pedidos} ${r.nombre}</li>`).join('')}
+            </ul>
+        </div>
+
+        ${quedoAlgo
+            ? `<p class="recorte-nota">El resto del pedido ya salió a la cocina.</p>`
+            : `<p class="recorte-nota">No salió nada: era lo único que llevaba el pedido.</p>`}
+
+        <p class="recorte-nota fuerte">Anda a la mesa y diles antes de que lo esperen.</p>`;
+
+    $('hoja-recorte').classList.add('open');
+}
+
+async function enviar() {
     if (!borrador.length) return;
 
     // Un mixto sin carnes escogidas no se puede mandar: el asador no
@@ -1128,10 +1164,35 @@ function enviar() {
         return;
     }
 
+    /* LA ÚLTIMA PREGUNTA. Entre que este pedido se empezó a escribir y
+       ahora, otro celular pudo haberse llevado las últimas costillas.
+       Se le pregunta a la nube y se recorta lo que ya no existe, para
+       que a la cocina nunca le llegue más de lo que hay. */
+    const boton = $('btn-enviar');
+    if (boton) boton.disabled = true;
+
+    let aMandar = borrador, recortes = [];
+    try {
+        const revisado = await Servicio.revisarStock(borrador);
+        aMandar  = revisado.items;
+        recortes = revisado.recortes;
+    } catch (e) {
+        // Si no se pudo preguntar, se manda lo que hay: dejar a la mesa
+        // sin pedido por no poder comprobar es peor que el riesgo.
+    }
+    if (boton) boton.disabled = false;
+
+    if (!aMandar.length) {
+        avisarRecorte(recortes, false);
+        borrador = [];
+        pintarMesa();
+        return;
+    }
+
     const comanda = Servicio.enviarComanda({
         mesa: refActual.mesa || 0,
         nombre: refActual.mesa ? '' : (nombreLlevar || Servicio.nombreDeCuenta(refActual)),
-        items: borrador,
+        items: aMandar,
         origen: 'mesero'
     });
 
@@ -1144,7 +1205,11 @@ function enviar() {
 
     borrador = [];
     pintarMesa();
-    avisarEnviada(comanda);
+
+    /* Si hubo recorte manda el aviso grande, no el "enviado" de siempre:
+       lo segundo lo dejaría tranquilo justo cuando tiene que moverse. */
+    if (recortes.length) avisarRecorte(recortes, true);
+    else avisarEnviada(comanda);
 }
 
 /* ============================================================
@@ -1393,6 +1458,8 @@ function conectarEventos() {
 
     $('hoja-close').addEventListener('click', cerrarMod);
     $('hoja-listo').addEventListener('click', cerrarMod);
+    $('recorte-listo').addEventListener('click',
+        () => $('hoja-recorte').classList.remove('open'));
     $('bebida-close').addEventListener('click', () => $('hoja-bebida').classList.remove('open'));
     $('bebida-add').addEventListener('click', agregarBebidaNueva);
     $('bebida-costo').addEventListener('input', calcularPrecioBebida);

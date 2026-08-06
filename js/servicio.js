@@ -458,6 +458,89 @@ const Servicio = (() => {
         return fuera;
     }
 
+    /* ------------------------------------------------------------
+       LA ÚLTIMA PREGUNTA, JUSTO ANTES DE MANDAR
+
+       El agujero que encontró el dueño: el mesero y el asador toman
+       pedido a la vez, los dos ven 6 costillas, los dos anotan 6 y los
+       dos envían. Salen 12 a la parrilla y solo hay 6.
+
+       Y los dos celulares tenían razón. Un pedido a medio escribir no
+       existe para nadie más —ni debe existir, el cliente todavía está
+       decidiendo— así que ninguno podía ver al otro. La resta protege
+       del error de UNA persona, no de dos a la vez.
+
+       Lo que faltaba era preguntar al final. Antes de escribir nada se
+       le pide a la nube lo último que hayan mandado los demás, se
+       vuelve a contar y SE RECORTA lo que ya no existe.
+
+       Se recorta y no se rechaza el pedido entero: las bebidas y el
+       pollo del mismo pedido no tienen la culpa, y la mesa no puede
+       quedarse sin nada porque faltara una costilla.
+
+       Queda un hueco de milisegundos —si los dos tocan Enviar en el
+       mismo instante— que solo se cerraría apartando la costilla en la
+       nube. Se decidió no hacerlo: cuesta otra vuelta a Firebase en cada
+       envío y el caso real es el de los minutos, no el del instante.
+       ------------------------------------------------------------ */
+
+    async function revisarStock(items) {
+        const vacio = { items, recortes: [] };
+        if (!items || !items.length) return vacio;
+        if (!Object.keys(Store.getStock()).length) return vacio;   // local sin stock
+
+        /* Sin línea no se puede preguntar. Se manda igual: quedarse sin
+           tomar el pedido por no poder comprobar sería peor que el
+           riesgo, y la pantalla ya avisa cuando no hay conexión. */
+        if (Red.activo && Red.haySesion()) {
+            const frescas = await Red.leer('servicio/comandas', true);
+            if (frescas !== undefined) mezclar(K.comandas, frescas);
+        }
+
+        const restante = {};
+        const queda = prod => {
+            if (!(prod in restante)) {
+                const q = quedanDe(prod);
+                restante[prod] = (q === null) ? Infinity : q;
+            }
+            return restante[prod];
+        };
+
+        const salida = [];
+        const recortes = [];
+
+        items.forEach(it => {
+            const consumo = consumoDe(it);
+            const pedidos = it.cantidad || 1;
+            const productos = Object.keys(consumo);
+
+            if (!productos.length) { salida.push(it); return; }
+
+            /* Cuántas unidades caben. Un mixto gasta de dos neveras a la
+               vez, así que manda la más corta de las dos. */
+            let caben = pedidos;
+            productos.forEach(prod => {
+                const porUnidad = consumo[prod] / pedidos;
+                if (porUnidad > 0) caben = Math.min(caben, Math.floor(queda(prod) / porUnidad));
+            });
+            caben = Math.max(0, caben);
+
+            productos.forEach(prod => { restante[prod] -= consumo[prod] / pedidos * caben; });
+
+            if (caben > 0) salida.push(caben === pedidos ? it : { ...it, cantidad: caben });
+            if (caben < pedidos) {
+                recortes.push({
+                    nombre: it.nombre,
+                    pedidos,
+                    entraron: caben,
+                    producto: nombreProducto(productos[0])
+                });
+            }
+        });
+
+        return { items: salida, recortes };
+    }
+
     /**
      * Publicar el espejo. Solo lo hace quien toma pedidos: la cocina, la
      * parrilla y el que sirve no tienen por qué escribir en el menú, y
@@ -1786,7 +1869,7 @@ const Servicio = (() => {
         estacionDe, guarnicionDe, arrozPendiente, categoriaDe, codigoDe, etiquetaDe,
         cambiosDe, guarnicionFinal, comoSeSirve,
         productoDe, nombreProducto, consumoDe, quedanDe, quedanDePlato,
-        sePuedePedir, quedanTodos,
+        sePuedePedir, quedanTodos, revisarStock,
         cubiertosDe, nombreCorto, resumirItems,
         // una cuenta: una mesa o un pedido para llevar
         sesionesDe, tandasDe, cuentaDe, nombreDeCuenta, llevarAbiertos, llevarPorNombre,

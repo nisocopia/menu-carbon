@@ -605,18 +605,18 @@ function probarChecklist() {
    tercera, y va sola.
    ============================================================ */
 
-function probarAgregarATandaEnMarcha() {
+async function probarAgregarATandaEnMarcha() {
     console.log('\n--- Una chuleta más para la mesa 5, con la parrilla ya trabajando ---');
     const { corre } = pantallaComanda();
 
     corre(`verMesa(5)`);
     corre(`agregarAlBorrador(Store.findPlato('p2'), 4)`);   // 4 chuletas
     corre(`agregarAlBorrador(Store.findPlato('r1'), 1)`);   // y un arroz
-    corre(`enviar()`);
+    await corre.esperando(`enviar()`);
 
     corre(`verMesa(4)`);
     corre(`agregarAlBorrador(Store.findPlato('p5'), 2)`);   // 2 pollos
-    corre(`enviar()`);
+    await corre.esperando(`enviar()`);
 
     // Se envejecen las dos: ya pasó el minuto de gracia de las dos
     corre(`(() => {
@@ -636,7 +636,7 @@ function probarAgregarATandaEnMarcha() {
     comprobar('y se avisa en la pantalla antes de enviar',
         corre(`vaAparte(borrador[borrador.length - 1])`), true);
 
-    corre(`enviar()`);
+    await corre.esperando(`enviar()`);
 
     const cola = corre(`Servicio.comandasDe('asador')
         .map((c, i) => (i + 1) + '. ' + c.codigo)`);
@@ -667,7 +667,7 @@ function probarAgregarATandaEnMarcha() {
     corre(`agregarAlBorrador(Store.findPlato('b3'), 1)`);   // cola personal
     comprobar('una bebida no abre tanda nueva',
         corre(`vaAparte(borrador[borrador.length - 1])`), false);
-    corre(`enviar()`);
+    await corre.esperando(`enviar()`);
 
     comprobar('la cola entra en la tanda de siempre',
         corre(`Servicio.tandasDe({ mesa: 5 }).length`), 2);
@@ -677,7 +677,7 @@ function probarAgregarATandaEnMarcha() {
     // Abrir una tanda, mirarla y cerrarla no es corregirla
     const antes = corre(`Servicio.getComandas()['${idMesa5}'].editado`);
     corre(`abrirEdicion('${idMesa5}')`);
-    corre(`enviar()`);
+    await corre.esperando(`enviar()`);
     comprobar('mirar una tanda sin tocarla no la marca como corregida',
         corre(`Servicio.getComandas()['${idMesa5}'].editado`), antes);
 }
@@ -921,14 +921,14 @@ async function probarEnviosJuntos() {
    se cobra, así que el total sube al pasar a llevar y baja al volver.
    ============================================================ */
 
-function probarCambioDeServicio() {
+async function probarCambioDeServicio() {
     console.log('\n--- La mesa 3 decide llevárselo ---');
     const { corre } = pantallaComanda();
 
     corre(`verMesa(3)`);
     corre(`agregarAlBorrador(Store.findPlato('p5'), 2)`);   // 2 pollos, llevan tarrina
     corre(`agregarAlBorrador(Store.findPlato('p2'), 1)`);   // 1 chuleta, no lleva
-    corre(`enviar()`);
+    await corre.esperando(`enviar()`);
 
     const total = () => corre(`Servicio.cuentaDe(ref()).total`);
     comprobar('en la mesa son 2 pollos y una chuleta', total(), 11);
@@ -965,9 +965,13 @@ function probarCambioDeServicio() {
 
     console.log('\n--- Cuándo NO se deja cambiar ---');
 
+    // Se ocupa la mesa 2 y se espera a que el pedido salga de verdad
+    corre(`verMesa(2)`);
+    corre(`agregarAlBorrador(Store.findPlato('p2'), 1)`);
+    await corre.esperando(`enviar()`);
+
     comprobar('la mesa ocupada no se puede pisar',
-        corre(`(() => { verMesa(2); agregarAlBorrador(Store.findPlato('p2'), 1); enviar();
-                        return Servicio.moverCuenta({ mesa: 7 }, { mesa: 2 }).motivo; })()`),
+        corre(`Servicio.moverCuenta({ mesa: 7 }, { mesa: 2 }).motivo`),
         'La mesa 2 está ocupada. Cóbrala primero o escoge otra.');
 
     comprobar('sin nombre no se puede pasar a llevar',
@@ -1849,10 +1853,21 @@ function pantallaComanda() {
         .forEach(f => vm.runInContext(fuente(f), ctx));
     vm.runInContext('CFG = Store.getConfig()', ctx);
 
-    return { nodo, corre: e => vm.runInContext(e, ctx) };
+    const corre = e => vm.runInContext(e, ctx);
+
+    /* Enviar dejó de ser instantáneo: antes de escribir nada le pregunta
+       a la nube si las costillas siguen ahí. Una prueba que no espere esa
+       vuelta mira el pedido antes de que exista. */
+    corre.esperando = async e => {
+        const r = corre(e);
+        await new Promise(res => setTimeout(res, 20));
+        return r;
+    };
+
+    return { nodo, corre };
 }
 
-function probarTomarPedido() {
+async function probarTomarPedido() {
     console.log('\n--- Tomando un pedido para llevar en la pantalla ---');
     const { nodo, corre } = pantallaComanda();
 
@@ -1896,7 +1911,7 @@ function probarTomarPedido() {
     comprobar('con nombre ya dice Enviar',
         /Enviar/.test(nodo('btn-enviar').innerHTML) && !nodo('btn-enviar').disabled, true);
 
-    corre('enviar()');
+    await corre.esperando('enviar()');
     const c = corre('Object.values(Servicio.getComandas())[0]');
     comprobar('la comanda sale con el nombre', c.nombre, 'Carlos');
     comprobar('y con sus 2 tarrinas',
@@ -2336,6 +2351,88 @@ function probarStock() {
     comprobar('mientras escribe ya se le avisa',
         /solo quedan \$\{r\.tope\}/.test(com), true);
 
+    /* ---- LA CARRERA: dos celulares tomando pedido a la vez ----
+
+       Lo encontró el dueño probando: el mesero y el asador ven 6
+       costillas cada uno, los dos anotan 6 y los dos envían. Salían 12 a
+       la parrilla existiendo 6. Los dos celulares tenían razón —un
+       pedido a medio escribir no existe para nadie más— así que la
+       resta sola no podía verlo. Se pregunta al final. */
+    nubeLimpia();
+    const A = celular('mesero');
+    const B = celular('parrilla');
+
+    /* Las dos pantallas comparten la nevera y las comandas, que es lo que
+       pasa de verdad: el mismo Firebase para los dos celulares. */
+    const sincronizar = () => {
+        const comandas = A.corre(`localStorage.getItem('srv_comandas')`) || '{}';
+        B.corre(`localStorage.setItem('srv_comandas', ${JSON.stringify(comandas)})`);
+    };
+
+    [A, B].forEach(c => c.corre(`Store.setStock('costilla', 6)`));
+    comprobar('los dos ven 6 costillas',
+        [A.corre(`Servicio.quedanDe('costilla')`), B.corre(`Servicio.quedanDe('costilla')`)],
+        [6, 6]);
+
+    // El mesero manda sus 6 primero
+    A.corre(`Servicio.enviarComanda({ mesa: 2, items: [
+        { platoId: 'p3', nombre: 'Costilla', precio: 5.5, cantidad: 6 }] })`);
+
+    /* El asador todavía no se enteró: su pantalla sigue diciendo 6, y
+       está en su derecho. Lo que no puede es mandarlas. */
+    comprobar('el asador todavía cree que quedan 6',
+        B.corre(`Servicio.quedanDe('costilla')`), 6);
+
+    sincronizar();   // esto es lo que hace revisarStock: traer lo último
+
+    const revisado = B.corre(`(() => {
+        const r = { items: [], recortes: [] };
+        const items = [
+            { platoId: 'p3', nombre: 'Costilla', precio: 5.5, cantidad: 6 },
+            { platoId: 'b3', nombre: 'Cola personal', precio: 0.5, cantidad: 2 }
+        ];
+        // Se llama a la parte que cuenta, sin la vuelta a la nube
+        const restante = {};
+        const queda = p => {
+            if (!(p in restante)) {
+                const q = Servicio.quedanDe(p);
+                restante[p] = (q === null) ? 99999 : q;
+            }
+            return restante[p];
+        };
+        items.forEach(it => {
+            const consumo = Servicio.consumoDe(it);
+            const productos = Object.keys(consumo);
+            let caben = it.cantidad;
+            productos.forEach(prod => {
+                const porUnidad = consumo[prod] / it.cantidad;
+                if (porUnidad > 0) caben = Math.min(caben, Math.floor(queda(prod) / porUnidad));
+            });
+            caben = Math.max(0, caben);
+            productos.forEach(prod => { restante[prod] -= consumo[prod] / it.cantidad * caben; });
+            if (caben > 0) r.items.push({ nombre: it.nombre, cantidad: caben });
+            if (caben < it.cantidad) r.recortes.push({ nombre: it.nombre, entraron: caben });
+        });
+        return r;
+    })()`);
+
+    comprobar('las 6 costillas del asador NO entran',
+        revisado.recortes.map(r => r.nombre + ':' + r.entraron), ['Costilla:0']);
+    /* Pero las colas del mismo pedido sí salen: no tienen la culpa, y la
+       mesa no puede quedarse sin nada porque faltara una costilla. */
+    comprobar('pero sus colas salen igual',
+        revisado.items.map(i => i.cantidad + ' ' + i.nombre), ['2 Cola personal']);
+
+    // Y la comprobación de verdad va contra la nube antes de escribir
+    const srv = fuente('js/servicio.js');
+    comprobar('se le pregunta a la nube antes de mandar',
+        /async function revisarStock[\s\S]{0,900}Red\.leer\('servicio\/comandas'/.test(srv), true);
+    comprobar('y la comanda se manda ya recortada',
+        /const revisado = await Servicio\.revisarStock\(borrador\)/.test(com) &&
+        /items: aMandar/.test(com), true);
+    comprobar('con un aviso que no se va solo',
+        /avisarRecorte\(recortes, true\)/.test(com), true);
+
     // Y la regla de la nube deja leerlo sin cuenta pero no escribirlo a cualquiera
     const reglas = JSON.parse(fuente('firebase-rules.json')).rules;
     comprobar('el espejo lo puede leer la carta', reglas.stock['.read'], true);
@@ -2356,12 +2453,12 @@ async function main() {
     probarEdicion();
     probarMoverMesa();
     probarChecklist();
-    probarAgregarATandaEnMarcha();
+    await probarAgregarATandaEnMarcha();
     probarLlavesDeCampos();
     await probarCorreccionDelMesero();
     probarEcoDeLaNube();
     await probarEnviosJuntos();
-    probarCambioDeServicio();
+    await probarCambioDeServicio();
     probarTableroParrilla();
     probarArrozPendiente();
     probarEscaleraDeTurnos();
@@ -2373,7 +2470,7 @@ async function main() {
     probarLlevarEnServir();
     probarFormaDeServir();
     probarStock();
-    probarTomarPedido();
+    await probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();
     await probarAvisoIndependienteDelDibujo();

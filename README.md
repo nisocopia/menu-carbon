@@ -314,6 +314,33 @@ uno — aunque todavía no se haya enviado. El cliente ya los pidió.
 mesero buscándolo; uno apagado le contesta lo que le acaban de preguntar en
 la mesa.
 
+#### Dos tomando pedido a la vez
+
+El agujero que encontró el dueño probando: el mesero y el asador ven 6 costillas
+cada uno, los dos anotan 6, los dos envían. Salían **12 a la parrilla existiendo
+6**.
+
+Y los dos celulares tenían razón. Un pedido a medio escribir no existe para
+nadie más —ni debe: el cliente todavía está decidiendo— así que ninguno podía
+ver al otro. **La resta protege del error de una persona, no de dos a la vez.**
+
+Faltaba preguntar al final. Antes de escribir nada, `revisarStock()` le pide a
+la nube lo último que hayan mandado los demás, vuelve a contar y **recorta lo
+que ya no existe**.
+
+Se recorta, no se rechaza el pedido entero: las bebidas y el pollo del mismo
+pedido no tienen la culpa, y la mesa no puede quedarse sin nada porque faltara
+una costilla. Lo que se cayó sale en un aviso que **no se va solo** — hay que
+volver a la mesa a decirlo.
+
+Queda un hueco de milisegundos, si los dos tocan Enviar en el mismo instante.
+Cerrarlo pedía apartar la costilla en la nube, con otra vuelta a Firebase en
+cada envío; se decidió no hacerlo, porque el caso real es el de los minutos.
+
+Y si no hay línea se manda igual: quedarse sin tomar el pedido por no poder
+comprobar sería peor que el riesgo, y la pantalla ya avisa cuando está sin
+conexión.
+
 #### El espejo del comensal
 
 El celular del cliente **no puede contar**: para restar habría que leer las
