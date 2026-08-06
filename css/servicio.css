@@ -541,6 +541,41 @@
 .chip.sin-stock { opacity: 0.4; cursor: not-allowed; }
 .chip.sin-stock em { font-style: normal; font-size: 0.78em; color: #ff5252; }
 
+/* ---------- Otro se les adelantó ----------
+
+   Esto no se puede parecer a un aviso más. Lo que sigue después de
+   leerlo es caminar hasta la mesa y decirle a alguien que su costilla
+   no va a llegar. */
+
+#hoja-recorte .hoja-head { background: #4a1414; }
+#hoja-recorte .hoja-head h2 { color: #ff8a80; }
+
+.recorte-por { font-size: 0.95rem; color: #ddd; margin-bottom: 14px; line-height: 1.45; }
+
+.recorte-bloque {
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    background: #1a1a1a;
+}
+.recorte-bloque.malo { background: #2a1212; border: 1px solid #6b2020; }
+.recorte-bloque h3 {
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: #ff8a80;
+    margin-bottom: 8px;
+}
+.recorte-bloque ul { list-style: none; }
+.recorte-bloque li {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #fff;
+    padding: 3px 0;
+}
+
+.recorte-nota { font-size: 0.82rem; color: #999; margin-top: 10px; line-height: 1.45; }
+.recorte-nota.fuerte { color: #FFC107; font-weight: 600; font-size: 0.92rem; }
+
 /* ---------- Todo el menú, plegado ---------- */
 
 .todo-menu {

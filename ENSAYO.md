@@ -86,6 +86,23 @@ del **Pollo**. Fíjate que debajo del nombre diga de qué platos come.
 
 - [ ] Cae **solo el apanado**; el pollo asado y la porción siguen vivos
 
+## 3a-bis. Dos tomando pedido a la vez (el más importante)
+
+Hacen falta **dos celulares**: el del mesero y el del asador.
+
+**En el panel:** pon **6** en la Costilla.
+
+1. Los dos entran a su comanda, cada uno a una mesa distinta
+2. Los dos anotan **6 costillas** (y el asador, además, 2 colas)
+3. Envía **primero el mesero**
+4. Envía **después el asador**
+
+- [ ] A la parrilla llegan **6 costillas en total**, no 12
+- [ ] Al asador le sale un aviso rojo que **no se va solo**: *Otro se les adelantó*
+- [ ] Dice **6 Costilla** bajo "NO se mandó"
+- [ ] **Sus 2 colas sí salieron** — el resto del pedido no tiene la culpa
+- [ ] El aviso no se cierra hasta tocar *Entendido, voy a la mesa*
+
 ## 3b. Un plato solo con patacones y ensalada
 
 **En el celular del mesero:** mesa 7, escribe `1co`. Toca el renglón
