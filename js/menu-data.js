@@ -68,9 +68,8 @@ const EQUIPO = {
     'fbdIzi6tOwhwJwQR6xY0MLUz4UE3': 'gerente',    // eduardolino78@gmail.com
     'YHeMmcUbMFdsPQrIcvT561FDunt1': 'mesero',     // mesa@gmail.com
     'rgi36tpn1KNHeDEqJN17dpbWguy2': 'cocina',     // cocina@gmail.com
-    '0elTDMQYcHSZYZHHyZ4i3RFPQEo1': 'parrilla'    // asador@gmail.com
-    // Cuando crees la cuenta del que sirve, agrega aquí su uid:
-    // ,'PEGA_AQUI_SU_UID': 'servir'                // servir@gmail.com
+    '0elTDMQYcHSZYZHHyZ4i3RFPQEo1': 'parrilla',    // asador@gmail.com
+    'HHKEKPvT5IgKVmoVj9rN0rzrV862': 'servir'      // servir@gmail.com
 };
 
 /* ------------------------------------------------------------
