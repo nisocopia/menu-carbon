@@ -295,6 +295,17 @@ haría perder la referencia a mitad del servicio.
 Vuelve a ① cuando el local se queda vacío, para que cada noche empiece en
 uno. Tocar una mesa muestra lo que pidió, solo para mirar.
 
+Debajo de la rejilla van los **pedidos para llevar**, en azul para que no
+se confundan con las mesas. No tienen mesa y por eso no caben arriba, pero
+también llevan cubiertos y aderezos: antes se los encontraba de sorpresa.
+Van en la **misma fila de turnos** que las mesas — es el mismo trabajo y
+el mismo viaje a la gaveta — y así dejan de faltar números: cuando una
+funda se llevaba el ②, en la rejilla se veía el ① y el ③ sin nada en medio.
+
+De ellos se muestran **platos y no cubiertos**: en una funda todo va
+marcado para llevar, y los cubiertos por definición dejan fuera lo que no
+se sienta a comer, así que siempre dirían cero.
+
 Las bebidas no le llegan a ninguna estación: las sirve el mesero directo.
 
 ### Quién puede tocar qué

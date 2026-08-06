@@ -2058,6 +2058,66 @@ function probarPorQueNoEntro() {
     });
 }
 
+
+function probarLlevarEnServir() {
+    console.log('\n' + '--- Los pedidos para llevar, en la pantalla del que sirve ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    // Mesa 3, luego una funda a nombre de Carlos, luego mesa 4
+    corre(`Servicio.enviarComanda({ mesa: 3, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 3 }] })`);
+    /* Los items van marcados para llevar, que es como los manda la
+       comanda: al entrar por el boton "Pedido para llevar" ella marca
+       todo el pedido de una, sin pedirle al mesero que lo repita plato
+       por plato. */
+    corre(`Servicio.enviarComanda({ nombre: 'Carlos', items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2, llevar: true }] })`);
+    corre(`Servicio.enviarComanda({ mesa: 4, items: [
+        { platoId: 'p1', nombre: 'Carne Asada', precio: 3.5, cantidad: 2 }] })`);
+
+    comprobar('la funda aparece entre lo que esta abierto',
+        corre(`Servicio.llevarAbiertos().map(s => s.nombre)`), ['Carlos']);
+
+    /* Lo importante: la funda ocupa su puesto en la MISMA fila que las
+       mesas. Antes se llevaba un numero y no se veia en ningun lado, asi
+       que en la rejilla faltaba el 2 y el que sirve no sabia por que. */
+    const turnos = corre(`(() => {
+        const t = Servicio.turnosDeSesion();
+        const m3 = Servicio.sesionDeMesa(3).id;
+        const m4 = Servicio.sesionDeMesa(4).id;
+        const ll = Servicio.llevarAbiertos()[0].id;
+        return [t[m3], t[ll], t[m4]];
+    })()`);
+    comprobar('mesa 3, funda y mesa 4 hacen fila seguida', turnos, [1, 2, 3]);
+
+    /* En una funda todo va marcado para llevar, asi que los cubiertos
+       dan cero: esa cuenta era para el caso mixto —dos pollos y uno se
+       lo llevan— y aqui se queda corta. Por eso la pantalla enseña
+       platos y no cubiertos: en una funda, cero platos seria mentira. */
+    const ll = corre(`Servicio.llevarAbiertos()[0].id`);
+    comprobar('los cubiertos de una funda dan cero',
+        corre(`Servicio.cubiertosDeSesion('${ll}')`), 0);
+    /* Se cuentan solo los platos fuertes, igual que hace la pantalla: la
+       tarrina se agrega sola al pedido y contarla diria "4 platos" por
+       dos pollos. */
+    comprobar('pero los platos fuertes, no', corre(`(() => {
+        const cs = Servicio.comandasDeSesion('${ll}');
+        return cs.reduce((n, c) => n + c.items.reduce((m, i) => {
+            const cat = Servicio.categoriaDe(i.platoId);
+            return cat && cat.cubierto ? m + i.cantidad : m;
+        }, 0), 0);
+    })()`), 2);
+
+    const js = fuente('js/servir.js');
+    comprobar('por eso la pantalla cuenta platos, no cubiertos',
+        /function platosDe/.test(js), true);
+    comprobar('y las pinta desde lo que esta abierto',
+        /Servicio\.llevarAbiertos\(\)/.test(js), true);
+    comprobar('sigue sin tocar nada',
+        /marcarEntregado|registrarPago|enviarComanda|cerrarSesion/.test(js), false);
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -2084,6 +2144,7 @@ async function main() {
     probarPantallaDeServir();
     probarCuentaDeServir();
     probarPorQueNoEntro();
+    probarLlevarEnServir();
     probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();

@@ -1878,11 +1878,101 @@ body.hay-nuevo::after {
 }
 
 /* En una pantalla fija se ven las once mesas sin desplazar nada */
+/* En una pantalla colgada tiene que caber TODO sin bajar el dedo: las
+   once mesas y los pedidos para llevar. Por eso los cuadros dejan de ser
+   cuadrados y se quedan con la altura justa — el numero sigue enorme,
+   que es lo que se lee de lejos, pero sobra sitio para las fundas. */
 @media (min-width: 620px) {
-    .servir-grid { grid-template-columns: repeat(4, 1fr); max-width: 900px; margin: 0 auto; }
-    .smesa-num { font-size: 3.2rem; }
-    .smesa-cub { font-size: 1.15rem; }
-    .smesa-turno { min-width: 32px; height: 32px; line-height: 30px; font-size: 1.1rem; }
+    .servir-grid {
+        grid-template-columns: repeat(4, 1fr);
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .servir-grid .smesa {
+        aspect-ratio: auto;
+        min-height: 118px;
+    }
+
+    .smesa-num { font-size: 2.8rem; }
+    .smesa-cub { font-size: 1.05rem; }
+    .smesa-turno { min-width: 30px; height: 30px; line-height: 28px; font-size: 1.05rem; }
 }
 
 .servir-grid .smesa.ocupada:active { background: #2a2210; }
+
+/* ============================================================
+   PARA LLEVAR, EN LA PANTALLA DEL QUE SIRVE
+
+   No tienen mesa, asi que no caben en la rejilla — pero tambien llevan
+   cubiertos y aderezos, y antes se los encontraba de sorpresa.
+   ============================================================ */
+
+.llevar-servir {
+    padding: 0 12px 12px;
+}
+
+.llevar-servir[hidden] { display: none; }
+
+.llevar-titulo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64b5f6;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-top: 2px dashed #1e3a4d;
+    padding-top: 14px;
+    margin-bottom: 10px;
+}
+
+.llevar-lista {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+/* Azul y no amarillo: de un vistazo se distingue una funda de una mesa,
+   que es justo lo que se estaba confundiendo. */
+.sllevar {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 96px;
+    background: #0d1f2d;
+    border: 2px solid #2196f3;
+    border-radius: 16px;
+    color: #fff;
+    font-family: inherit;
+    padding: 14px 10px;
+    cursor: pointer;
+}
+
+.sllevar:active { background: #14293a; }
+
+.sllevar .smesa-turno {
+    background: #2196f3;
+    color: #fff;
+}
+
+.sllevar-nom {
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+    word-break: break-word;
+}
+
+.sllevar-platos { font-size: 0.9rem; color: #90caf9; }
+
+@media (min-width: 620px) {
+    .llevar-servir { max-width: 900px; margin: 0 auto; }
+    .llevar-lista { grid-template-columns: repeat(4, 1fr); }
+    .sllevar-nom { font-size: 1.6rem; }
+    .sllevar-platos { font-size: 1.05rem; }
+}
