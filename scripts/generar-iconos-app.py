@@ -55,6 +55,7 @@ PANTALLAS = [
     ("cocina",      0xE51A, "#FFC107", "#141414"),   # fa-kitchen-set
     ("parrilla",    0xF06D, "#D84315", "#FFFFFF"),   # fa-fire
     ("comanda",     0xF044, "#1565C0", "#FFFFFF"),   # fa-pen-to-square
+    ("servir",      0xF2E7, "#2E7D32", "#FFFFFF"),   # fa-utensils
 ]
 
 # Cuánto del cuadro ocupa el símbolo. El recorte de Android respeta el

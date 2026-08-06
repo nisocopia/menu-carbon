@@ -61,13 +61,17 @@ const Servicio = (() => {
        ============================================================ */
 
     const PERMISOS = {
-        gerente:  { comanda: 'todo',   cocina: 'todo', parrilla: 'todo' },
-        mesero:   { comanda: 'todo',   cocina: 'ver',  parrilla: 'ver'  },
-        cocina:   { comanda: 'no',     cocina: 'todo', parrilla: 'ver'  },
+        gerente:  { comanda: 'todo',   cocina: 'todo', parrilla: 'todo', servir: 'ver' },
+        mesero:   { comanda: 'todo',   cocina: 'ver',  parrilla: 'ver',  servir: 'ver' },
+        cocina:   { comanda: 'no',     cocina: 'todo', parrilla: 'ver',  servir: 'ver' },
         /* Al asador le llegan pedidos directos y tiene que poder
            anotarlos sin ir a buscar al mesero. Cobrar es otra cosa: el
            dinero se queda donde estaba. */
-        parrilla: { comanda: 'anotar', cocina: 'ver',  parrilla: 'todo' }
+        parrilla: { comanda: 'anotar', cocina: 'ver',  parrilla: 'todo', servir: 'ver' },
+        /* El que pone los cubiertos y lleva los platos. Su pantalla es
+           de puro leer: no hay un solo botón que cambie nada, porque
+           lleva las manos ocupadas y porque el pedido no es suyo. */
+        servir:   { comanda: 'no',     cocina: 'no',   parrilla: 'no',   servir: 'ver' }
     };
 
     /** El rol de quien entró en este celular, o null si no entró nadie. */
@@ -605,6 +609,44 @@ const Servicio = (() => {
         Object.values(getComandas())
             .filter(c => c.sesion === sesionId)
             .sort((a, b) => a.creado - b.creado);
+
+    /** Todos los cubiertos que lleva esa mesa, sumando sus tandas. */
+    const cubiertosDeSesion = sesionId =>
+        comandasDeSesion(sesionId)
+            .filter(c => c.estado !== 'anulado')
+            .reduce((suma, c) => suma + (c.cubiertos || 0), 0);
+
+    /**
+     * El turno de cada mesa: en qué orden se fueron ocupando.
+     *
+     * Es lo que usa el que sirve para saber por dónde va. Si está en el
+     * ⑧, del ① al ⑦ ya tienen sus cubiertos puestos, sin que nadie haya
+     * tenido que marcar nada.
+     *
+     * El número NO se recalcula cuando una mesa se va: si la ① paga, la
+     * ② sigue siendo la ②. Renumerar seria peor que no numerar — el que
+     * sirve perderia la referencia a mitad del servicio.
+     *
+     * Vuelve a ① cuando el local se queda vacío, para que cada noche
+     * empiece en uno y no se termine en el treinta.
+     */
+    function turnosDeSesion() {
+        const sesiones = Object.values(getSesiones()).sort((a, b) => a.creado - b.creado);
+        const turnos = {};
+        let n = 0;
+
+        sesiones.forEach(s => {
+            const habiaOtraAbierta = sesiones.some(o =>
+                o.id !== s.id &&
+                o.creado <= s.creado &&
+                (!o.cerrado || o.cerrado > s.creado));
+
+            n = habiaOtraAbierta ? n + 1 : 1;
+            turnos[s.id] = n;
+        });
+
+        return turnos;
+    }
 
     /** Las tandas de una cuenta, en el orden en que se pidieron. */
     function tandasDe(ref) {
@@ -1434,9 +1476,12 @@ const Servicio = (() => {
         // La parrilla y la cocina no necesitan nada más que las comandas
         if (modo === 'estacion') return;
 
-        Red.leer('servicio/extras', true).then(x => { if (x) write(K.extras, x); });
-        refrescarResto();
-        setInterval(refrescarResto, 6000);
+        // El que sirve necesita además las mesas, pero ni cobros ni bandeja
+        const soloMesas = modo === 'servir';
+        if (!soloMesas) Red.leer('servicio/extras', true).then(x => { if (x) write(K.extras, x); });
+
+        refrescarResto(soloMesas);
+        setInterval(() => refrescarResto(soloMesas), 6000);
     }
 
     /* ============================================================
@@ -1538,6 +1583,7 @@ const Servicio = (() => {
         // consultar
         getComandas, getSesiones, getPagos, comandasDe, comandasDeSesion, comandasDeMesa,
         sesionDeMesa, sesionesAbiertasDeMesa, cuentaDeSesion, cuentaDeMesa, pagosDeSesion,
+        cubiertosDeSesion, turnosDeSesion,
         estacionDe, guarnicionDe, arrozPendiente, categoriaDe, codigoDe, etiquetaDe,
         cubiertosDe, nombreCorto, resumirItems,
         // una cuenta: una mesa o un pedido para llevar

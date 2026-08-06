@@ -345,16 +345,20 @@ function probarPermisos() {
     console.log('\n--- Quién puede qué ---');
     nubeLimpia();
     const esperado = {
-        gerente:  ['todo',   'todo', 'todo'],
-        mesero:   ['todo',   'ver',  'ver' ],
-        cocina:   ['no',     'todo', 'ver' ],
-        parrilla: ['anotar', 'ver',  'todo'],   // anota pedidos, pero no cobra
-        intruso:  ['no',     'no',   'no'  ]    // una cuenta que no está en EQUIPO
+        gerente:  ['todo',   'todo', 'todo', 'ver'],
+        mesero:   ['todo',   'ver',  'ver',  'ver'],
+        cocina:   ['no',     'todo', 'ver',  'ver'],
+        parrilla: ['anotar', 'ver',  'todo', 'ver'],  // anota pedidos, pero no cobra
+        // El que sirve entra a la suya y a ninguna otra: lleva las manos
+        // ocupadas y el pedido no es suyo.
+        servir:   ['no',     'no',   'no',   'ver'],
+        intruso:  ['no',     'no',   'no',   'no' ]   // una cuenta que no está en EQUIPO
     };
     Object.keys(esperado).forEach(rol => {
         const { corre } = celular(rol);
-        comprobar(`${rol}: comanda / cocina / parrilla`,
-            corre(`[Servicio.permisoEn('comanda'), Servicio.permisoEn('cocina'), Servicio.permisoEn('asador')]`),
+        comprobar(`${rol}: comanda / cocina / parrilla / servir`,
+            corre(`[Servicio.permisoEn('comanda'), Servicio.permisoEn('cocina'),
+                    Servicio.permisoEn('asador'), Servicio.permisoEn('servir')]`),
             esperado[rol]);
     });
 
@@ -1903,6 +1907,100 @@ function probarTomarPedido() {
 
 const Store_nombre = (corre, id) => corre(`Store.findPlato('${id}').nombre`);
 
+
+/* ============================================================
+   LA PANTALLA DEL QUE SIRVE
+
+   El turno es lo que reemplaza a marcar los cubiertos: si va por el 8,
+   del 1 al 7 ya estan puestos. Por eso NO se renumera cuando una mesa
+   se va — perderia la referencia a mitad del servicio.
+   ============================================================ */
+
+function probarTurnosDeMesa() {
+    console.log('\n--- El turno de cada mesa, para el que pone los cubiertos ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    /* Se siembran las mesas tal como quedan tras cobrar: la sesion
+       cerrada guarda cuando se cerro, que es lo que decide si el local
+       llego a quedarse vacio. */
+    const sembrar = ses => corre(
+        `localStorage.setItem('srv_sesiones', ${JSON.stringify(JSON.stringify(ses))})`);
+
+    const T = 1000000;
+    const ses = (id, mesa, min, cerrado) => ({
+        id, mesa, abierta: !cerrado, creado: T + min * 60000,
+        cerrado: cerrado ? T + cerrado * 60000 : null
+    });
+
+    // Mesa 3 primero, mesa 4 despues
+    sembrar({ s3: ses('s3', 3, 0), s4: ses('s4', 4, 5) });
+    comprobar('la primera mesa es la 1 y la segunda la 2',
+        corre('[Servicio.turnosDeSesion().s3, Servicio.turnosDeSesion().s4]'), [1, 2]);
+
+    // Se cobra la mesa 3: la 4 NO se renumera
+    sembrar({ s3: ses('s3', 3, 0, 20), s4: ses('s4', 4, 5) });
+    comprobar('al irse la 1, la 2 sigue siendo la 2',
+        corre('Servicio.turnosDeSesion().s4'), 2);
+
+    // Entra la mesa 6 con la 4 todavia ocupada
+    sembrar({ s3: ses('s3', 3, 0, 20), s4: ses('s4', 4, 5), s6: ses('s6', 6, 25) });
+    comprobar('la que entra despues es la 3',
+        corre('Servicio.turnosDeSesion().s6'), 3);
+
+    // El local se vacia del todo y entra una mesa nueva
+    sembrar({ s3: ses('s3', 3, 0, 10), s4: ses('s4', 4, 2, 12), s7: ses('s7', 7, 30) });
+    comprobar('con el local vacio, vuelve a empezar en 1',
+        corre('Servicio.turnosDeSesion().s7'), 1);
+}
+
+function probarCubiertosDeLaMesa() {
+    console.log('\n--- Los cubiertos suben solos cuando la mesa pide mas ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    corre(`Servicio.enviarComanda({ mesa: 4, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 }] })`);
+    const ses = corre('Servicio.sesionDeMesa(4).id');
+
+    comprobar('dos platos, dos cubiertos',
+        corre(`Servicio.cubiertosDeSesion('${ses}')`), 2);
+
+    // A mitad de comida piden una chuleta mas
+    corre(`Servicio.enviarComanda({ mesa: 4, items: [
+        { platoId: 'p2', nombre: 'Chuleta', precio: 4, cantidad: 1 }] })`);
+
+    comprobar('piden una chuleta mas y pasa a tres',
+        corre(`Servicio.cubiertosDeSesion('${ses}')`), 3);
+
+    /* Una bebida no se sienta a comer. Si sumara, el que sirve llevaria
+       cubiertos de mas cada vez que alguien pide una cola. */
+    corre(`Servicio.enviarComanda({ mesa: 4, items: [
+        { platoId: 'b3', nombre: 'Cola personal', precio: 0.5, cantidad: 4 }] })`);
+
+    comprobar('pero una bebida no suma cubiertos',
+        corre(`Servicio.cubiertosDeSesion('${ses}')`), 3);
+}
+
+function probarPantallaDeServir() {
+    console.log('\n--- La pantalla del que sirve es de puro mirar ---');
+
+    const js = fuente('js/servir.js');
+    comprobar('no cambia el estado de ninguna comanda',
+        /marcarEntregado|marcarSacado|marcarListo|registrarPago|anularComanda|editarComanda/.test(js),
+        false);
+    comprobar('ni escribe en la nube',
+        /Servicio\.(enviarComanda|cerrarSesion|abrirSesion|moverMesa)/.test(js), false);
+
+    const html = fuente('servir.html');
+    comprobar('se instala como su propia aplicacion',
+        /manifest-servir\.json/.test(html), true);
+
+    const manifiesto = JSON.parse(fuente('manifest-servir.json'));
+    comprobar('y abre su pantalla, no otra', manifiesto.start_url, 'servir.html');
+}
+
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -1924,6 +2022,9 @@ async function main() {
     probarTableroParrilla();
     probarArrozPendiente();
     probarEscaleraDeTurnos();
+    probarTurnosDeMesa();
+    probarCubiertosDeLaMesa();
+    probarPantallaDeServir();
     probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();
