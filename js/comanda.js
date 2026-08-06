@@ -520,6 +520,12 @@ function interpretar(texto) {
            bien, la otra no la arregla nadie. */
         if (!seVende(plato)) return { token, plato, cantidad, sinStock: true };
 
+        /* Y si pide más de los que hay, se avisa MIENTRAS ESCRIBE. Leer
+           "2 × Pollo Apanado" y que después entre uno solo es peor que
+           no haber leído nada. */
+        const hay = quedanDe(plato);
+        if (hay !== null && cantidad > hay) return { token, plato, cantidad, tope: hay };
+
         return { token, plato, cantidad };
     });
 }
@@ -534,7 +540,9 @@ function leerTecleo() {
         ? `<span class="lee mal">“${r.token}” no existe</span>`
         : r.sinStock
             ? `<span class="lee mal">${r.plato.nombre}: se acabó</span>`
-            : `<span class="lee bien">${r.cantidad} × ${r.plato.nombre}</span>`
+            : r.tope !== undefined
+                ? `<span class="lee mal">${r.plato.nombre}: solo quedan ${r.tope}</span>`
+                : `<span class="lee bien">${r.cantidad} × ${r.plato.nombre}</span>`
     ).join('');
 }
 
@@ -618,17 +626,26 @@ function pintarTodoElMenu() {
 function agregarAlBorrador(plato, cantidad) {
     /* El último candado. Los botones ya salen apagados, pero al pedido
        se llega por cuatro caminos —tecleo, botón rápido, menú largo,
-       sugerencia— y este es el único por el que pasan todos. */
-    const piden = cantidad || 1;
+       sugerencia— y este es el único por el que pasan todos.
+
+       SE PONE LO QUE HAYA, no se rechaza el renglón entero. Pedir 2 con
+       uno disponible dejaba el pedido igual que estaba: el mesero tocaba
+       y no pasaba nada, y el aviso se iba solo antes de que lo leyera.
+       Ahora entra el que hay y se dice en voz alta cuántos entraron. */
+    let piden = cantidad || 1;
     const quedan = quedanDe(plato);
+    const producto = Servicio.nombreProducto(Servicio.productoDe(plato.id)).toLowerCase();
+
     if (!Servicio.sePuedePedir(plato.id) || quedan === 0) {
-        toast(`Se acabó: ${plato.nombre}`);
+        toast(`Se acabó el ${producto}. No queda ninguno.`);
         return;
     }
+
     if (quedan !== null && piden > quedan) {
-        toast(`Solo quedan ${quedan} de ${Servicio.nombreProducto(Servicio.productoDe(plato.id)).toLowerCase()}`);
-        return;
+        toast(`Solo quedaba ${quedan} de ${producto}: puse ${quedan}, no ${piden}.`);
+        piden = quedan;
     }
+    cantidad = piden;
 
     // En un pedido para llevar todo va para llevar. Marcarlo plato por
     // plato era pedirle al mesero que repita lo que ya dijo al entrar,
