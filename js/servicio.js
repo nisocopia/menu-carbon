@@ -330,6 +330,145 @@ const Servicio = (() => {
         return (cat && cat.guarnicion) || [];
     }
 
+    /* ============================================================
+       LO QUE HAY EN LA NEVERA
+
+       El gerente pone "hoy hay 12 pollos" y de ahí sale todo. Cuántos
+       quedan NO se guarda en ningún lado: se resta contra las comandas
+       cada vez que se pregunta.
+
+           quedan  =  lo que puso el gerente  −  lo que se pidió desde
+                      que lo puso
+
+       Por qué restar y no llevar un contador:
+
+         · Cinco celulares bajando un número a la vez terminan mintiendo
+           la noche que dos meseros toquen al mismo tiempo. Una resta da
+           igual en los cinco.
+         · Anular un pedido devuelve el pollo solo, sin escribir nada.
+         · Las reglas de la nube no dejan otra cosa: el menú solo lo
+           escribe el gerente. Y así debe ser — un mesero no puede andar
+           cambiando el menú del local.
+       ============================================================ */
+
+    /** De qué producto sale el plato. El que no lo dice es el suyo propio. */
+    function productoDe(platoId) {
+        const p = Store.findPlato(platoId);
+        return (p && p.usa) || platoId;
+    }
+
+    /** Cómo se llama el producto, para escribirlo en pantalla. */
+    function nombreProducto(producto) {
+        if (typeof PRODUCTOS !== 'undefined' && PRODUCTOS[producto]) return PRODUCTOS[producto];
+        const p = Store.findPlato(producto);
+        return p ? p.nombre : producto;
+    }
+
+    /**
+     * Qué se lleva de la nevera un renglón del pedido.
+     *
+     * Un mixto no gasta "un mixto": gasta las carnes que el mesero
+     * escogió. Un mixto de pollo y costilla saca un pollo y una costilla,
+     * y si son dos mixtos, dos de cada una.
+     */
+    function consumoDe(it) {
+        const p = Store.findPlato(it.platoId);
+        const cuenta = {};
+
+        if (p && p.elegir) {
+            (it.elegidas || []).forEach(id => {
+                const k = productoDe(id);
+                cuenta[k] = (cuenta[k] || 0) + (it.cantidad || 1);
+            });
+            return cuenta;
+        }
+
+        cuenta[productoDe(it.platoId)] = it.cantidad || 1;
+        return cuenta;
+    }
+
+    /** Cuánto se ha pedido de un producto desde que el gerente puso el número. */
+    function gastadoDe(producto, desde) {
+        return Object.values(getComandas())
+            .filter(c => c.estado !== 'anulado' && (c.creado || 0) >= desde)
+            .reduce((total, c) => total + (c.items || [])
+                .reduce((n, it) => n + (consumoDe(it)[producto] || 0), 0), 0);
+    }
+
+    const mismoDia = (a, b) => {
+        const x = new Date(a), y = new Date(b);
+        return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth()
+            && x.getDate() === y.getDate();
+    };
+
+    /**
+     * Cuántos quedan. `null` = sin límite, que es como funciona todo
+     * mientras el gerente no ponga un número.
+     *
+     * EL NÚMERO DE AYER NO VALE HOY. Si no se vuelve a poner, el stock
+     * vence y el plato se vende normal. Al revés —arrastrarlo— el local
+     * abriría un jueves con el sistema diciendo que no quedan pollos
+     * porque el domingo se acabaron, y nadie entendería por qué no se
+     * puede vender.
+     */
+    function quedanDe(producto) {
+        const s = Store.getStock()[producto];
+        if (!s || typeof s.hay !== 'number') return null;
+        if (!mismoDia(s.puesto, Date.now())) return null;
+        return Math.max(0, s.hay - gastadoDe(producto, s.puesto));
+    }
+
+    /** Cuántos quedan de este plato. Un mixto no tiene un número solo. */
+    function quedanDePlato(platoId) {
+        const p = Store.findPlato(platoId);
+        if (p && p.elegir) return null;
+        return quedanDe(productoDe(platoId));
+    }
+
+    /**
+     * ¿Se puede pedir?
+     *
+     * Dos candados independientes, que fue lo que pidió el dueño:
+     *   · el producto se acabó   -> caen todos los platos que lo usan
+     *   · el plato está apagado  -> cae solo ese (se acabó la apanadura)
+     *
+     * Un mixto vive mientras le quede alguna carne que escoger.
+     */
+    function sePuedePedir(platoId) {
+        const p = Store.findPlato(platoId);
+        if (!p || p.agotado) return false;
+
+        if (p.elegir) return p.elegir.entre.some(id => sePuedePedir(id));
+
+        const q = quedanDe(productoDe(platoId));
+        return q === null || q > 0;
+    }
+
+    /**
+     * Lo que se publica para la carta del comensal: cuántos quedan de
+     * cada producto que tenga número. Su celular no puede leer las
+     * comandas, así que no puede restar — lo publica quien sí puede.
+     */
+    function quedanTodos() {
+        const fuera = {};
+        Object.keys(Store.getStock()).forEach(prod => {
+            const q = quedanDe(prod);
+            if (q !== null) fuera[prod] = q;
+        });
+        return fuera;
+    }
+
+    /**
+     * Publicar el espejo. Solo lo hace quien toma pedidos: la cocina, la
+     * parrilla y el que sirve no tienen por qué escribir en el menú, y
+     * un local que no usa stock no escribe nada.
+     */
+    function publicarStock() {
+        if (!Object.keys(Store.getStock()).length) return;
+        if (permisoEn('comanda') === 'no') return;
+        Store.publicarEspejo(quedanTodos());
+    }
+
     /* ------------------------------------------------------------
        SERVIR EL PLATO DE OTRA FORMA
 
@@ -788,6 +927,7 @@ const Servicio = (() => {
         write(K.comandas, todas);
         encolar(`servicio/comandas/${comanda.id}`, comanda);
         alCambiar();
+        publicarStock();
 
         return comanda;
     }
@@ -829,6 +969,11 @@ const Servicio = (() => {
         write(K.comandas, todas);
         encolar(`servicio/comandas/${id}`, cambios, 'PATCH');
         alCambiar();
+        /* Anular o corregir una tanda devuelve lo que llevaba: como los
+           que quedan se restan y no se descuentan, no hay que sumar
+           nada a mano — pero el espejo del comensal sí hay que volver a
+           publicarlo. */
+        publicarStock();
         return c;
     }
 
@@ -1640,6 +1785,8 @@ const Servicio = (() => {
         cubiertosDeSesion, turnosDeSesion,
         estacionDe, guarnicionDe, arrozPendiente, categoriaDe, codigoDe, etiquetaDe,
         cambiosDe, guarnicionFinal, comoSeSirve,
+        productoDe, nombreProducto, consumoDe, quedanDe, quedanDePlato,
+        sePuedePedir, quedanTodos,
         cubiertosDe, nombreCorto, resumirItems,
         // una cuenta: una mesa o un pedido para llevar
         sesionesDe, tandasDe, cuentaDe, nombreDeCuenta, llevarAbiertos, llevarPorNombre,

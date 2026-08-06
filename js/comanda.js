@@ -432,9 +432,65 @@ const lineaCorta = it => `${it.cantidad} ${it.nombre}${it.llevar ? ' 🥡' : ''}
 
 /* ---------- Escritura rápida ---------- */
 
+/* ---------- Lo que hay ----------
+
+   Un plato se puede pedir si tiene producto en la nevera Y no lo apagó
+   el gerente a mano. Se pregunta en un solo sitio para que las cuatro
+   listas de esta pantalla digan lo mismo. */
+
+/**
+ * Lo que el pedido a medio escribir ya tiene apartado.
+ *
+ * Sin esto, con tres pollos en la nevera el mesero podía escribir "5p"
+ * y el sistema lo dejaba: los pollos no se descuentan hasta enviar. El
+ * borrador tiene que contar como si ya estuviera mandado — el cliente ya
+ * lo pidió, aunque el papel todavía no haya salido.
+ */
+function apartadoEnBorrador() {
+    const m = {};
+    const sumar = (it, signo) => {
+        const c = Servicio.consumoDe(it);
+        Object.keys(c).forEach(k => { m[k] = (m[k] || 0) + signo * c[k]; });
+    };
+
+    borrador.forEach(it => sumar(it, +1));
+
+    /* Lo que ya venía en la tanda que se está corrigiendo ya está
+       contado en las comandas. Sin descontarlo, abrir una tanda de tres
+       pollos para cambiarle una nota dejaría el pollo en cero. */
+    if (editandoTanda) {
+        const c = Servicio.getComandas()[editandoTanda.id];
+        (c && c.items ? c.items : []).forEach(it => sumar(it, -1));
+    }
+    return m;
+}
+
+/** Cuántos quedan de verdad: los de la nevera menos los del borrador. */
+function quedanDe(p) {
+    const base = Servicio.quedanDePlato(p.id);
+    if (base === null) return null;
+    return Math.max(0, base - (apartadoEnBorrador()[Servicio.productoDe(p.id)] || 0));
+}
+
+const seVende = p =>
+    tienePrecio(p) && Servicio.sePuedePedir(p.id) && quedanDe(p) !== 0;
+
+/**
+ * El aviso de "va quedando poco", para que el mesero lo diga en la mesa
+ * antes de que el cliente se ilusione. Desde 5 hacia abajo: más arriba
+ * es ruido, y en una mesa de seis un "quedan 5" ya es una conversación.
+ */
+function avisoDeStock(p) {
+    const q = quedanDe(p);
+    if (q === null || q > 5) return '';
+    return q === 0
+        ? '<span class="poco agotado-ya">se acabó</span>'
+        : `<span class="poco">quedan ${q}</span>`;
+}
+
 /** Busca el plato que el mesero quiso escribir. */
 function buscarPlato(clave) {
-    const platos = Store.getPlatos().filter(p => !p.agotado && tienePrecio(p));
+    const platos = Store.getPlatos().filter(p => tienePrecio(p));
     const c = norm(clave);
 
     return platos.find(p => p.atajo === c)
@@ -457,7 +513,14 @@ function interpretar(texto) {
 
         if (!clave || cantidad < 1 || cantidad > 50) return { token, error: true };
         const plato = buscarPlato(clave);
-        return plato ? { token, plato, cantidad } : { token, error: true };
+        if (!plato) return { token, error: true };
+
+        /* Se acabó no es lo mismo que no existe. Al mesero hay que
+           decirle cuál de las dos cosas es: una la arregla escribiendo
+           bien, la otra no la arregla nadie. */
+        if (!seVende(plato)) return { token, plato, cantidad, sinStock: true };
+
+        return { token, plato, cantidad };
     });
 }
 
@@ -469,7 +532,9 @@ function leerTecleo() {
 
     cont.innerHTML = interpretar(texto).map(r => r.error
         ? `<span class="lee mal">“${r.token}” no existe</span>`
-        : `<span class="lee bien">${r.cantidad} × ${r.plato.nombre}</span>`
+        : r.sinStock
+            ? `<span class="lee mal">${r.plato.nombre}: se acabó</span>`
+            : `<span class="lee bien">${r.cantidad} × ${r.plato.nombre}</span>`
     ).join('');
 }
 
@@ -482,6 +547,12 @@ function agregarDesdeTecleo() {
 
     if (malos.length) {
         toast('No entendí: ' + malos.map(m => m.token).join(', '));
+        return;
+    }
+
+    const sinStock = leido.filter(r => r.sinStock);
+    if (sinStock.length) {
+        toast('Se acabó: ' + sinStock.map(m => m.plato.nombre).join(', '));
         return;
     }
 
@@ -498,15 +569,19 @@ function pintarRapidos() {
     const platos = Store.getMenu()
         .filter(c => c.id === 'parrillas' || c.id === 'mixtos')
         .flatMap(c => c.platos)
-        .filter(p => !p.agotado && tienePrecio(p));
+        .filter(p => tienePrecio(p) && !p.agotado);
 
     const jugos = Store.getPlatos().filter(p => p.destacado && p.id.startsWith('b') && !p.agotado);
 
+    /* Lo que se acabó NO se esconde: se apaga. Un botón que desaparece
+       deja al mesero buscándolo en la lista larga; uno apagado le dice
+       en la mesa que ya no hay, que es lo que tiene que contestar. */
     $('rapidos').innerHTML =
         [...platos, ...jugos].map(p => `
-            <button class="rapido" data-plato="${p.id}">
+            <button class="rapido ${seVende(p) ? '' : 'sin-stock'}" data-plato="${p.id}"
+                    ${seVende(p) ? '' : 'disabled'}>
                 <span class="rapido-nom">${p.nombre}</span>
-                <span class="rapido-pre">${money(p.precio)}</span>
+                <span class="rapido-pre">${avisoDeStock(p) || money(p.precio)}</span>
             </button>`).join('') +
         `<button class="rapido otra" id="btn-otra-bebida">
             <span class="rapido-nom"><i class="fas fa-plus"></i> Otra bebida</span>
@@ -516,15 +591,16 @@ function pintarRapidos() {
 
 function pintarTodoElMenu() {
     $('todo-menu-lista').innerHTML = Store.getMenu().map(cat => {
-        const platos = cat.platos.filter(p => !p.agotado && tienePrecio(p));
+        const platos = cat.platos.filter(p => tienePrecio(p) && !p.agotado);
         if (!platos.length) return '';
         return `
             <div class="tm-cat">
                 <h3>${cat.nombre}</h3>
                 ${platos.map(p => `
-                    <button class="tm-plato" data-plato="${p.id}">
+                    <button class="tm-plato ${seVende(p) ? '' : 'sin-stock'}" data-plato="${p.id}"
+                            ${seVende(p) ? '' : 'disabled'}>
                         <span>${p.nombre}</span>
-                        <span class="tm-pre">${money(p.precio)}</span>
+                        <span class="tm-pre">${avisoDeStock(p) || money(p.precio)}</span>
                     </button>`).join('')}
             </div>`;
     }).join('');
@@ -540,6 +616,20 @@ function pintarTodoElMenu() {
    cualquier hora — que es lo que pasa en el salón. */
 
 function agregarAlBorrador(plato, cantidad) {
+    /* El último candado. Los botones ya salen apagados, pero al pedido
+       se llega por cuatro caminos —tecleo, botón rápido, menú largo,
+       sugerencia— y este es el único por el que pasan todos. */
+    const piden = cantidad || 1;
+    const quedan = quedanDe(plato);
+    if (!Servicio.sePuedePedir(plato.id) || quedan === 0) {
+        toast(`Se acabó: ${plato.nombre}`);
+        return;
+    }
+    if (quedan !== null && piden > quedan) {
+        toast(`Solo quedan ${quedan} de ${Servicio.nombreProducto(Servicio.productoDe(plato.id)).toLowerCase()}`);
+        return;
+    }
+
     // En un pedido para llevar todo va para llevar. Marcarlo plato por
     // plato era pedirle al mesero que repita lo que ya dijo al entrar,
     // y de ahí salían las tarrinas que no se cobraban.
@@ -600,6 +690,7 @@ function pintarBorrador() {
         $('borrador-total').textContent = money(0);
         $('pie-mesa').hidden = !pideNombre;
         pintarPie();
+        refrescarStock();
         return;
     }
 
@@ -623,6 +714,34 @@ function pintarBorrador() {
     $('borrador-total').textContent = money(total);
     $('pie-mesa').hidden = false;
     pintarPie();
+    refrescarStock();
+}
+
+/**
+ * Poner al dia lo que dicen los botones cuando cambia el borrador.
+ *
+ * Hace falta porque el borrador APARTA: con tres pollos y dos ya
+ * escritos queda uno, y el boton seguia diciendo tres. El mesero leia
+ * un numero que ya no era verdad justo cuando lo estaba usando.
+ *
+ * No se vuelven a dibujar las listas: se tocan los botones que ya estan.
+ * Redibujarlas mueve las filas de sitio mientras el dedo va bajando, y
+ * eso ya costo un plato borrado una vez.
+ */
+function refrescarStock() {
+    if (!Object.keys(Store.getStock()).length) return;   // local sin stock: nada que hacer
+
+    document.querySelectorAll('.rapido[data-plato], .tm-plato[data-plato]').forEach(b => {
+        const p = Store.findPlato(b.dataset.plato);
+        if (!p) return;
+
+        const hay = seVende(p);
+        b.disabled = !hay;
+        b.classList.toggle('sin-stock', !hay);
+
+        const etiqueta = b.querySelector('.rapido-pre, .tm-pre');
+        if (etiqueta) etiqueta.innerHTML = avisoDeStock(p) || money(p.precio);
+    });
 }
 
 /** Va siempre al final y no se toca: es para ver de dónde salen los centavos. */
@@ -744,8 +863,14 @@ function abrirMod(uid) {
                     ${plato.elegir.entre.map(id => {
                         const c = Store.findPlato(id);
                         const veces = it.elegidas.filter(e => e === id).length;
-                        return `<button class="chip ${veces ? 'on' : ''}" data-elegir="${id}">
+                        /* Una carne que se acabó no se puede escoger dentro
+                           de un mixto: el mixto sigue vivo mientras le quede
+                           alguna, pero esa no. */
+                        const hay = c && seVende(c);
+                        return `<button class="chip ${veces ? 'on' : ''} ${hay ? '' : 'sin-stock'}"
+                                        data-elegir="${id}" ${hay ? '' : 'disabled'}>
                                     ${c ? c.nombre : id}${veces > 1 ? ` ×${veces}` : ''}
+                                    ${hay ? '' : ' <em>se acabó</em>'}
                                 </button>`;
                     }).join('')}
                 </div>
@@ -1483,6 +1608,14 @@ function iniciar() {
     if (Sync.activo) {
         Sync.escuchar('menu/overrides', datos => {
             Store.aplicarOverridesRemotos(datos);
+            if (!$('vista-mesa').hidden) { pintarRapidos(); pintarTodoElMenu(); }
+        });
+
+        /* Y lo que hay en la nevera. El gerente pone "quedan 12 pollos"
+           desde su celular y los meseros lo ven sin recargar: si se
+           enteran tarde, venden lo que ya no hay. */
+        Sync.escuchar('menu/stock', datos => {
+            Store.aplicarStockRemoto(datos);
             if (!$('vista-mesa').hidden) { pintarRapidos(); pintarTodoElMenu(); }
         });
     }

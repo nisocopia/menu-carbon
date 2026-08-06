@@ -269,6 +269,60 @@ crece a mitad de comida.
 Las modificaciones **no** van dentro del código — comprimirlas lo volvería
 ilegible. Van escritas debajo, en palabras.
 
+### Lo que hay en la nevera
+
+El gerente pone en el panel **"hoy hay 12 pollos"** y de ahí sale todo. Se
+cuenta **por producto, no por plato**: del mismo pollo salen el asado, el
+apanado, el junior y la porción. Puesto plato por plato, cuatro números de 12
+dejarían vender 48 pollos que no existen.
+
+Un plato que comparte producto lo dice con `usa` en `menu-data.js`. El que no
+dice nada **es su propio producto**, así que se le puede poner número a
+cualquier cosa de la carta sin declarar nada. Los mixtos no lo llevan: sus
+carnes se escogen al tomar el pedido, así que descuentan de lo que el mesero
+eligió.
+
+**Cuántos quedan no se guarda en ningún lado — se resta.**
+
+```
+   quedan  =  lo que puso el gerente  −  lo pedido desde que lo puso
+```
+
+Tres razones, y las tres importan:
+
+- Un contador que bajan cinco celulares a la vez miente la noche que dos
+  meseros toquen al mismo tiempo. Una resta da igual en los cinco.
+- **Anular un pedido devuelve el pollo solo**, sin código que lo sume.
+- Las reglas de la nube no dejan otra cosa: `/menu` solo lo escribe el
+  gerente, y así debe ser.
+
+**El número de ayer no vale hoy.** Si no se vuelve a poner, el stock vence y
+todo se vende sin límite. Al revés, el local abriría un jueves sin poder
+vender pollo porque el domingo se acabó, y nadie entendería por qué.
+
+**Son dos candados independientes**, que es lo que hacía falta:
+
+| Pasa esto | Cae |
+|---|---|
+| Quedan 0 pollos | El asado, el apanado, el junior y la porción |
+| Se acabó la apanadura (botón **Agotado**) | Solo el pollo apanado |
+
+**El borrador aparta.** Con tres pollos y dos ya escritos en el pedido, queda
+uno — aunque todavía no se haya enviado. El cliente ya los pidió.
+
+**Lo que se acabó no se esconde, se apaga.** Un botón que desaparece deja al
+mesero buscándolo; uno apagado le contesta lo que le acaban de preguntar en
+la mesa.
+
+#### El espejo del comensal
+
+El celular del cliente **no puede contar**: para restar habría que leer las
+comandas, que son los pedidos de las otras mesas. Así que el celular del que
+toma el pedido publica cuántos quedan en `/stock` —público de leer, escribible
+solo por quien toma pedidos— y la carta lo muestra: `Quedan 3`, y solo de 5
+para abajo. Si el espejo se atrasa no se vende de más, porque el pedido del
+comensal pasa igual por el mesero.
+
 ### Servir el plato de otra forma
 
 Quitar no alcanzaba. El comensal puede pedir su plato **solo con patacones y

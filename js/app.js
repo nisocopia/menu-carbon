@@ -30,6 +30,40 @@ const money = n => CFG.moneda + Number(n || 0).toFixed(2);
 /** Un plato sin precio se muestra pero no se puede pedir (ej: bebidas por consultar). */
 const tienePrecio = p => typeof p.precio === 'number' && !isNaN(p.precio);
 
+/* ------------------------------------------------------------
+   LO QUE QUEDA
+
+   Este celular NO puede contar. Para saber cuántos pollos quedan hay
+   que restar lo que se pidió, y lo pedido son las comandas de las
+   mesas: pedidos de otra gente, que no le tocan a un desconocido.
+
+   Así que lee un espejo. El celular del que toma el pedido publica
+   cuántos quedan y aquí solo se muestra. Si el espejo se atrasa no se
+   vende de más: este pedido pasa por el mesero, y el mesero sí tiene la
+   cuenta buena.
+   ------------------------------------------------------------ */
+
+const quedanDe = p => {
+    const espejo = Store.getEspejo();
+    const producto = p.usa || p.id;
+    return typeof espejo[producto] === 'number' ? espejo[producto] : null;
+};
+
+const sePuedePedir = p => !p.agotado && quedanDe(p) !== 0;
+
+/**
+ * "Quedan 3", y solo desde 5 hacia abajo.
+ *
+ * Más arriba no es información, es ruido — y además le estaría contando
+ * al comensal cuánto compró el local. Con cinco o menos sí sirve: es
+ * cuando una mesa de cuatro tiene que decidir rápido.
+ */
+function quedanPocos(p) {
+    const q = quedanDe(p);
+    return q !== null && q > 0 && q <= 5
+        ? `<span class="quedan-pocos">Quedan ${q}</span>` : '';
+}
+
 /* ============================================================
    1. DIBUJAR EL MENÚ DESDE LOS DATOS
    ============================================================ */
@@ -46,10 +80,10 @@ function tarjetaPlato(p) {
         ? `<img src="${p.img}" alt="${p.nombre}" loading="lazy">`
         : `<div class="image-placeholder">📷 <span>Próximamente</span></div>`;
 
-    const sello = p.destacado && !p.agotado
+    const sello = p.destacado && sePuedePedir(p)
         ? `<span class="badge-destacado"><i class="fas fa-star"></i> El más pedido</span>` : '';
 
-    const boton = p.agotado
+    const boton = !sePuedePedir(p)
         ? `<button class="btn-agregar agotado" disabled>Agotado hoy</button>`
         : tienePrecio(p)
             ? `<button class="btn-agregar" data-add="${p.id}"><i class="fas fa-plus"></i> Agregar</button>`
@@ -60,8 +94,8 @@ function tarjetaPlato(p) {
         : `<div class="product-price sin-precio">Consultar</div>`;
 
     return `
-    <div class="product-card ${p.agotado ? 'is-agotado' : ''}" data-plato="${p.id}">
-        <div class="product-image">${foto}${sello}</div>
+    <div class="product-card ${sePuedePedir(p) ? '' : 'is-agotado'}" data-plato="${p.id}">
+        <div class="product-image">${foto}${sello}${quedanPocos(p)}</div>
         <div class="product-content">
             <div class="product-header">
                 <h3 class="product-title">${p.nombre}</h3>
@@ -74,7 +108,7 @@ function tarjetaPlato(p) {
 }
 
 function filaLista(p) {
-    const boton = p.agotado
+    const boton = !sePuedePedir(p)
         ? `<span class="lista-agotado">Agotado</span>`
         : tienePrecio(p)
             ? `<button class="btn-mini" data-add="${p.id}" aria-label="Agregar ${p.nombre}"><i class="fas fa-plus"></i></button>`
@@ -85,8 +119,8 @@ function filaLista(p) {
         : `<span class="portion-price sin-precio">Consultar</span>`;
 
     return `
-    <div class="portion-item ${p.agotado ? 'is-agotado' : ''}" data-plato="${p.id}">
-        <span class="portion-name">${p.nombre}</span>
+    <div class="portion-item ${sePuedePedir(p) ? '' : 'is-agotado'}" data-plato="${p.id}">
+        <span class="portion-name">${p.nombre} ${quedanPocos(p)}</span>
         <span class="portion-right">
             ${precio}
             ${boton}
@@ -142,7 +176,7 @@ function unidadesCarrito() {
 
 function agregarPlato(id, silencioso) {
     const p = Store.findPlato(id);
-    if (!p || p.agotado || !tienePrecio(p)) return;
+    if (!p || !sePuedePedir(p) || !tienePrecio(p)) return;
 
     const existente = carrito.find(i => i.id === id);
     if (existente) existente.cantidad++;
@@ -200,7 +234,7 @@ function sugerencias() {
     return Store.getMenuPublico()
         .filter(c => c.sugerible)
         .flatMap(c => c.platos)
-        .filter(p => !p.agotado && tienePrecio(p) && !yaPedido.has(p.id))
+        .filter(p => sePuedePedir(p) && tienePrecio(p) && !yaPedido.has(p.id))
         .slice(0, 4);
 }
 
@@ -481,7 +515,7 @@ function redibujarMenu() {
     const antes = carrito.length;
     carrito = carrito.filter(i => {
         const p = Store.findPlato(i.id);
-        return p && !p.agotado;
+        return p && sePuedePedir(p);
     });
     if (carrito.length !== antes) {
         Store.saveCarrito(carrito);
@@ -508,6 +542,13 @@ function escucharCambiosDelLocal() {
         redibujarMenu();
     });
 
+    /* Cuántos quedan. Lo publica el celular del que toma el pedido:
+       este no puede contarlo solo. */
+    Nube.escuchar('stock', datos => {
+        Store.aplicarEspejoRemoto(datos);
+        redibujarMenu();
+    });
+
     Nube.escuchar('config', datos => {
         Store.aplicarConfigRemota(datos);
         CFG = Store.getConfig();
@@ -525,7 +566,7 @@ function iniciarApp() {
 
     carrito = Store.getCarrito().filter(i => {
         const p = Store.findPlato(i.id);
-        return p && !p.agotado;   // si algo se agotó mientras tanto, sale del carrito
+        return p && sePuedePedir(p);   // si algo se agotó mientras tanto, sale del carrito
     });
     Store.saveCarrito(carrito);
 

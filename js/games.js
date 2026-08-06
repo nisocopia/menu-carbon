@@ -123,7 +123,9 @@ function flipMemoryCard(index, el, card) {
 // ============ RULETA ============
 const ruletaItems = [
     ...Store.getPlatosPublicos()
-        .filter(p => !p.agotado && p.catId !== 'bebidas' && p.catId !== 'porciones')
+        // La ruleta no puede recomendar lo que ya no hay: "pide costilla"
+        // y que en la mesa le digan que se acabó es peor que no jugar.
+        .filter(p => sePuedePedir(p) && p.catId !== 'bebidas' && p.catId !== 'porciones')
         .slice(0, 8)
         .map(p => ({ name: p.nombre }))
 ];

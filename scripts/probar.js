@@ -2215,6 +2215,122 @@ function probarFormaDeServir() {
         ['Plátano', 2]);
 }
 
+/* ============================================================
+   LO QUE HAY EN LA NEVERA
+
+   Se prueba el caso que describió el dueño con sus palabras: "solo
+   quedan 3 pollos, eso quiere decir que si alguien quiere 3 pollos
+   asados ya no habrá pollos para apanado de pollo o para sacar una
+   porción". Y el otro, que es distinto: "si quedan tres pollos pero ya
+   no tengo apanadura, que dé la opción de colocar agotado al apanado
+   pero el pollo asado y porción de pollo sigan disponibles".
+   ============================================================ */
+
+function probarStock() {
+    console.log('\n--- Lo que hay en la nevera ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    // De qué producto sale cada plato
+    comprobar('el pollo asado sale del pollo',    corre(`Servicio.productoDe('p5')`), 'pollo');
+    comprobar('el pollo apanado también',         corre(`Servicio.productoDe('a1')`), 'pollo');
+    comprobar('y la porción de pollo también',    corre(`Servicio.productoDe('q1')`), 'pollo');
+    comprobar('el junior de pollo también',       corre(`Servicio.productoDe('j1')`), 'pollo');
+    /* Un plato que no comparte nada es su propio producto: así se le
+       puede poner número a cualquier cosa de la carta sin declararla. */
+    comprobar('una porción de arroz es lo suyo',  corre(`Servicio.productoDe('r1')`), 'r1');
+
+    // Sin número puesto, todo se vende como siempre
+    comprobar('sin número no hay límite', corre(`Servicio.quedanDe('pollo')`), null);
+    comprobar('y todo se puede pedir',    corre(`Servicio.sePuedePedir('p5')`), true);
+
+    /* ---- "Solo quedan 3 pollos" ---- */
+    corre(`Store.setStock('pollo', 3)`);
+    comprobar('el gerente pone 3 pollos', corre(`Servicio.quedanDe('pollo')`), 3);
+
+    corre(`Servicio.enviarComanda({ mesa: 2, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 }] })`);
+    comprobar('se venden 2 asados y quedan 1', corre(`Servicio.quedanDe('pollo')`), 1);
+
+    /* Aquí está el asunto: el pollo se lo llevó el ASADO, pero el que se
+       queda sin nada es el APANADO — y la porción, y el junior. */
+    corre(`Servicio.enviarComanda({ mesa: 3, items: [
+        { platoId: 'a1', nombre: 'Pollo Apanado', precio: 5, cantidad: 1 }] })`);
+    comprobar('un apanado se lleva el último', corre(`Servicio.quedanDe('pollo')`), 0);
+
+    comprobar('ya no se puede pedir pollo asado',    corre(`Servicio.sePuedePedir('p5')`), false);
+    comprobar('ni pollo apanado',                    corre(`Servicio.sePuedePedir('a1')`), false);
+    comprobar('ni porción de pollo',                 corre(`Servicio.sePuedePedir('q1')`), false);
+    comprobar('ni junior de pollo',                  corre(`Servicio.sePuedePedir('j1')`), false);
+    // Y nada de esto toca a la carne, que es otra nevera
+    comprobar('la carne asada sigue vendiéndose',    corre(`Servicio.sePuedePedir('p1')`), true);
+
+    /* Anular devuelve el pollo solo: como se resta y no se descuenta, no
+       hay que acordarse de sumar nada. */
+    const id = corre(`Object.values(Servicio.getComandas()).find(c => c.mesa === 3).id`);
+    corre(`Servicio.anularComanda('${id}', 'se equivocó')`);
+    comprobar('anular devuelve el pollo',            corre(`Servicio.quedanDe('pollo')`), 1);
+    comprobar('y se vuelve a poder pedir',           corre(`Servicio.sePuedePedir('a1')`), true);
+
+    /* ---- El otro caso: se acabó la apanadura ---- */
+    corre(`Store.toggleAgotado('a1')`);
+    comprobar('el apanado apagado a mano no se pide', corre(`Servicio.sePuedePedir('a1')`), false);
+    comprobar('pero el pollo asado sigue vivo',       corre(`Servicio.sePuedePedir('p5')`), true);
+    comprobar('y la porción de pollo también',        corre(`Servicio.sePuedePedir('q1')`), true);
+    corre(`Store.toggleAgotado('a1')`);
+
+    /* ---- Un mixto gasta las carnes que se escogieron ---- */
+    nubeLimpia();
+    const { corre: c2 } = celular('mesero');
+    c2(`Store.setStock('pollo', 4)`);
+    c2(`Store.setStock('costilla', 2)`);
+    c2(`Servicio.enviarComanda({ mesa: 6, items: [
+        { platoId: 'm2', nombre: 'Mixto 2 Carnes Especial', precio: 7, cantidad: 2,
+          elegidas: ['p3', 'p5'] }] })`);
+    comprobar('dos mixtos se llevan dos costillas', c2(`Servicio.quedanDe('costilla')`), 0);
+    comprobar('y dos pollos',                       c2(`Servicio.quedanDe('pollo')`), 2);
+    /* El mixto no se cae por quedarse sin una carne: le quedan otras
+       para escoger. La que se acabó es la que no se puede elegir. */
+    comprobar('el mixto sigue en pie',              c2(`Servicio.sePuedePedir('m2')`), true);
+    comprobar('la costilla suelta no',              c2(`Servicio.sePuedePedir('p3')`), false);
+
+    /* ---- El número de ayer no vale hoy ---- */
+    const ayer = Date.now() - 26 * 60 * 60 * 1000;
+    c2(`localStorage.setItem('menu_stock', JSON.stringify(
+        { pescado: { hay: 0, puesto: ${ayer} } }))`);
+    comprobar('el stock de ayer venció',   c2(`Servicio.quedanDe('pescado')`), null);
+    comprobar('y el plato se vende igual', c2(`Servicio.sePuedePedir('f1')`), true);
+
+    /* ---- El espejo que lee la carta del comensal ---- */
+    nubeLimpia();
+    const { corre: c3, propio } = celular('mesero');
+    c3(`Store.setStock('camaron', 5)`);
+    c3(`Servicio.enviarComanda({ mesa: 8, items: [
+        { platoId: 'c1', nombre: 'Camarón Apanado', precio: 6, cantidad: 2 }] })`);
+
+    comprobar('el espejo dice cuántos quedan',
+        c3(`Store.getEspejo().camaron`), 3);
+    /* Los tres platos de camarón beben del mismo número: el celular del
+       comensal no sabe restar, pero sí sabe cuál es su producto. */
+    comprobar('el espejo se publica a la nube',
+        propio.enviado.some(e => e.rama === 'stock' && e.valor.camaron === 3), true);
+
+    // Y las pantallas que no toman pedidos no escriben en el menú
+    nubeLimpia();
+    const { corre: c4, propio: p4 } = celular('cocina');
+    c4(`Store.setStock('camaron', 5)`);
+    c4(`Servicio.marcarEntregado('x')`);
+    comprobar('la cocina no publica el stock',
+        p4.enviado.some(e => e.rama === 'stock'), false);
+
+    // Y la regla de la nube deja leerlo sin cuenta pero no escribirlo a cualquiera
+    const reglas = JSON.parse(fuente('firebase-rules.json')).rules;
+    comprobar('el espejo lo puede leer la carta', reglas.stock['.read'], true);
+    comprobar('pero solo lo escribe quien toma pedidos',
+        /YHeMmcUbMFdsPQrIcvT561FDunt1/.test(reglas.stock['.write']) &&
+        !/rgi36tpn1KNHeDEqJN17dpbWguy2/.test(reglas.stock['.write']), true);
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -2243,6 +2359,7 @@ async function main() {
     probarPorQueNoEntro();
     probarLlevarEnServir();
     probarFormaDeServir();
+    probarStock();
     probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();

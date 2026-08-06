@@ -62,6 +62,30 @@ Cierra con Listo y Enviar.
 - [ ] **Cocina:** ve las dos cosas
 - [ ] **Cocina:** dice **0 cubiertos** (todo es para llevar)
 
+## 3a. Se acaba el pollo
+
+**En el panel (pestaña Menú):** en *Lo que hay hoy*, escribe **3** en la fila
+del **Pollo**. Fíjate que debajo del nombre diga de qué platos come.
+
+**En el celular del mesero:** mesa 9, escribe `2p` y Enviar. Después `1ap`
+(pollo apanado) y Enviar.
+
+- [ ] Al escribir el segundo `2p`, el botón del pollo dice **queda 1** y no
+      deja pasar de ahí
+- [ ] Después del apanado, **caen los cuatro**: pollo asado, pollo apanado,
+      junior de pollo y porción de pollo
+- [ ] La **carne asada sigue vendiéndose** (es otra nevera)
+- [ ] Los botones salen **apagados y diciendo "se acabó"**, no desaparecidos
+- [ ] **En la carta del comensal** el pollo sale *Agotado hoy*
+
+**Anula uno de los pedidos desde la comanda:**
+
+- [ ] El pollo **vuelve a poderse pedir** sin tocar nada más
+
+**Y el otro caso:** en el panel marca **Agotado** solo en *Pollo Apanado*.
+
+- [ ] Cae **solo el apanado**; el pollo asado y la porción siguen vivos
+
 ## 3b. Un plato solo con patacones y ensalada
 
 **En el celular del mesero:** mesa 7, escribe `1co`. Toca el renglón
