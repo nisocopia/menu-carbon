@@ -2323,6 +2323,19 @@ function probarStock() {
     comprobar('la cocina no publica el stock',
         p4.enviado.some(e => e.rama === 'stock'), false);
 
+    /* ---- Pedir más de los que hay pone los que hay ----
+
+       El dueño lo pilló probando: con un pollo disponible escribió dos
+       apanados y NO ENTRÓ NINGUNO. Desde la mesa eso es "toqué y no pasó
+       nada". Ahora entra el que hay y se dice cuántos entraron. */
+    const com = fuente('js/comanda.js');
+    comprobar('no se rechaza el renglón entero',
+        /piden = quedan;/.test(com), true);
+    comprobar('y se dice cuántos entraron de verdad',
+        /puse \$\{quedan\}, no \$\{piden\}/.test(com), true);
+    comprobar('mientras escribe ya se le avisa',
+        /solo quedan \$\{r\.tope\}/.test(com), true);
+
     // Y la regla de la nube deja leerlo sin cuenta pero no escribirlo a cualquiera
     const reglas = JSON.parse(fuente('firebase-rules.json')).rules;
     comprobar('el espejo lo puede leer la carta', reglas.stock['.read'], true);
