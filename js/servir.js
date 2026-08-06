@@ -240,6 +240,7 @@ function verCuenta(sesionId, titulo) {
                         <span>
                             ${it.nombre}
                             ${it.llevar ? '<em>🥡 para llevar</em>' : ''}
+                            ${it.cambio ? `<em>${Servicio.comoSeSirve(it)}</em>` : ''}
                             ${(it.sin && it.sin.length)
                                 ? `<em>sin ${it.sin.map(g => GUARNICIONES[g] || g).join(', ')}</em>` : ''}
                             ${it.termino ? `<em>${it.termino}</em>` : ''}

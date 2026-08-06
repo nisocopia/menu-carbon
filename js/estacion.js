@@ -827,6 +827,12 @@ function detallesDe(it) {
     }
     if (it.termino) detalles.push(`<b class="det-fuerte">${it.termino}</b>`);
 
+    /* La forma de servir es de la cocina, que es la que emplata. Al
+       asador no le cambia nada: él saca la proteína igual. Va en negrita
+       porque no es quitar una cosa, es un plato armado distinto. */
+    if (ESTACION === 'cocina' && it.cambio) {
+        detalles.push(`<b class="det-fuerte">${Servicio.comoSeSirve(it).toUpperCase()}</b>`);
+    }
     if (ESTACION === 'cocina' && it.sin && it.sin.length) {
         detalles.push(it.sin.map(g => 'sin ' + (GUARNICIONES[g] || g)).join(' · '));
     }

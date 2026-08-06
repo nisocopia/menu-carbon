@@ -359,11 +359,15 @@ const Store = (() => {
         ];
 
         /* Se copian tal cual: la lista del equipo, la conexión con la
-           nube y los nombres de las guarniciones. Si faltara cualquiera
-           de los tres, el sistema de comandas no vuelve a arrancar. */
+           nube, los nombres de las guarniciones y las formas de servir.
+           Si faltara cualquiera, el sistema de comandas no vuelve a
+           arrancar. CAMBIOS es una lista y no un objeto, así que va por
+           su lado: bloqueJs escribe llaves y lo dejaría inservible. */
         if (typeof EQUIPO       !== 'undefined') partes.push(bloqueJs('EQUIPO', EQUIPO));
         if (typeof FIREBASE     !== 'undefined') partes.push(bloqueJs('FIREBASE', FIREBASE));
         if (typeof GUARNICIONES !== 'undefined') partes.push(bloqueJs('GUARNICIONES', GUARNICIONES));
+        if (typeof CAMBIOS      !== 'undefined')
+            partes.push(`const CAMBIOS = ${JSON.stringify(CAMBIOS, null, 4)};\n`);
 
         const cats = getMenu().map(cat => {
             const { platos, ...resto } = cat;

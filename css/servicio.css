@@ -835,6 +835,16 @@
 .chip.grande { font-size: 1rem; padding: 14px 20px; }
 .chip b { font-weight: 600; }
 
+/* Servir el plato de otra forma no es lo mismo que quitarle algo, y va
+   pegado a las fichas de "sin ...". Con el mismo aspecto, el dedo con
+   prisa toca una por otra: se marca "solo patacones y ensalada" creyendo
+   que se quitó el plátano. La barra de la izquierda las separa sin
+   ocupar sitio. */
+.chip.forma { border-left: 4px solid #FFC107; border-radius: 8px 22px 22px 8px; }
+.chip.forma.on { border-left-color: #111; }
+
+.mod-chips + .mod-chips { margin-top: 8px; }
+
 .mod-nota { font-size: 0.72rem; color: #666; margin-top: 8px; }
 
 .campo-srv { display: block; margin-bottom: 14px; }

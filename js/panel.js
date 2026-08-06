@@ -399,6 +399,7 @@ function renderPedidos() {
                     <li>
                         <span>${i.cantidad}×</span> ${i.nombre}
                         ${i.llevar ? ' 🥡' : ''}
+                        ${i.cambio ? `<em>${Servicio.comoSeSirve(i)}</em>` : ''}
                         ${(i.sin && i.sin.length) ? `<em>sin ${i.sin.map(g => GUARNICIONES[g] || g).join(', ')}</em>` : ''}
                     </li>`).join('')}
             </ul>
