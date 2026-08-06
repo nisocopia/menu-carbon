@@ -88,6 +88,36 @@ const Sync = (() => {
 
     function salir() { guardarSesion(null); }
 
+    /* ---------------- POR QUE NO ENTRO ---------------- */
+
+    /* Firebase contesta con codigos. Decirle a todo "correo o clave
+       incorrectos" es mentir la mitad de las veces: si el correo no
+       existe, si la cuenta esta desactivada o si hay demasiados
+       intentos, uno se queda probando la clave contra una pared. */
+    const MOTIVOS = {
+        EMAIL_NOT_FOUND:             'Ese correo no esta registrado en el local',
+        INVALID_PASSWORD:            'Clave incorrecta',
+        INVALID_LOGIN_CREDENTIALS:   'Correo o clave incorrectos',
+        USER_DISABLED:               'Esa cuenta esta desactivada',
+        TOO_MANY_ATTEMPTS_TRY_LATER: 'Demasiados intentos. Espera unos minutos.',
+        MISSING_PASSWORD:            'Falta la clave',
+        MISSING_EMAIL:               'Falta el correo',
+        INVALID_EMAIL:               'Ese correo esta mal escrito',
+        OPERATION_NOT_ALLOWED:       'Falta activar correo y clave en Firebase',
+        'sin-configurar':            'Este local todavia no tiene la nube conectada'
+    };
+
+    /**
+     * Por que no dejo entrar, dicho en cristiano.
+     *
+     * Si el codigo no esta en la lista se muestra tal cual: un mensaje
+     * raro pero exacto sirve mas que uno bonito y falso.
+     */
+    function porQueNoEntro(e) {
+        const codigo = String((e && e.message) || '').split(/[ :]/)[0];
+        return MOTIVOS[codigo] || ('No se pudo entrar — ' + (codigo || 'sin detalle'));
+    }
+
     /** Devuelve un token válido, renovándolo si ya venció. */
     async function token() {
         if (!sesion) cargarSesion();
@@ -426,7 +456,7 @@ const Sync = (() => {
 
     return {
         activo,
-        entrar, salir, haySesion, correoSesion, uidSesion, rolSesion, token,
+        entrar, salir, porQueNoEntro, haySesion, correoSesion, uidSesion, rolSesion, token,
         escuchar, leer, guardar, parchear, agregar, reclamar, enviar,
         ramaViva, desdeUltimoContacto, fallo
     };

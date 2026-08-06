@@ -87,15 +87,8 @@ function mostrarError(texto) {
     setTimeout(() => { if (err.textContent === texto) err.textContent = ''; }, 4000);
 }
 
-/** Mensajes de Firebase traducidos a algo que se entienda. */
-const ERRORES_FIREBASE = {
-    EMAIL_NOT_FOUND:           'Ese correo no está registrado',
-    INVALID_PASSWORD:          'Clave incorrecta',
-    INVALID_LOGIN_CREDENTIALS: 'Correo o clave incorrectos',
-    USER_DISABLED:             'Esa cuenta está desactivada',
-    TOO_MANY_ATTEMPTS_TRY_LATER: 'Demasiados intentos. Espera unos minutos.',
-    'sin-configurar':          'Falta configurar Firebase en menu-data.js'
-};
+/* Los mensajes de Firebase los traduce sync.js, que es el que habla con
+   él. Tenerlos aquí también era tener dos verdades que se separan. */
 
 async function intentarEntrar() {
     const campoClave = document.getElementById('pin-input');
@@ -136,8 +129,8 @@ async function intentarEntrar() {
                 return;
             } catch (err) {
                 registrarFallo();
-                const codigo = String(err.message).split(' ')[0];
-                mostrarError(ERRORES_FIREBASE[codigo] || 'No se pudo entrar');
+                mostrarError(Nube.porQueNoEntro ? Nube.porQueNoEntro(err)
+                                                : 'No se pudo entrar');
                 return;
             }
         }

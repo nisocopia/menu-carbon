@@ -450,9 +450,7 @@ async function entrar() {
         await Sync.entrar(correo, clave);
         abrirApp();
     } catch (e) {
-        error.textContent = e.message === 'sin-configurar'
-            ? 'Este local todavía no tiene la nube conectada.'
-            : 'Correo o clave incorrectos.';
+        error.textContent = Sync.porQueNoEntro(e);
     } finally {
         $('lock-entrar').disabled = false;
     }
