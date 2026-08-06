@@ -56,7 +56,8 @@ const RESTAURANTE = {
    navegador. Por eso los mismos uid van escritos también en
    firebase-rules.json — si cambias uno, cámbialo en los dos lados.
 
-   Los roles válidos son: 'gerente', 'mesero', 'cocina', 'parrilla'.
+   Los roles válidos son: 'gerente', 'mesero', 'cocina', 'parrilla'
+   y 'servir' (el que pone los cubiertos y lleva los platos a la mesa).
 
    SI SE DEJA VACÍO, cualquier cuenta del local puede todo, como
    antes. Así un restaurante que todavía no ha repartido las cuentas
@@ -68,6 +69,8 @@ const EQUIPO = {
     'YHeMmcUbMFdsPQrIcvT561FDunt1': 'mesero',     // mesa@gmail.com
     'rgi36tpn1KNHeDEqJN17dpbWguy2': 'cocina',     // cocina@gmail.com
     '0elTDMQYcHSZYZHHyZ4i3RFPQEo1': 'parrilla'    // asador@gmail.com
+    // Cuando crees la cuenta del que sirve, agrega aquí su uid:
+    // ,'PEGA_AQUI_SU_UID': 'servir'                // servir@gmail.com
 };
 
 /* ------------------------------------------------------------

@@ -1754,3 +1754,135 @@ body.hay-nuevo::after {
 
 .srv-sonido[hidden] { display: none; }
 .srv-sonido i { margin-right: 8px; }
+
+/* ============================================================
+   SERVIR  —  las once mesas de un vistazo
+
+   Esta pantalla se lee de lejos y con las manos ocupadas. Todo grande,
+   nada que tocar salvo para curiosear qué pidio una mesa.
+   ============================================================ */
+
+.servir-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    padding: 12px;
+}
+
+.smesa {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    aspect-ratio: 1;
+    background: #141414;
+    border: 2px solid #232323;
+    border-radius: 16px;
+    color: #444;
+    font-family: inherit;
+    padding: 8px;
+}
+
+.smesa-num { font-size: 2.4rem; font-weight: 700; line-height: 1; }
+.smesa-libre { font-size: 0.75rem; }
+
+.smesa.ocupada {
+    background: #1f1a0d;
+    border-color: #FFC107;
+    color: #fff;
+    cursor: pointer;
+}
+
+.smesa.ocupada .smesa-num { color: #FFC107; }
+
+.smesa-cub {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+/* El turno: en qué orden se ocupó la mesa, que es el orden en que van
+   los cubiertos. No se renumera cuando una mesa se va. */
+.smesa-turno {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    min-width: 26px;
+    height: 26px;
+    line-height: 24px;
+    text-align: center;
+    background: #FFC107;
+    color: #111;
+    border-radius: 50%;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+/* ---------- Qué pidió la mesa ---------- */
+
+.vmesa-tanda {
+    background: #1a1a1a;
+    border-left: 3px solid #FFC107;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+}
+
+.vmesa-tanda.servida { border-left-color: #4caf50; opacity: 0.6; }
+
+.vmesa-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.vmesa-top strong { font-size: 0.95rem; color: #FFC107; }
+.vmesa-top span { font-size: 0.72rem; color: #888; }
+
+.vmesa-items { list-style: none; }
+
+.vmesa-items li {
+    display: flex;
+    gap: 10px;
+    padding: 5px 0;
+    font-size: 1.05rem;
+}
+
+.vmesa-items em {
+    display: block;
+    font-size: 0.82rem;
+    font-style: normal;
+    color: #FFC107;
+}
+
+.vmesa-cant {
+    flex-shrink: 0;
+    min-width: 30px;
+    background: #2a2a2a;
+    border-radius: 7px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.vmesa-nota {
+    background: #221d0d;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: #ffd54f;
+    padding: 7px 10px;
+    margin-top: 8px;
+}
+
+/* En una pantalla fija se ven las once mesas sin desplazar nada */
+@media (min-width: 620px) {
+    .servir-grid { grid-template-columns: repeat(4, 1fr); max-width: 900px; margin: 0 auto; }
+    .smesa-num { font-size: 3.2rem; }
+    .smesa-cub { font-size: 1.15rem; }
+    .smesa-turno { min-width: 32px; height: 32px; line-height: 30px; font-size: 1.1rem; }
+}
+
+.servir-grid .smesa.ocupada:active { background: #2a2210; }

@@ -77,6 +77,7 @@ orillas, que es justo lo que se cortaba antes.
 | `comanda.html` | **Tomar pedido y cobrar.** El celular del mesero. |
 | `parrilla.html` | Lo que ve el asador: solo proteínas. |
 | `cocina.html` | Lo que ve la cocina: el pedido entero y los cubiertos. |
+| `servir.html` | Las once mesas de un vistazo: cuántos cubiertos y en qué orden. |
 | `panel.html` | Panel privado del dueño. |
 | `js/menu-data.js` | **Lo único que se edita por restaurante.** |
 | `js/servicio.js` | El sistema de comandas: mesas, tandas, códigos, cuenta. |
@@ -275,6 +276,24 @@ ilegible. Van escritas debajo, en palabras.
 | **Parrilla** | Solo proteínas. El término y el "para llevar". Nada de guarniciones: no cambian nada en la parrilla. |
 | **Cocina** | El pedido entero, los cubiertos en grande y lo que se le quitó al plato. Esta pantalla también la lee el que sirve. |
 | **Comanda** | Todo, más la cuenta. |
+| **Servir** | Las once mesas, los cubiertos de cada una y el turno. Solo lectura. |
+
+### La pantalla del que sirve
+
+El que pone los cubiertos y lleva los platos se había quedado fuera: la
+pantalla de la cocina le queda a tres metros y es un celular, no se lee.
+
+Su pantalla es la única **sin un solo botón que cambie nada** — lleva las
+manos ocupadas y el pedido no es suyo. Ve las once mesas, los cubiertos de
+cada una, y un **turno** en la esquina: el orden en que se fueron ocupando.
+
+Ese turno reemplaza a marcar los cubiertos uno por uno. Si va por el ⑧, del
+① al ⑦ ya están puestos, sin decírselo al sistema. Y **no se renumera**
+cuando una mesa se va: si la ① paga, la ② sigue siendo la ②. Renumerar le
+haría perder la referencia a mitad del servicio.
+
+Vuelve a ① cuando el local se queda vacío, para que cada noche empiece en
+uno. Tocar una mesa muestra lo que pidió, solo para mirar.
 
 Las bebidas no le llegan a ninguna estación: las sirve el mesero directo.
 

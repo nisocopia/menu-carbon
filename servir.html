@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0d0d0d">
+    <meta name="robots" content="noindex, nofollow">
+
+    <title>Servir</title>
+
+    <!-- Cada pantalla es su propia aplicación: instalar "Servir" tiene
+         que abrir Servir, no el menú del comensal. -->
+    <link rel="manifest" href="manifest-servir.json">
+
+    <link rel="icon" type="image/png" href="img/favicon.png">
+    <link rel="apple-touch-icon" href="img/app/servir-192.png">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Servir">
+
+    <link rel="stylesheet" href="css/fuentes.css?v=202608060011">
+    <link rel="stylesheet" href="css/iconos.css?v=202608060011">
+    <link rel="stylesheet" href="css/servicio.css?v=202608060011">
+</head>
+
+<body class="srv-body estacion">
+
+    <!-- ENTRAR -->
+    <div class="srv-lock" id="lock">
+        <div class="srv-lock-box">
+            <div class="srv-lock-icon"><i class="fas fa-utensils"></i></div>
+            <h1>Servir</h1>
+            <p id="lock-msg">Entra con la cuenta del que sirve</p>
+            <input type="email" id="lock-correo" placeholder="Correo" autocomplete="username">
+            <input type="password" id="lock-clave" placeholder="Clave" autocomplete="current-password">
+            <button id="lock-entrar">Entrar</button>
+            <p class="srv-lock-error" id="lock-error"></p>
+        </div>
+    </div>
+
+    <header class="srv-top">
+        <h1><i class="fas fa-utensils"></i> Servir</h1>
+        <div class="srv-red" id="red"></div>
+    </header>
+
+    <div class="srv-alarma" id="alarma" hidden></div>
+
+    <!-- Las 11 mesas de un vistazo. El número pequeño de la esquina es el
+         turno: en qué orden se fueron ocupando, que es el mismo orden en
+         que van los cubiertos. -->
+    <main class="servir-grid" id="mesas"></main>
+
+    <!-- Solo sale cuando el navegador de verdad puede instalarla. Un
+         botón que a veces no hace nada es peor que no tenerlo. -->
+    <button class="srv-instalar" id="btn-instalar" hidden>
+        <i class="fas fa-download"></i>
+        Instalar Servir en este aparato
+        <span>Se abre de un toque y no se pierde entre las pestañas</span>
+    </button>
+
+    <nav class="srv-links">
+        <a href="cocina.html"><i class="fas fa-kitchen-set"></i> Cocina</a>
+        <a href="parrilla.html"><i class="fas fa-fire"></i> Parrilla</a>
+        <button class="srv-salir" id="btn-salir"><i class="fas fa-right-from-bracket"></i> Salir</button>
+    </nav>
+
+    <!-- QUÉ PIDIÓ ESTA MESA — solo para mirar, sin un botón que cambie nada -->
+    <div class="hoja-overlay" id="hoja-mesa">
+        <div class="hoja">
+            <div class="hoja-head">
+                <h2 id="hoja-titulo">Mesa</h2>
+                <button class="hoja-close" id="hoja-close" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="hoja-cuerpo" id="hoja-cuerpo"></div>
+            <button class="btn-listo" id="hoja-cerrar">Cerrar</button>
+        </div>
+    </div>
+
+    <div class="srv-toast" id="toast"></div>
+
+    <script src="js/menu-data.js?v=202608060011"></script>
+    <script src="js/sync.js?v=202608060011"></script>
+    <script src="js/store.js?v=202608060011"></script>
+    <script src="js/servicio.js?v=202608060011"></script>
+    <script src="js/servir.js?v=202608060011"></script>
+    <script src="js/pwa.js?v=202608060011"></script>
+
+</body>
+
+</html>

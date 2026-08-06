@@ -1,4 +1,4 @@
-/* Font Awesome 6.4.0 recortado a los 54 iconos que usa este menú.
+/* Font Awesome 6.4.0 recortado a los 62 iconos que usa este menú.
    Se sirve desde el propio sitio: no depende de ningún servidor externo. */
 
 @font-face {
@@ -32,9 +32,12 @@
 
 .fa-bacon:before{content:"\f7e5"}
 .fa-bag-shopping:before{content:"\f290"}
+.fa-ban:before{content:"\f05e"}
 .fa-bell:before{content:"\f0f3"}
 .fa-bell-concierge:before{content:"\f562"}
 .fa-bowl-food:before{content:"\e4c6"}
+.fa-bowl-rice:before{content:"\e2eb"}
+.fa-box:before{content:"\f466"}
 .fa-cash-register:before{content:"\f788"}
 .fa-chart-simple:before{content:"\e473"}
 .fa-check:before{content:"\f00c"}
@@ -50,6 +53,7 @@
 .fa-cube:before{content:"\f1b2"}
 .fa-download:before{content:"\f019"}
 .fa-drumstick-bite:before{content:"\f6d7"}
+.fa-eye:before{content:"\f06e"}
 .fa-fire:before{content:"\f06d"}
 .fa-fire-burner:before{content:"\e4f1"}
 .fa-fish:before{content:"\f578"}
@@ -66,19 +70,23 @@
 .fa-money-bill:before{content:"\f0d6"}
 .fa-note-sticky:before{content:"\f249"}
 .fa-paper-plane:before{content:"\f1d8"}
+.fa-pen:before{content:"\f304"}
 .fa-pen-to-square:before{content:"\f044"}
 .fa-plug-circle-xmark:before{content:"\e560"}
 .fa-plus:before{content:"\2b"}
 .fa-puzzle-piece:before{content:"\f12e"}
 .fa-receipt:before{content:"\f543"}
 .fa-right-from-bracket:before{content:"\f2f5"}
+.fa-right-left:before{content:"\f362"}
 .fa-rotate-left:before{content:"\f2ea"}
 .fa-shrimp:before{content:"\e448"}
 .fa-star:before{content:"\f005"}
+.fa-stopwatch:before{content:"\f2f2"}
 .fa-store:before{content:"\f54e"}
 .fa-sync-alt:before{content:"\f2f1"}
 .fa-triangle-exclamation:before{content:"\f071"}
 .fa-up-right-from-square:before{content:"\f35d"}
+.fa-user-pen:before{content:"\f4ff"}
 .fa-utensils:before{content:"\f2e7"}
 .fa-volume-high:before{content:"\f028"}
 .fa-volume-xmark:before{content:"\f6a9"}

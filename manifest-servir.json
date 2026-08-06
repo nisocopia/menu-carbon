@@ -1,0 +1,32 @@
+{
+  "name": "Servir — Carbon",
+  "short_name": "Servir",
+  "description": "Las mesas de un vistazo: cuántos cubiertos van y en qué orden.",
+  "start_url": "servir.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d0d0d",
+  "theme_color": "#0d0d0d",
+  "lang": "es",
+  "dir": "ltr",
+  "categories": [
+    "food",
+    "business",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "img/app/servir-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "img/app/servir-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
