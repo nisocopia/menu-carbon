@@ -171,6 +171,44 @@ const CAMBIOS = [
 ];
 
 /* ------------------------------------------------------------
+   LO QUE HAY EN LA NEVERA
+
+   El stock NO se cuenta por plato, se cuenta por producto. Es la
+   diferencia entre lo que se vende y lo que se acaba:
+
+       quedan 3 pollos  ->  se caen el pollo asado, el pollo apanado,
+                            el junior y la porción. Los cuatro salen
+                            del mismo pollo.
+
+   Contado por plato habría que poner "3" cuatro veces y el sistema
+   dejaría vender doce pollos que no existen.
+
+   CÓMO SE DECLARA: un plato que comparte producto con otros lo dice
+   con `usa`. El que no dice nada es su propio producto — así se le
+   puede poner número a cualquier plato de la carta sin declarar nada.
+
+   Y ES OTRA COSA QUE EL BOTÓN "AGOTADO" del panel. Ese apaga UN plato:
+   se acabó la apanadura y cae el pollo apanado, pero el pollo asado y
+   la porción siguen vendiéndose. Los dos caminos conviven: un plato se
+   puede pedir si tiene producto Y no está apagado a mano.
+
+   SIN NÚMERO NO HAY LÍMITE. Mientras el gerente no ponga una cantidad,
+   todo se vende como hasta ahora. El stock es para las noches en que
+   algo escasea, no para llevar inventario.
+   ------------------------------------------------------------ */
+
+const PRODUCTOS = {
+    pollo:    'Pollo',
+    carne:    'Carne',
+    chuleta:  'Chuleta',
+    costilla: 'Costilla',
+    matambre: 'Matambre',
+    chancho:  'Chancho',
+    camaron:  'Camarón',
+    pescado:  'Pescado'
+};
+
+/* ------------------------------------------------------------
    CATEGORÍAS Y PLATOS
 
    - id:        se usa para el enlace del menú (#parrillas)
@@ -196,6 +234,12 @@ const CAMBIOS = [
    - soloMesero: la categoria existe y se puede pedir desde la comanda,
                 pero NO aparece en el menu del comensal. Para lo que no
                 se anuncia: el menu de ninos, precios especiales.
+   - usa:       de qué producto sale, para el stock. Varios platos pueden
+                compartirlo: el asado, el apanado, el junior y la porción
+                salen todos del mismo pollo. El plato que no lo declara es
+                su propio producto. Los mixtos NO lo llevan: sus carnes se
+                escogen al tomar el pedido, así que se descuentan de lo que
+                el mesero eligió.
    - atajo:     lo que se teclea al tomar el pedido. "3p" = 3 pollos.
    - minutos:   cuánto demora, para decirle la verdad al comensal
    - termino:   true si se le puede pedir el término (solo la carne)
@@ -220,11 +264,11 @@ const MENU = [
         cubierto: true,
         guarnicion: ['arroz', 'menestra', 'ensalada', 'platano'],
         platos: [
-            { id: 'p1', nombre: 'Carne Asada',  precio: 3.50, img: 'img/productos/carneasada.webp',    destacado: true, sigla: 'CA', atajo: 'c',  minutos: 8,  termino: true, tarrina: true },
-            { id: 'p2', nombre: 'Chuleta',      precio: 4.00, img: 'img/productos/chuletaas.webp',                      sigla: 'CH', atajo: 'ch', minutos: 10 },
-            { id: 'p3', nombre: 'Costilla',     precio: 5.50, img: 'img/productos/costillaasada.webp',                  sigla: 'CO', atajo: 'co', minutos: 20 },
-            { id: 'p4', nombre: 'Matambre',     precio: 5.00, img: '',                                                  sigla: 'MA', atajo: 'ma', minutos: 15 },
-            { id: 'p5', nombre: 'Pollo Asado',  precio: 3.50, img: 'img/productos/polloasado.webp',    destacado: true, sigla: 'PO', atajo: 'p',  minutos: 15, tarrina: true }
+            { id: 'p1', usa: 'carne', nombre: 'Carne Asada',  precio: 3.50, img: 'img/productos/carneasada.webp',    destacado: true, sigla: 'CA', atajo: 'c',  minutos: 8,  termino: true, tarrina: true },
+            { id: 'p2', usa: 'chuleta', nombre: 'Chuleta',      precio: 4.00, img: 'img/productos/chuletaas.webp',                      sigla: 'CH', atajo: 'ch', minutos: 10 },
+            { id: 'p3', usa: 'costilla', nombre: 'Costilla',     precio: 5.50, img: 'img/productos/costillaasada.webp',                  sigla: 'CO', atajo: 'co', minutos: 20 },
+            { id: 'p4', usa: 'matambre', nombre: 'Matambre',     precio: 5.00, img: '',                                                  sigla: 'MA', atajo: 'ma', minutos: 15 },
+            { id: 'p5', usa: 'pollo', nombre: 'Pollo Asado',  precio: 3.50, img: 'img/productos/polloasado.webp',    destacado: true, sigla: 'PO', atajo: 'p',  minutos: 15, tarrina: true }
         ]
     },
     {
@@ -265,17 +309,17 @@ const MENU = [
         tarrina: true,                      // porción de niño, pero si se la llevan va en tarrina
         guarnicion: ['arroz', 'menestra', 'ensalada', 'platano'],
         platos: [
-            { id: 'j1', nombre: 'Junior de Pollo',   precio: 2.50, sigla: 'JPO', atajo: 'jp',  minutos: 10 },
+            { id: 'j1', usa: 'pollo', nombre: 'Junior de Pollo',   precio: 2.50, sigla: 'JPO', atajo: 'jp',  minutos: 10 },
             // Al junior no se le pide término: es porción de niño y sale como sale
-            { id: 'j2', nombre: 'Junior de Carne',   precio: 2.50, sigla: 'JCA', atajo: 'jc',  minutos: 6 },
-            { id: 'j3', nombre: 'Junior de Chuleta', precio: 2.50, sigla: 'JCH', atajo: 'jch', minutos: 8 },
+            { id: 'j2', usa: 'carne', nombre: 'Junior de Carne',   precio: 2.50, sigla: 'JCA', atajo: 'jc',  minutos: 6 },
+            { id: 'j3', usa: 'chuleta', nombre: 'Junior de Chuleta', precio: 2.50, sigla: 'JCH', atajo: 'jch', minutos: 8 },
             // La hornada sale del horno y los apanados de la sartén: no
             // son de parrilla aunque estén en la misma lista.
-            { id: 'j4', nombre: 'Junior de Hornada',        precio: 2.50, atajo: 'jho',
+            { id: 'j4', usa: 'chancho', nombre: 'Junior de Hornada',        precio: 2.50, atajo: 'jho',
               estacion: 'cocina', guarnicion: ['arroz', 'ensalada', 'patacones'] },
-            { id: 'j5', nombre: 'Junior de Pollo Apanado',  precio: 3.00, atajo: 'jap',
+            { id: 'j5', usa: 'pollo', nombre: 'Junior de Pollo Apanado',  precio: 3.00, atajo: 'jap',
               estacion: 'cocina', guarnicion: ['arroz', 'ensalada', 'patacones'] },
-            { id: 'j6', nombre: 'Junior de Carne Apanada',  precio: 3.00, atajo: 'jac',
+            { id: 'j6', usa: 'carne', nombre: 'Junior de Carne Apanada',  precio: 3.00, atajo: 'jac',
               estacion: 'cocina', guarnicion: ['arroz', 'ensalada', 'patacones'] }
         ]
     },
@@ -289,7 +333,7 @@ const MENU = [
         cubierto: true,
         guarnicion: ['arroz', 'ensalada', 'patacones'],
         platos: [
-            { id: 'h1', nombre: 'Chancho al Horno', precio: 5.00, img: 'img/productos/chanchoalhorno.webp', atajo: 'ho' }
+            { id: 'h1', usa: 'chancho', nombre: 'Chancho al Horno', precio: 5.00, img: 'img/productos/chanchoalhorno.webp', atajo: 'ho' }
         ]
     },
     {
@@ -302,8 +346,8 @@ const MENU = [
         cubierto: true,
         guarnicion: ['arroz', 'ensalada', 'patacones'],
         platos: [
-            { id: 'a1', nombre: 'Pollo Apanado', precio: 5.00, img: 'img/productos/polloap.webp', atajo: 'ap' },
-            { id: 'a2', nombre: 'Carne Apanada', precio: 5.00, img: 'img/productos/carneap.webp', atajo: 'ac' }
+            { id: 'a1', usa: 'pollo', nombre: 'Pollo Apanado', precio: 5.00, img: 'img/productos/polloap.webp', atajo: 'ap' },
+            { id: 'a2', usa: 'carne', nombre: 'Carne Apanada', precio: 5.00, img: 'img/productos/carneap.webp', atajo: 'ac' }
         ]
     },
     {
@@ -316,8 +360,8 @@ const MENU = [
         cubierto: true,
         guarnicion: ['arroz', 'ensalada', 'patacones'],
         platos: [
-            { id: 'c1', nombre: 'Camarón Apanado',   precio: 6.00, img: 'img/productos/camaronap.webp',     atajo: 'ka' },
-            { id: 'c2', nombre: 'Camarón al Ajillo', precio: 6.00, img: 'img/productos/camaronajillo.webp', atajo: 'kj' }
+            { id: 'c1', usa: 'camaron', nombre: 'Camarón Apanado',   precio: 6.00, img: 'img/productos/camaronap.webp',     atajo: 'ka' },
+            { id: 'c2', usa: 'camaron', nombre: 'Camarón al Ajillo', precio: 6.00, img: 'img/productos/camaronajillo.webp', atajo: 'kj' }
         ]
     },
     {
@@ -330,9 +374,9 @@ const MENU = [
         cubierto: true,
         guarnicion: ['arroz', 'ensalada', 'patacones'],
         platos: [
-            { id: 'f1', nombre: 'Pescado Apanado',      precio: 5.00, img: 'img/productos/pescadoap.webp',      atajo: 'pa' },
-            { id: 'f2', nombre: 'Pescado al Ajillo',    precio: 6.00, img: 'img/productos/pescadoalajillo.webp', atajo: 'pj' },
-            { id: 'f3', nombre: 'Pescado a la Plancha', precio: 5.00, img: 'img/productos/pescadoplancha.webp',  atajo: 'pp' }
+            { id: 'f1', usa: 'pescado', nombre: 'Pescado Apanado',      precio: 5.00, img: 'img/productos/pescadoap.webp',      atajo: 'pa' },
+            { id: 'f2', usa: 'pescado', nombre: 'Pescado al Ajillo',    precio: 6.00, img: 'img/productos/pescadoalajillo.webp', atajo: 'pj' },
+            { id: 'f3', usa: 'pescado', nombre: 'Pescado a la Plancha', precio: 5.00, img: 'img/productos/pescadoplancha.webp',  atajo: 'pp' }
         ]
     },
     {
@@ -345,7 +389,7 @@ const MENU = [
         cubierto: true,
         platos: [
             { id: 'e1', nombre: 'Carbonara',            precio: 7.00, img: '',                                   atajo: 'cb' },
-            { id: 'e2', nombre: 'Espagueti de Camarón', precio: 7.00, img: 'img/productos/espagueticamaron.webp', atajo: 'ek' }
+            { id: 'e2', usa: 'camaron', nombre: 'Espagueti de Camarón', precio: 7.00, img: 'img/productos/espagueticamaron.webp', atajo: 'ek' }
         ]
     },
     {
@@ -380,13 +424,13 @@ const MENU = [
         estilo: 'lista',
         estacion: 'asador',       // estas sí van a la parrilla
         platos: [
-            { id: 'q1', nombre: 'Porción de Pollo',    precio: 2.00, atajo: 'qp',  minutos: 15 },
-            { id: 'q2', nombre: 'Porción de Carne',    precio: 2.00, atajo: 'qc',  minutos: 8, termino: true },
-            { id: 'q3', nombre: 'Porción de Chuleta',  precio: 2.50, atajo: 'qch', minutos: 10 },
-            { id: 'q4', nombre: 'Porción de Matambre', precio: 3.50, atajo: 'qma', minutos: 15 },
-            { id: 'q5', nombre: 'Porción de Costilla', precio: 4.00, atajo: 'qco', minutos: 20 },
+            { id: 'q1', usa: 'pollo', nombre: 'Porción de Pollo',    precio: 2.00, atajo: 'qp',  minutos: 15 },
+            { id: 'q2', usa: 'carne', nombre: 'Porción de Carne',    precio: 2.00, atajo: 'qc',  minutos: 8, termino: true },
+            { id: 'q3', usa: 'chuleta', nombre: 'Porción de Chuleta',  precio: 2.50, atajo: 'qch', minutos: 10 },
+            { id: 'q4', usa: 'matambre', nombre: 'Porción de Matambre', precio: 3.50, atajo: 'qma', minutos: 15 },
+            { id: 'q5', usa: 'costilla', nombre: 'Porción de Costilla', precio: 4.00, atajo: 'qco', minutos: 20 },
             // El chancho sale del horno, no de la parrilla
-            { id: 'q6', nombre: 'Porción de Chancho',  precio: 3.50, atajo: 'qho', estacion: 'cocina' }
+            { id: 'q6', usa: 'chancho', nombre: 'Porción de Chancho',  precio: 3.50, atajo: 'qho', estacion: 'cocina' }
         ]
     },
     {

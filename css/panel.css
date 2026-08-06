@@ -377,6 +377,63 @@
     border-top: 1px solid #2a2a2a;
 }
 
+/* ---------- Lo que hay hoy ----------
+
+   El número va por producto, no por plato. La fila enseña de qué platos
+   come ese producto: sin eso, "Pollo 12" no dice que el apanado y la
+   porción salen de ahí mismo. */
+
+.fila-stock {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid #222;
+}
+
+.fila-stock:last-child { border-bottom: none; }
+
+.stock-nom { font-size: 0.95rem; font-weight: 500; min-width: 0; }
+.stock-nom em {
+    display: block;
+    font-style: normal;
+    font-size: 0.72rem;
+    color: #666;
+    margin-top: 3px;
+}
+
+.stock-der { display: flex; align-items: center; gap: 10px; flex: none; }
+
+.in-stock {
+    width: 68px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.95rem;
+    text-align: center;
+    padding: 8px 4px;
+}
+
+.stock-libre   { font-size: 0.74rem; color: #666; }
+.stock-quedan  { font-size: 0.78rem; color: #FFC107; font-weight: 600; }
+.stock-cero    { font-size: 0.78rem; color: #ff5252; font-weight: 700; }
+.stock-vencido { font-size: 0.74rem; color: #888; font-style: italic; }
+
+.fila-stock.en-cero .in-stock { border-color: #7a2020; }
+
+/* La pista bajo el nombre del plato: dónde vive su número */
+.plato-stock {
+    display: block;
+    font-size: 0.7rem;
+    color: #666;
+    margin-top: 2px;
+}
+.plato-stock.con-poco { color: #FFC107; }
+.plato-stock.en-cero  { color: #ff5252; font-weight: 600; }
+
 /* ---------- Editor del menú ---------- */
 
 .fila-plato {

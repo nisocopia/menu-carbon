@@ -270,6 +270,14 @@ function escucharNube() {
         Store.aplicarOverridesRemotos(datos);
         renderEditorMenu();
     });
+
+    /* Lo que hay hoy también viaja: si el gerente lo pone desde el
+       celular, el panel de la caja se entera sin recargar. */
+    Nube.escuchar('menu/stock', datos => {
+        Store.aplicarStockRemoto(datos);
+        renderStock();
+        renderEditorMenu();
+    });
 }
 
 /* ------------------------------------------------------------
@@ -413,6 +421,138 @@ function renderPedidos() {
    EDITOR DEL MENÚ
    ============================================================ */
 
+/* ============================================================
+   LO QUE HAY HOY
+
+   Se cuenta POR PRODUCTO. Del mismo pollo salen el asado, el apanado,
+   el junior y la porción: si se ponen cuatro números sueltos, el
+   sistema deja vender cuatro veces el mismo pollo.
+
+   Es otra cosa que el botón Agotado de abajo. Ese apaga UN plato — se
+   acabó la apanadura y cae el apanado, pero el pollo asado sigue
+   vendiéndose. Los dos conviven.
+   ============================================================ */
+
+/** Qué platos comen de cada producto, para poder decírselo al gerente. */
+function platosDelProducto(producto) {
+    return Store.getPlatos()
+        .filter(p => (p.usa || p.id) === producto)
+        .map(p => p.nombre);
+}
+
+function renderStock() {
+    const caja = document.getElementById('stock-hoy');
+    if (!caja) return;
+
+    const guardado = Store.getStock();
+    const productos = typeof PRODUCTOS !== 'undefined' ? PRODUCTOS : {};
+
+    const fila = (clave, titulo, comen) => {
+        const s = guardado[clave];
+        const quedan = Servicio.quedanDe(clave);
+        const hay = s && typeof s.hay === 'number' ? s.hay : '';
+
+        /* Un número puesto ayer no vale hoy: si no se vuelve a poner, el
+           plato se vende sin límite. Al revés, el local abriría el jueves
+           sin poder vender pollo porque el domingo se acabó. */
+        const vencido = s && quedan === null;
+
+        const estado = vencido  ? '<span class="stock-vencido">el de ayer venció</span>'
+                     : quedan === null ? '<span class="stock-libre">sin límite</span>'
+                     : quedan === 0    ? '<span class="stock-cero">se acabó</span>'
+                     : `<span class="stock-quedan">quedan ${quedan}</span>`;
+
+        return `
+            <div class="fila-stock ${quedan === 0 ? 'en-cero' : ''}">
+                <div class="stock-nom">
+                    ${titulo}
+                    ${comen.length > 1 ? `<em>${comen.join(' · ')}</em>` : ''}
+                </div>
+                <div class="stock-der">
+                    ${estado}
+                    <input class="in-stock" type="number" min="0" step="1" placeholder="—"
+                           value="${hay}" data-stock="${clave}">
+                </div>
+            </div>`;
+    };
+
+    // Primero los productos compartidos, que son los que importan
+    const compartidos = Object.keys(productos)
+        .map(k => fila(k, productos[k], platosDelProducto(k)))
+        .join('');
+
+    /* Y cualquier otro plato al que ya se le haya puesto un número. Los
+       demás se le ponen desde su propia fila, más abajo en el editor. */
+    const sueltos = Object.keys(guardado)
+        .filter(k => !productos[k])
+        .map(k => {
+            const p = Store.findPlato(k);
+            return fila(k, p ? p.nombre : k, []);
+        }).join('');
+
+    caja.innerHTML = `
+        <div class="bloque">
+            <div class="bloque-head">
+                <h2>Lo que hay hoy</h2>
+                <button class="btn-texto" id="btn-borrar-stock">Quitar todos los números</button>
+            </div>
+            <p class="ayuda">
+                Pon un número solo en lo que esté escaso. Lo que dejes vacío se vende
+                sin límite, como siempre. Del mismo pollo salen el asado, el apanado,
+                el junior y la porción: por eso el número es uno solo para los cuatro.
+                <b>Al día siguiente hay que ponerlo de nuevo</b> — un número viejo
+                dejaría el local sin poder vender sin que nadie sepa por qué.
+            </p>
+            ${compartidos}${sueltos}
+        </div>`;
+}
+
+function conectarStock() {
+    const caja = document.getElementById('stock-hoy');
+    if (!caja) return;
+
+    caja.addEventListener('change', e => {
+        const campo = e.target.closest('[data-stock]');
+        if (!campo) return;
+        Store.setStock(campo.dataset.stock, campo.value === '' ? null : campo.value);
+        publicarStockDelPanel();
+        renderStock();
+        renderEditorMenu();
+    });
+
+    caja.addEventListener('click', e => {
+        if (!e.target.closest('#btn-borrar-stock')) return;
+        if (!confirm('¿Quitar todos los números? Todo vuelve a venderse sin límite.')) return;
+        Object.keys(Store.getStock()).forEach(k => Store.setStock(k, null));
+        publicarStockDelPanel();
+        renderStock();
+        renderEditorMenu();
+    });
+}
+
+/** El número que ve la carta del comensal, que no puede restar sola. */
+function publicarStockDelPanel() {
+    Store.publicarEspejo(Servicio.quedanTodos());
+}
+
+/**
+ * El renglón chico bajo el nombre del plato.
+ *
+ * Un plato que comparte producto no lleva su propio número: se lo pone
+ * arriba, en "Lo que hay hoy". Hay que decirlo, o el gerente va a buscar
+ * la casilla del pollo asado y no la va a encontrar.
+ */
+function pistaDeStock(p) {
+    if (!p.usa) return '';
+    const quedan = Servicio.quedanDe(p.usa);
+    const nombre = Servicio.nombreProducto(p.usa);
+    return quedan === null
+        ? `<span class="plato-stock">sale del ${nombre.toLowerCase()}</span>`
+        : `<span class="plato-stock ${quedan === 0 ? 'en-cero' : 'con-poco'}">
+               ${nombre.toLowerCase()}: ${quedan === 0 ? 'se acabó' : 'quedan ' + quedan}
+           </span>`;
+}
+
 function renderEditorMenu() {
     const menu = Store.getMenu();
 
@@ -423,6 +563,7 @@ function renderEditorMenu() {
                 <div class="fila-plato ${p.agotado ? 'agotado' : ''}">
                     <input class="in-nombre" type="text" value="${p.nombre.replace(/"/g, '&quot;')}"
                            data-campo="nombre" data-id="${p.id}">
+                    ${pistaDeStock(p)}
                     <div class="fila-acciones">
                         <div class="in-precio-wrap">
                             <span>${cfgPanel.moneda || '$'}</span>
@@ -621,6 +762,7 @@ function renderTodo() {
     renderCabecera();
     renderResumenDia();
     renderPedidos();
+    renderStock();
     renderEditorMenu();
     renderNumeros();
     renderFormLocal();
@@ -633,6 +775,7 @@ function renderTodo() {
 document.addEventListener('DOMContentLoaded', () => {
     conectarTabs();
     conectarEditor();
+    conectarStock();
 
     // Con nube se entra con correo y clave; sin nube, solo con la clave
     if (Nube.activo) {

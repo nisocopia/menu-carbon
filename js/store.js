@@ -10,6 +10,8 @@ const Store = (() => {
     const NS = 'menu_';
     const K = {
         overrides: NS + 'overrides',   // cambios de precio / agotados hechos por el gerente
+        stock:     NS + 'stock',       // cuánto hay de cada producto, puesto por el gerente
+        espejo:    NS + 'stock_visto', // cuántos quedan, publicado para la carta del comensal
         config:    NS + 'config',      // datos del local editados desde el panel
         pedidos:   NS + 'pedidos',     // historial de pedidos
         vistas:    NS + 'vistas',      // cuántas veces se vio cada plato
@@ -121,6 +123,60 @@ const Store = (() => {
     function aplicarConfigRemota(c) {
         if (c) write(K.config, c);
     }
+
+    /* ---------------- LO QUE HAY EN LA NEVERA ----------------
+
+       Aquí solo se guarda LO QUE PUSO EL GERENTE ("hoy hay 12 pollos") y
+       cuándo lo puso. Cuántos quedan NO se guarda: se resta contra las
+       comandas cada vez que se pregunta.
+
+       Es a propósito. Un número que van bajando cinco celulares a la vez
+       termina mintiendo la noche que dos meseros toquen al mismo tiempo,
+       y anular un pedido no lo devuelve. Una resta da igual en los cinco
+       celulares y devuelve el pollo sola.
+       -------------------------------------------------------- */
+
+    function getStock() { return read(K.stock, {}); }
+
+    /**
+     * Cuánto hay de un producto. `hay` en null o vacío = sin límite, que
+     * es como funcionaba todo hasta ahora.
+     *
+     * Se apunta CUÁNDO se puso, y de ahí en adelante se cuenta. Así
+     * "llegaron 10 más" es volver a escribir el número, sin cuentas: lo
+     * vendido antes ya no se le resta.
+     */
+    function setStock(producto, hay) {
+        const s = getStock();
+        if (hay === null || hay === '' || isNaN(hay)) delete s[producto];
+        else s[producto] = { hay: Math.max(0, Math.floor(Number(hay))), puesto: Date.now() };
+        write(K.stock, s);
+        if (typeof Sync !== 'undefined' && Sync.activo && Sync.haySesion()) {
+            Sync.guardar('menu/stock', s);
+        }
+        return s[producto] || null;
+    }
+
+    function aplicarStockRemoto(s) { write(K.stock, s || {}); }
+
+    /* El espejo para la carta del comensal.
+
+       Su celular no puede leer las comandas —son los pedidos de las
+       mesas y no son de él— así que no puede restar. El celular del que
+       toma el pedido publica aquí cuántos quedan y la carta lo lee.
+
+       Si el espejo se atrasa no se vende de más: el pedido del comensal
+       pasa por el mesero, y el mesero sí tiene la cuenta buena. */
+    function getEspejo() { return read(K.espejo, {}); }
+
+    function publicarEspejo(quedan) {
+        write(K.espejo, quedan || {});
+        if (typeof Sync !== 'undefined' && Sync.activo && Sync.haySesion()) {
+            Sync.guardar('stock', quedan || {});
+        }
+    }
+
+    function aplicarEspejoRemoto(q) { write(K.espejo, q || {}); }
 
     function toggleAgotado(platoId) {
         const p = findPlato(platoId);
@@ -390,6 +446,7 @@ const Store = (() => {
         getMenu, getPlatos, findPlato,
         getMenuPublico, getPlatosPublicos,
         setOverride, resetOverrides, toggleAgotado, getOverrides,
+        getStock, setStock, getEspejo, publicarEspejo,
         getCarrito, saveCarrito, limpiarCarrito,
         guardarPedido, getPedidos, getPedidoActivo, cerrarPedidoActivo,
         setEstadoPedido, borrarPedidos,
@@ -397,6 +454,7 @@ const Store = (() => {
         getStats, exportarMenuData,
         // Puentes con la nube
         aplicarOverridesRemotos, aplicarConfigRemota,
+        aplicarStockRemoto, aplicarEspejoRemoto,
         mezclarPedidosRemotos, mezclarVistasRemotas
     };
 })();

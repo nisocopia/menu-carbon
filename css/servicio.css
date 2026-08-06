@@ -524,6 +524,23 @@
 .rapido.otra { border-style: dashed; border-color: #3a3a3a; }
 .rapido.otra .rapido-pre { color: #777; }
 
+/* LO QUE SE ACABÓ NO SE ESCONDE, SE APAGA.
+
+   Un botón que desaparece deja al mesero buscándolo en la lista larga
+   creyendo que se equivocó. Uno apagado le contesta la pregunta que le
+   acaban de hacer en la mesa: ya no hay. */
+.rapido.sin-stock, .tm-plato.sin-stock {
+    opacity: 0.42;
+    border-style: dashed;
+    cursor: not-allowed;
+}
+
+.poco { color: #FFC107; font-weight: 700; }
+.poco.agotado-ya { color: #ff5252; }
+
+.chip.sin-stock { opacity: 0.4; cursor: not-allowed; }
+.chip.sin-stock em { font-style: normal; font-size: 0.78em; color: #ff5252; }
+
 /* ---------- Todo el menú, plegado ---------- */
 
 .todo-menu {
