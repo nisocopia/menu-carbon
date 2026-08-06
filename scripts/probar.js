@@ -2001,6 +2001,36 @@ function probarPantallaDeServir() {
 }
 
 
+
+function probarCuentaDeServir() {
+    console.log('\n' + '--- La cuenta del que sirve, ya creada ---');
+
+    const equipo = fuente('js/menu-data.js');
+    const uid = (equipo.match(/'([A-Za-z0-9]{28})':\s*'servir'/) || [])[1];
+
+    comprobar('esta en EQUIPO con su rol', !!uid, true);
+    comprobar('y su identificador tiene los 28 caracteres',
+        uid ? uid.length : 0, 28);
+
+    /* Un uid repetido daria dos roles a la misma persona y el ultimo
+       ganaria en silencio. Mejor que salte aqui. */
+    const uids = [...equipo.matchAll(/'([A-Za-z0-9]{28})':\s*'\w+'/g)].map(m => m[1]);
+    comprobar('ninguna cuenta esta repetida en la lista',
+        uids.length, new Set(uids).size);
+
+    /* Con la cuenta puesta, el sistema tiene que dejarla entrar a la
+       suya y cerrarle las demas. Antes de crearla esto no se podia
+       comprobar de verdad: el rol no existia en ningun lado. */
+    const { corre } = celular('servir');
+    comprobar('entra a su pantalla',
+        corre(`Servicio.permisoEn('servir')`), 'ver');
+    comprobar('y no a la comanda, la cocina ni la parrilla',
+        corre(`[Servicio.permisoEn('comanda'), Servicio.permisoEn('cocina'), Servicio.permisoEn('asador')]`),
+        ['no', 'no', 'no']);
+    comprobar('no anota ni cobra',
+        corre('[Servicio.puedeAnotar(), Servicio.puedeCobrar()]'), [false, false]);
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -2025,6 +2055,7 @@ async function main() {
     probarTurnosDeMesa();
     probarCubiertosDeLaMesa();
     probarPantallaDeServir();
+    probarCuentaDeServir();
     probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();
