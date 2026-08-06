@@ -141,6 +141,36 @@ const GUARNICIONES = {
 };
 
 /* ------------------------------------------------------------
+   PLATOS QUE SE SIRVEN DE OTRA FORMA
+
+   Quitar no alcanzaba. "Solo patacones y ensalada" en una costilla no
+   es quitar tres cosas: es que entre algo que ese plato NO trae — los
+   patacones son de los platos de cocina, no de la parrilla.
+
+   Se declara POR EL RESULTADO, no por lo que se quita ni por lo que se
+   pone. Así la misma línea sirve para todos los platos: en una costilla
+   se van el arroz, la menestra y el plátano y entran los patacones; en
+   un pescado, que ya viene con patacones y ensalada, solo se va el
+   arroz. No hay que escribir la regla dos veces ni acordarse de cuál
+   plato trae qué.
+
+   Otra forma de servir mañana —"solo arroz y ensalada"— es una línea
+   más aquí, no código nuevo.
+
+   EL PRECIO NO CAMBIA. Una costilla con patacones y ensalada se cobra
+   $5.50, igual que la costilla normal. Es decisión del local: los
+   patacones cuestan más que el arroz que reemplazan.
+   ------------------------------------------------------------ */
+
+const CAMBIOS = [
+    {
+        id: 'pat',
+        etiqueta: 'Solo patacones y ensalada',
+        deja: ['patacones', 'ensalada']
+    }
+];
+
+/* ------------------------------------------------------------
    CATEGORÍAS Y PLATOS
 
    - id:        se usa para el enlace del menú (#parrillas)
@@ -338,7 +368,8 @@ const MENU = [
             { id: 'r1', nombre: 'Arroz',            precio: 1.50, atajo: 'ar', guarnicion: ['arroz'] },
             { id: 'r2', nombre: 'Menestra',         precio: 1.00, atajo: 'me', guarnicion: ['menestra'] },
             { id: 'r3', nombre: 'Arroz y Menestra', precio: 2.00, atajo: 'am', guarnicion: ['arroz', 'menestra'] },
-            { id: 'r4', nombre: 'Patacones',        precio: 2.00, atajo: 'pt', guarnicion: ['patacones'] }
+            { id: 'r4', nombre: 'Patacones',        precio: 2.00, atajo: 'pt', guarnicion: ['patacones'] },
+            { id: 'r5', nombre: 'Plátano',          precio: 2.00, atajo: 'pl', guarnicion: ['platano'] }
         ]
     },
     {

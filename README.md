@@ -269,12 +269,45 @@ crece a mitad de comida.
 Las modificaciones **no** van dentro del código — comprimirlas lo volvería
 ilegible. Van escritas debajo, en palabras.
 
+### Servir el plato de otra forma
+
+Quitar no alcanzaba. El comensal puede pedir su plato **solo con patacones y
+ensalada**, y eso en una parrillada no se puede armar quitando: los patacones
+no están ahí para quitarlos, hay que ponerlos.
+
+Se declara en `menu-data.js`, lista `CAMBIOS`, **por el resultado** y no por
+lo que se quita ni por lo que se pone:
+
+```js
+{ id: 'pat', etiqueta: 'Solo patacones y ensalada', deja: ['patacones', 'ensalada'] }
+```
+
+Así una sola línea sirve para toda la carta: a una costilla se le van el
+arroz, la menestra y el plátano y entran los patacones; a un pescado, que ya
+viene con patacones y ensalada, solo se le va el arroz. Otra forma de servir
+mañana es una línea más, no código nuevo.
+
+Solo se ofrece en platos que alguien se sienta a comer (`cubierto: true`) y
+que traigan acompañantes — una porción de patacones no puede venir "solo con
+patacones y ensalada".
+
+Es **excluyente** con las fichas de "sin ...": o se le quita algo a como
+viene el plato, o se sirve de otra forma. Tocar una apaga la otra, para que a
+la cocina no le lleguen pedidos a medio armar.
+
+**El precio no cambia.** Una costilla con patacón y ensalada se cobra $5.50,
+igual que la normal. Es decisión del local, y cuesta: los patacones valen más
+que el arroz y la menestra que reemplazan.
+
+En la parrilla no se muestra. Al asador no le cambia nada — él saca la
+proteína igual. La que necesita leerlo es la cocina, que es la que emplata.
+
 ### Quién ve qué
 
 | Pantalla | Ve |
 |---|---|
 | **Parrilla** | Solo proteínas. El término y el "para llevar". Nada de guarniciones: no cambian nada en la parrilla. |
-| **Cocina** | El pedido entero, los cubiertos en grande y lo que se le quitó al plato. Esta pantalla también la lee el que sirve. |
+| **Cocina** | El pedido entero, los cubiertos en grande, cómo se sirve el plato y lo que se le quitó. Esta pantalla también la lee el que sirve. |
 | **Comanda** | Todo, más la cuenta. |
 | **Servir** | Las once mesas, los cubiertos de cada una y el turno. Solo lectura. |
 

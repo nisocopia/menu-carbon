@@ -2118,6 +2118,103 @@ function probarLlevarEnServir() {
         /marcarEntregado|registrarPago|enviarComanda|cerrarSesion/.test(js), false);
 }
 
+/* ============================================================
+   SERVIR EL PLATO DE OTRA FORMA
+
+   El gerente abrió una opción nueva: el plato puede salir solo con
+   patacones y ensalada. No se puede armar quitando —los patacones no
+   están en una parrillada para poder quitarlos— así que se guarda por
+   el resultado y de ahí sale todo lo demás.
+   ============================================================ */
+
+function probarFormaDeServir() {
+    console.log('\n--- Solo patacones y ensalada ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    const ofrece = id => corre(`Servicio.cambiosDe('${id}').map(c => c.id)`);
+
+    /* A quién se le ofrece. Una costilla viene con arroz, menestra,
+       ensalada y plátano: el cambio tiene sentido. Un pescado ya viene
+       con patacones y ensalada, pero también con arroz — así que
+       también, solo que ahí el cambio es más corto. */
+    comprobar('la costilla lo puede llevar',  ofrece('p3'), ['pat']);
+    comprobar('el pescado también',           ofrece('f1'), ['pat']);
+    comprobar('y el junior de pollo',         ofrece('j1'), ['pat']);
+
+    /* A quién no. Una porción de pollo es carne sola; una cola no se
+       emplata; y una porción de patacones ya ES patacones — ofrecerle
+       "solo patacones y ensalada" sería un botón que no dice nada. */
+    comprobar('una porción de proteína no',   ofrece('q1'), []);
+    comprobar('una cola tampoco',             ofrece('b3'), []);
+    comprobar('ni la porción de patacones',   ofrece('r4'), []);
+
+    /* Con qué sale el plato al final. Esto es lo que emplata la cocina:
+       no es "sin tres cosas", es un plato armado distinto. */
+    const conQue = (platoId, it) =>
+        corre(`Servicio.guarnicionFinal(${JSON.stringify({ platoId, ...it })}).sort()`);
+
+    comprobar('la costilla normal sale con las cuatro',
+        conQue('p3', {}), ['arroz', 'ensalada', 'menestra', 'platano']);
+    comprobar('con el cambio sale solo con dos',
+        conQue('p3', { cambio: 'pat' }), ['ensalada', 'patacones']);
+    comprobar('y al pescado solo se le va el arroz',
+        conQue('f1', { cambio: 'pat' }), ['ensalada', 'patacones']);
+    comprobar('quitar a mano sigue funcionando igual',
+        conQue('p3', { sin: ['menestra'] }), ['arroz', 'ensalada', 'platano']);
+
+    /* La olla del arroz. Un plato servido de esta forma no lleva arroz,
+       así que no puede seguir contándose como una porción pedida. */
+    corre(`(() => {
+        const t = Servicio.getComandas();
+        t['n1'] = { id: 'n1', sesion: 's1', mesa: 3, creado: 1, estado: 'nuevo', items: [
+            { uid: 'a', platoId: 'p3', nombre: 'Costilla', cantidad: 2, precio: 5.5, estacion: 'asador' },
+            { uid: 'b', platoId: 'p3', nombre: 'Costilla', cantidad: 3, precio: 5.5, estacion: 'asador', cambio: 'pat' }
+        ]};
+        localStorage.setItem('srv_comandas', JSON.stringify(t));
+    })()`);
+    comprobar('las tres con patacones no gastan olla de arroz',
+        corre(`Servicio.arrozPendiente()`), 2);
+
+    /* EL PRECIO NO CAMBIA. Es lo que dijo el dueño con todas sus
+       letras: una costilla con patacón y ensalada se cobra $5.50,
+       igual que la costilla normal. */
+    nubeLimpia();
+    const { corre: c2 } = celular('mesero');
+    c2(`Servicio.enviarComanda({ mesa: 5, items: [
+        { platoId: 'p3', nombre: 'Costilla', precio: 5.50, cantidad: 1, cambio: 'pat' }] })`);
+
+    comprobar('la costilla con patacones cuesta lo mismo',
+        c2(`Servicio.cuentaDeMesa(5).total`), 5.50);
+    comprobar('y el pedido se guarda con la forma en que se sirve',
+        c2(`Object.values(Servicio.getComandas())[0].items[0].cambio`), 'pat');
+    comprobar('la frase que lee la cocina',
+        c2(`Servicio.comoSeSirve({ cambio: 'pat' })`), 'Solo patacones y ensalada');
+    comprobar('un plato normal no dice nada',
+        c2(`Servicio.comoSeSirve({ cambio: '' })`), '');
+
+    /* QUIÉN LO VE. Lo dijo el dueño: al asador no le importa si va con
+       patacones o sin menestra, él saca la proteína. La que necesita
+       saberlo es la cocina, que es la que emplata y adorna. */
+    const est = fuente('js/estacion.js');
+    comprobar('la forma de servir se muestra solo en cocina',
+        /ESTACION === 'cocina' && it\.cambio/.test(est), true);
+
+    /* Y que no queden pedidos a medio armar: o se quita algo de como
+       viene el plato, o se sirve de otra forma. Las dos a la vez la
+       cocina no las puede leer. */
+    const com = fuente('js/comanda.js');
+    comprobar('elegir la forma borra lo que se había quitado',
+        /if \(it\.cambio\) it\.sin = \[\];/.test(com), true);
+    comprobar('y quitar algo borra la forma',
+        /it\.cambio = '';\s*\/\/ o se quita/.test(com), true);
+
+    // La porción nueva que pidió el gerente
+    comprobar('existe la porción de plátano a $2.00',
+        c2(`(() => { const p = Store.findPlato('r5'); return [p.nombre, p.precio]; })()`),
+        ['Plátano', 2]);
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -2145,6 +2242,7 @@ async function main() {
     probarCuentaDeServir();
     probarPorQueNoEntro();
     probarLlevarEnServir();
+    probarFormaDeServir();
     probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();

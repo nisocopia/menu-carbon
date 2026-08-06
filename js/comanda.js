@@ -550,7 +550,8 @@ function agregarAlBorrador(plato, cantidad) {
        suma al arroz que la cocina ya tiene contado — hace su propia
        línea, y esa saldrá como tanda aparte. */
     const igual = borrador.find(i => i.platoId === plato.id && !i.bloqueado && !i.sin.length &&
-                                     !i.termino && i.llevar === paraLlevar && !i.nota && !i.elegidas.length &&
+                                     !i.cambio && !i.termino && i.llevar === paraLlevar &&
+                                     !i.nota && !i.elegidas.length &&
                                      !(saleAparte(plato.id) && yaVenia(i)));
     if (igual) {
         igual.cantidad += (cantidad || 1);
@@ -561,7 +562,7 @@ function agregarAlBorrador(plato, cantidad) {
             nombre: plato.nombre,
             precio: plato.precio,
             cantidad: cantidad || 1,
-            sin: [], termino: '', llevar: paraLlevar, nota: '', elegidas: []
+            sin: [], cambio: '', termino: '', llevar: paraLlevar, nota: '', elegidas: []
         });
     }
     pintarBorrador();
@@ -711,6 +712,7 @@ function detalleItem(it, faltaElegir) {
     const partes = [];
     if (it.elegidas.length) partes.push(it.elegidas.map(id => (Store.findPlato(id) || {}).nombre).join(' + '));
     if (faltaElegir)        partes.push('<b class="falta">falta elegir las carnes</b>');
+    if (it.cambio)          partes.push(Servicio.comoSeSirve(it));
     if (it.sin.length)      partes.push(it.sin.map(g => 'sin ' + (GUARNICIONES[g] || g)).join(' · '));
     if (it.termino)         partes.push(it.termino);
     if (it.llevar)          partes.push('🥡 para llevar');
@@ -751,15 +753,29 @@ function abrirMod(uid) {
     }
 
     if (guarnicion.length) {
+        /* Las dos formas de tocar el acompañante van juntas y son
+           excluyentes: o se le quita algo a como viene, o se sirve de
+           otra forma. Mezclarlas dejaba pedidos a medio armar —"sin
+           arroz" más "solo patacones y ensalada"— que la cocina tenía
+           que adivinar. Tocar una apaga la otra. */
+        const cambios = Servicio.cambiosDe(it.platoId);
+
         bloques.push(`
             <div class="mod-bloque">
-                <h3>Quitar</h3>
+                <h3>Acompañantes</h3>
                 <div class="mod-chips">
                     ${guarnicion.map(g => `
                         <button class="chip ${it.sin.includes(g) ? 'on' : ''}" data-sin="${g}">
                             sin ${GUARNICIONES[g] || g}
                         </button>`).join('')}
                 </div>
+                ${cambios.length ? `
+                    <div class="mod-chips">
+                        ${cambios.map(c => `
+                            <button class="chip grande forma ${it.cambio === c.id ? 'on' : ''}" data-cambio="${c.id}">
+                                ${c.etiqueta}
+                            </button>`).join('')}
+                    </div>` : ''}
                 <p class="mod-nota">El precio no cambia: la cocina aumenta lo demás.</p>
             </div>`);
     }
@@ -880,7 +896,7 @@ function abrirEdicion(id) {
         .filter(it => !it.automatico)          // la tarrina se recalcula sola
         .map(it => ({
             ...it,
-            sin: it.sin || [], elegidas: it.elegidas || [],
+            sin: it.sin || [], cambio: it.cambio || '', elegidas: it.elegidas || [],
             bloqueado: modo === 'agregados' && !Servicio.editableSiempre(it.platoId)
         }));
 
@@ -1366,6 +1382,15 @@ function conectarEventos() {
         if (sin && it) {
             const g = sin.dataset.sin;
             it.sin = it.sin.includes(g) ? it.sin.filter(x => x !== g) : [...it.sin, g];
+            it.cambio = '';                       // o se quita, o se sirve de otra forma
+            abrirMod(editando);
+            return;
+        }
+
+        const cambio = t.closest('[data-cambio]');
+        if (cambio && it) {
+            it.cambio = (it.cambio === cambio.dataset.cambio) ? '' : cambio.dataset.cambio;
+            if (it.cambio) it.sin = [];
             abrirMod(editando);
             return;
         }

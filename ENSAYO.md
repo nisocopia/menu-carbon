@@ -62,6 +62,18 @@ Cierra con Listo y Enviar.
 - [ ] **Cocina:** ve las dos cosas
 - [ ] **Cocina:** dice **0 cubiertos** (todo es para llevar)
 
+## 3b. Un plato solo con patacones y ensalada
+
+**En el celular del mesero:** mesa 7, escribe `1co`. Toca el renglón
+*Costilla* y marca **Solo patacones y ensalada** (la ficha con la barra
+amarilla). Listo y Enviar.
+
+- [ ] Al marcarla, si había alguna ficha de "sin ..." encendida, **se apaga**
+- [ ] **Cocina:** el renglón dice **SOLO PATACONES Y ENSALADA**
+- [ ] **Asador:** ve la costilla y **no** dice nada de patacones
+- [ ] La costilla sigue costando **$5.50** en la cuenta
+- [ ] El contador de arroz de la cocina **no** subió por esa costilla
+
 ## 4. Una segunda tanda
 
 **En el celular del mesero:** vuelve a la mesa 3, escribe `1ar` y Enviar.

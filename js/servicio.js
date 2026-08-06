@@ -331,6 +331,59 @@ const Servicio = (() => {
     }
 
     /* ------------------------------------------------------------
+       SERVIR EL PLATO DE OTRA FORMA
+
+       "Solo patacones y ensalada" no se puede armar quitando: en una
+       parrillada los patacones no están para quitarlos, hay que
+       ponerlos. Por eso el cambio se guarda como lo que el plato queda
+       llevando, y de ahí sale todo lo demás.
+       ------------------------------------------------------------ */
+
+    const listaCambios = () => (typeof CAMBIOS !== 'undefined' && CAMBIOS) || [];
+
+    const cambioPorId = id => listaCambios().find(c => c.id === id) || null;
+
+    /**
+     * Las formas de servir que de verdad cambian algo en ESTE plato.
+     *
+     * Se piden tres cosas, y cada una quita un botón que no serviría:
+     *
+     *   - Que sea un plato que se arma. Una porción de patacones tiene
+     *     guarnición —ella misma— pero "solo patacones y ensalada" en
+     *     una porción de patacones no quiere decir nada. Por eso se pide
+     *     el mismo 'cubierto' que ya marca los platos que alguien se
+     *     sienta a comer.
+     *   - Que traiga acompañantes. Una porción de pollo o una cola no.
+     *   - Que el cambio no sea lo que el plato ya trae.
+     */
+    function cambiosDe(platoId) {
+        const base = guarnicionDe(platoId);
+        const cat  = categoriaDe(platoId);
+        if (!base.length || !(cat && cat.cubierto)) return [];
+
+        const iguales = (a, b) =>
+            a.length === b.length && a.every(x => b.includes(x));
+
+        return listaCambios().filter(c => !iguales(c.deja, base));
+    }
+
+    /**
+     * Con qué se sirve el plato al final, ya contando lo que se le quitó
+     * o la forma en que se pidió. Es lo que la cocina tiene que emplatar.
+     */
+    function guarnicionFinal(it) {
+        const cam = it.cambio && cambioPorId(it.cambio);
+        if (cam) return cam.deja.slice();
+        return guarnicionDe(it.platoId).filter(g => !(it.sin || []).includes(g));
+    }
+
+    /** La frase que lee la cocina. Vacía si el plato va como siempre. */
+    function comoSeSirve(it) {
+        const cam = it.cambio && cambioPorId(it.cambio);
+        return cam ? cam.etiqueta : '';
+    }
+
+    /* ------------------------------------------------------------
        CUÁNTO ARROZ HAY QUE TENER LISTO
 
        El problema de siempre: las proteínas salen y el arroz sigue
@@ -342,13 +395,12 @@ const Servicio = (() => {
        entra un pedido grande —que es justo cuando hay que poner la
        olla— y baja cuando la cocina marca entregado.
 
-       Se cuenta por la guarnición que ya declara cada categoría en
-       menu-data.js, así que un plato pedido "sin arroz" no cuenta, y el
-       arroz suelto de porciones sí.
+       Se cuenta por la guarnición con la que el plato SALE, así que un
+       plato pedido "sin arroz" —o servido solo con patacones y
+       ensalada— no cuenta, y el arroz suelto de porciones sí.
        ------------------------------------------------------------ */
 
-    const llevaArroz = it =>
-        guarnicionDe(it.platoId).includes('arroz') && !(it.sin || []).includes('arroz');
+    const llevaArroz = it => guarnicionFinal(it).includes('arroz');
 
     function arrozPendiente() {
         return Object.values(getComandas())
@@ -687,6 +739,7 @@ const Servicio = (() => {
         cantidad: it.cantidad,
         estacion: estacionDe(it.platoId),
         sin: it.sin || [],               // guarniciones que se quitan
+        cambio: it.cambio || '',         // servido de otra forma (solo patacones y ensalada)
         termino: it.termino || '',
         llevar: !!it.llevar,
         nota: it.nota || '',
@@ -1511,7 +1564,8 @@ const Servicio = (() => {
                 // El panel espera 'id' donde la comanda guarda 'platoId'
                 items: (c.items || []).map(it => ({
                     id: it.platoId, nombre: it.nombre, precio: it.precio,
-                    cantidad: it.cantidad, llevar: it.llevar, sin: it.sin, termino: it.termino
+                    cantidad: it.cantidad, llevar: it.llevar, sin: it.sin,
+                    cambio: it.cambio, termino: it.termino
                 })),
                 total: totalDe(c.items)
             }))
@@ -1585,6 +1639,7 @@ const Servicio = (() => {
         sesionDeMesa, sesionesAbiertasDeMesa, cuentaDeSesion, cuentaDeMesa, pagosDeSesion,
         cubiertosDeSesion, turnosDeSesion,
         estacionDe, guarnicionDe, arrozPendiente, categoriaDe, codigoDe, etiquetaDe,
+        cambiosDe, guarnicionFinal, comoSeSirve,
         cubiertosDe, nombreCorto, resumirItems,
         // una cuenta: una mesa o un pedido para llevar
         sesionesDe, tandasDe, cuentaDe, nombreDeCuenta, llevarAbiertos, llevarPorNombre,
