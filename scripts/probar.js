@@ -2031,6 +2031,33 @@ function probarCuentaDeServir() {
         corre('[Servicio.puedeAnotar(), Servicio.puedeCobrar()]'), [false, false]);
 }
 
+
+function probarPorQueNoEntro() {
+    console.log('\n' + '--- Cuando no deja entrar, dice por que ---');
+    const sync = fuente('js/sync.js');
+
+    /* Decirle "correo o clave incorrectos" a todo es mentir la mitad de
+       las veces, y deja a la persona probando la clave contra una pared
+       cuando el problema era otro. */
+    [['EMAIL_NOT_FOUND', 'no esta registrado'],
+     ['USER_DISABLED', 'desactivada'],
+     ['TOO_MANY_ATTEMPTS_TRY_LATER', 'intentos'],
+     ['OPERATION_NOT_ALLOWED', 'Firebase']].forEach(([codigo, pista]) => {
+        const linea = sync.split('\n').find(l => l.includes(codigo + ':'));
+        comprobar(codigo + ' se explica', !!linea && linea.includes(pista), true);
+    });
+
+    // Un codigo que no esta en la lista se muestra tal cual, no se traga
+    comprobar('un codigo desconocido se muestra tal cual',
+        /No se pudo entrar/.test(sync), true);
+
+    // Y las pantallas dejan de tener cada una su propio mensaje
+    ['js/servir.js', 'js/estacion.js', 'js/panel.js'].forEach(f => {
+        comprobar(f + ' usa el motivo comun',
+            /porQueNoEntro/.test(fuente(f)), true);
+    });
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -2056,6 +2083,7 @@ async function main() {
     probarCubiertosDeLaMesa();
     probarPantallaDeServir();
     probarCuentaDeServir();
+    probarPorQueNoEntro();
     probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();
