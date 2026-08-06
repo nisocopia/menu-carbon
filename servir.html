@@ -19,9 +19,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Servir">
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608060043">
-    <link rel="stylesheet" href="css/iconos.css?v=202608060043">
-    <link rel="stylesheet" href="css/servicio.css?v=202608060043">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608060105">
+    <link rel="stylesheet" href="css/iconos.css?v=202608060105">
+    <link rel="stylesheet" href="css/servicio.css?v=202608060105">
 </head>
 
 <body class="srv-body estacion">
@@ -51,6 +51,10 @@
          que van los cubiertos. -->
     <main class="servir-grid" id="mesas"></main>
 
+    <!-- Los pedidos hechos con "Pedido para llevar" no tienen mesa y no
+         caben en la rejilla, pero tambien llevan cubiertos y aderezos. -->
+    <section class="llevar-servir" id="llevar" hidden></section>
+
     <!-- Solo sale cuando el navegador de verdad puede instalarla. Un
          botón que a veces no hace nada es peor que no tenerlo. -->
     <button class="srv-instalar" id="btn-instalar" hidden>
@@ -79,12 +83,12 @@
 
     <div class="srv-toast" id="toast"></div>
 
-    <script src="js/menu-data.js?v=202608060043"></script>
-    <script src="js/sync.js?v=202608060043"></script>
-    <script src="js/store.js?v=202608060043"></script>
-    <script src="js/servicio.js?v=202608060043"></script>
-    <script src="js/servir.js?v=202608060043"></script>
-    <script src="js/pwa.js?v=202608060043"></script>
+    <script src="js/menu-data.js?v=202608060105"></script>
+    <script src="js/sync.js?v=202608060105"></script>
+    <script src="js/store.js?v=202608060105"></script>
+    <script src="js/servicio.js?v=202608060105"></script>
+    <script src="js/servir.js?v=202608060105"></script>
+    <script src="js/pwa.js?v=202608060105"></script>
 
 </body>
 

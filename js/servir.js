@@ -149,6 +149,59 @@ function pintar() {
     }
 
     $('mesas').innerHTML = html.join('');
+    pintarLlevar(turnos);
+}
+
+/**
+ * Los pedidos hechos con el boton "Pedido para llevar".
+ *
+ * No tienen mesa, asi que no caben en la rejilla y hasta ahora no se
+ * veian por ningun lado — pero tambien llevan cubiertos y aderezos, y
+ * el que sirve se los estaba encontrando de sorpresa.
+ *
+ * Van en la MISMA fila de turnos que las mesas, no en una aparte: es el
+ * mismo trabajo y el mismo viaje a la gaveta. Ademas asi dejan de faltar
+ * numeros — al llevarse el ② una funda, en la rejilla se veia el ① y el
+ * ③ sin nada en medio.
+ */
+function pintarLlevar(turnos) {
+    const caja = $('llevar');
+    if (!caja) return;
+
+    const pedidos = Servicio.llevarAbiertos();
+    if (!pedidos.length) { caja.hidden = true; return; }
+
+    caja.hidden = false;
+    caja.innerHTML = `
+        <h2 class="llevar-titulo"><i class="fas fa-bag-shopping"></i> Para llevar</h2>
+        <div class="llevar-lista">
+            ${pedidos.map(s => {
+                const platos = platosDe(s.id);
+                return `
+                <button class="sllevar" data-sesion="${s.id}">
+                    <span class="smesa-turno">${turnos[s.id] || '·'}</span>
+                    <span class="sllevar-nom">${s.nombre || 'Sin nombre'}</span>
+                    <span class="sllevar-platos">${platos} ${platos === 1 ? 'plato' : 'platos'}</span>
+                </button>`;
+            }).join('')}
+        </div>`;
+}
+
+/**
+ * Cuantos platos fuertes lleva la cuenta.
+ *
+ * No se usan los "cubiertos" a proposito: esos dejan fuera lo que va
+ * para llevar —el que se lo lleva no se sienta a comer— y en una funda
+ * entera darian siempre cero. Aqui lo que hace falta es saber cuanta
+ * comida es.
+ */
+function platosDe(sesionId) {
+    return Servicio.comandasDeSesion(sesionId)
+        .filter(c => c.estado !== 'anulado')
+        .reduce((n, c) => n + c.items.reduce((m, it) => {
+            const cat = Servicio.categoriaDe(it.platoId);
+            return cat && cat.cubierto ? m + it.cantidad : m;
+        }, 0), 0);
 }
 
 /* ============================================================
@@ -158,11 +211,21 @@ function pintar() {
 function verMesa(n) {
     const sesion = Servicio.sesionDeMesa(n);
     if (!sesion) return;
-
-    const tandas = Servicio.comandasDeSesion(sesion.id).filter(c => c.estado !== 'anulado');
     const cubiertos = Servicio.cubiertosDeSesion(sesion.id);
+    verCuenta(sesion.id, `Mesa ${n} · ${cubiertos} ${cubiertos === 1 ? 'cubierto' : 'cubiertos'}`);
+}
 
-    $('hoja-titulo').textContent = `Mesa ${n} · ${cubiertos} ${cubiertos === 1 ? 'cubierto' : 'cubiertos'}`;
+function verLlevar(sesionId) {
+    const s = Servicio.llevarAbiertos().find(x => x.id === sesionId);
+    if (!s) return;
+    const platos = platosDe(sesionId);
+    verCuenta(sesionId, `${s.nombre || 'Sin nombre'} · ${platos} ${platos === 1 ? 'plato' : 'platos'}`);
+}
+
+function verCuenta(sesionId, titulo) {
+    const tandas = Servicio.comandasDeSesion(sesionId).filter(c => c.estado !== 'anulado');
+
+    $('hoja-titulo').textContent = titulo;
 
     $('hoja-cuerpo').innerHTML = tandas.length ? tandas.map(c => `
         <div class="vmesa-tanda ${c.estado === 'entregado' ? 'servida' : ''}">
@@ -185,7 +248,7 @@ function verMesa(n) {
             </ul>
             ${c.nota ? `<div class="vmesa-nota">${c.nota}</div>` : ''}
         </div>`).join('')
-        : '<p class="hoja-nota">Esta mesa todavía no ha pedido nada.</p>';
+        : '<p class="hoja-nota">Todavía no ha pedido nada.</p>';
 
     $('hoja-mesa').classList.add('open');
 }
@@ -211,7 +274,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.addEventListener('click', e => {
         const mesa = e.target.closest('[data-mesa]');
-        if (mesa) verMesa(Number(mesa.dataset.mesa));
+        if (mesa) return verMesa(Number(mesa.dataset.mesa));
+
+        const llevar = e.target.closest('[data-sesion]');
+        if (llevar) verLlevar(llevar.dataset.sesion);
     });
 
     // La conexión se vigila aunque no cambie nada
