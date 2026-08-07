@@ -418,7 +418,11 @@ function previaHtml(c) {
                 ${modo !== 'no' ? `
                     <button class="previa-editar" data-editar="${c.id}">
                         <i class="fas fa-pen"></i>
-                        ${modo === 'todo' ? 'Editar' : 'Agregar bebida o porción'}
+                        ${modo === 'todo' ? 'Editar'
+                          /* Ya servida: lo que se puede es CAMBIAR la bebida que
+                             la mesa ya no quiere, no solo sumar otra. */
+                          : c.estado === 'entregado' ? 'Cambiar bebida o porción'
+                          : 'Agregar bebida o porción'}
                     </button>` : ''}
                 ${anular.ok
                     ? `<button class="previa-anular" data-anular="${c.id}">Anular</button>`
@@ -716,9 +720,12 @@ function pintarBorrador() {
             <div class="editando-aviso">
                 <i class="fas fa-pen"></i>
                 Corrigiendo <b>${editandoTanda.codigo}</b>
-                ${editandoTanda.modo === 'agregados'
-                    ? '— lo de arriba ya está en marcha. Lo que agregues para cocinar sale como tanda nueva y hace su turno.'
-                    : ''}
+                ${editandoTanda.modo !== 'agregados' ? ''
+                  /* "Ya está en marcha" no vale para una tanda servida: la
+                     comida no está en marcha, está en la mesa. */
+                  : editandoTanda.entregado
+                    ? '— ya se sirvió. Solo se puede tocar la bebida y las porciones; lo que agregues para cocinar sale como tanda nueva.'
+                    : '— lo de arriba ya está en marcha. Lo que agregues para cocinar sale como tanda nueva y hace su turno.'}
             </div>` : ''}
         <h2 class="borrador-titulo">${editandoTanda ? 'Cómo queda la tanda' : 'Esta tanda'}</h2>
         ${borrador.map(bitemHtml).join('')}
@@ -1032,6 +1039,7 @@ function abrirEdicion(id) {
         codigo: c.codigo || Servicio.codigoDe(c),
         sesion: c.sesion,
         mesa: c.mesa,
+        entregado: c.estado === 'entregado',
         previos: c.items.map(it => it.uid)
     };
     borrador = c.items

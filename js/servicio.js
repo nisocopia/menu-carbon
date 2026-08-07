@@ -436,9 +436,16 @@ const Servicio = (() => {
      */
     function sePuedePedir(platoId) {
         const p = Store.findPlato(platoId);
-        if (!p || p.agotado) return false;
 
-        if (p.elegir) return p.elegir.entre.some(id => sePuedePedir(id));
+        /* OJO: que un plato no esté en el menú NO quiere decir que se
+           haya acabado. Las bebidas de la tienda de al lado se crean al
+           vuelo con id 'x…' y no viven en menu-data.js — se les preguntó
+           por su stock, no lo tenían, y se las daba por agotadas. En el
+           salón salía "Se acabó el xmsdwl45nppiz7", que además no le
+           dice nada a nadie. Lo que no está en el menú no tiene nevera:
+           se vende siempre. */
+        if (p && p.agotado) return false;
+        if (p && p.elegir)  return p.elegir.entre.some(id => sePuedePedir(id));
 
         const q = quedanDe(productoDe(platoId));
         return q === null || q > 0;
@@ -1297,10 +1304,27 @@ const Servicio = (() => {
         Math.max(0, Math.ceil((MINUTO_DE_GRACIA - (Date.now() - c.creado)) / 1000));
 
     function edicionDe(c) {
-        if (!c || c.estado === 'anulado' || c.estado === 'entregado') return 'no';
+        if (!c || c.estado === 'anulado') return 'no';
 
         const s = getSesiones()[c.sesion];
         if (!s || !s.abierta) return 'no';          // ya se cobró y se cerró
+
+        /* SERVIDA NO ES CERRADA.
+
+           Pasó en el salón: cuatro pollos y dos jugos, la cocina marca
+           entregado, y cuando el mesero va a llevar los jugos la mesa le
+           cambia uno por una cola. No lo dejaba, porque la tanda estaba
+           entregada — y la mesa se quedaba con la bebida que ya no
+           quería o había que anotarla en un papel.
+
+           La comida sí está cerrada: ya se cocinó y ya salió. Pero la
+           bebida y las porciones se piden y se cambian hasta que se
+           paga, que es como come la gente. Por eso pasa a 'agregados',
+           que es el modo que ya bloquea lo que hay que cocinar y deja
+           tocar solo lo marcado 'editableSiempre' en menu-data.js —
+           bebidas, porciones y extras. Las porciones de proteína no lo
+           están, así que siguen sin poder tocarse. */
+        if (c.estado === 'entregado') return 'agregados';
 
         // Si el asador ya la sacó, la proteína existe: no hay nada que cambiar
         if (c.sacado) return 'agregados';
