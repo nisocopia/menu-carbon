@@ -120,6 +120,8 @@ function pintarRed() {
 
 function pintar() {
     pintarRed();
+    // ¿La cocina o el asador están llamando por los cubiertos?
+    if (typeof Llamada !== 'undefined') Llamada.revisar('servir');
 
     const total  = Number(CFG.mesas) || 11;
     const turnos = Servicio.turnosDeSesion();

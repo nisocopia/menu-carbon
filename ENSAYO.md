@@ -62,6 +62,26 @@ Cierra con Listo y Enviar.
 - [ ] **Cocina:** ve las dos cosas
 - [ ] **Cocina:** dice **0 cubiertos** (todo es para llevar)
 
+## 2b. La cocina llama al salón
+
+**En la pantalla de la cocina:** arriba, junto al punto verde, toca **Mesero**.
+
+- [ ] El botón queda encendido y dice **Llamado**
+- [ ] **En el celular del mesero:** suena un tono **distinto** al de un pedido
+      nuevo, y dura unos 5 segundos
+- [ ] Le sale abajo un cartel amarillo: **La cocina te llama**
+- [ ] El cartel **no se va solo** hasta tocarlo (el sonido sí termina)
+- [ ] **En la pantalla de servir:** NO suena nada (esa llamada no era suya)
+
+Ahora toca **Cubiertos** desde la parrilla:
+
+- [ ] Suena en la pantalla de **servir**, no en la del mesero
+- [ ] El cartel dice **La parrilla te llama**
+
+Y déjalo pasar minuto y medio sin tocar nada:
+
+- [ ] La llamada **se apaga sola** en las dos pantallas
+
 ## 3a. Se acaba el pollo
 
 **En el panel (pestaña Menú):** en *Lo que hay hoy*, escribe **3** en la fila

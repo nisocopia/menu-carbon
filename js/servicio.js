@@ -28,7 +28,8 @@ const Servicio = (() => {
         cola:     NS + 'cola',        // lo que falta subir
         extras:   NS + 'extras',      // bebidas sueltas que se fueron aprendiendo
         tomados:  NS + 'tomados',     // pedidos del comensal que este celular ya pasó a comanda
-        apartado: NS + 'apartado'     // lo que la nube rechaza y nunca va a salir
+        apartado: NS + 'apartado',    // lo que la nube rechaza y nunca va a salir
+        llamadas: NS + 'llamadas'     // la cocina o el asador llamando al salón
     };
 
     /* Un dispositivo puede quedarse sin nube (sync.js no cargó o el
@@ -1067,6 +1068,76 @@ const Servicio = (() => {
         return c;
     }
 
+    /* ============================================================
+       LLAMAR AL SALÓN
+
+       La cocina y el asador no pueden salir de su sitio, así que hasta
+       ahora gritaban. El gerente pidió un botón.
+
+       EL BOTÓN VA EN LA CABECERA, junto al punto de la conexión, y no en
+       cada tarjeta. Lo decidió el dueño y tenía razón por un motivo que
+       yo no había visto: en la cabecera el botón está SIEMPRE. Puesto en
+       las tarjetas, una cocina con el tablero vacío se quedaba sin poder
+       llamar — que es justo cuando hay que pedir cubiertos.
+
+       El precio de eso es que la llamada no dice de qué mesa es. Se
+       acepta: un timbre en la cocina significa "ven a la cocina", que es
+       lo que ya quería decir el grito al que reemplaza.
+
+       NADIE TIENE QUE APAGARLA. Se guarda cuándo se llamó y se da por
+       viva mientras sea reciente: al minuto y medio desaparece sola. Un
+       aviso que hay que apagar es un aviso que alguien se olvida de
+       apagar, y el de al lado ya no sabe si es de ahora o de hace media
+       hora.
+       ============================================================ */
+
+    const DURA_LLAMADA = 90 * 1000;
+
+    const getLlamadas = () => read(K.llamadas, {});
+
+    /**
+     * La cocina o el asador llaman al mesero o al que sirve.
+     *
+     * NO SE ENCOLA. Todo lo demás en este sistema se guarda y se
+     * reintenta hasta que sale, porque un pedido no se puede perder.
+     * Un timbre es al revés: si llega cuando vuelve el internet, diez
+     * minutos tarde, el mesero camina hasta la cocina y ya nadie se
+     * acuerda de para qué lo llamaron. Si no sale ahora, no sale — y se
+     * le dice al que llamó, para que grite como toda la vida.
+     */
+    async function llamar(aQuien) {
+        const dato = { cuando: Date.now(), de: rol() };
+        const todas = getLlamadas();
+        todas[aQuien] = dato;
+        write(K.llamadas, todas);
+        alCambiar();
+
+        const salio = (Red.activo && Red.haySesion())
+            ? await Red.guardar(`servicio/llamadas/${aQuien}`, dato)
+            : false;
+
+        /* Si no salió se borra también de aquí. Dejarla puesta encendería
+           el botón igual, y el cocinero se quedaría esperando a alguien
+           a quien nunca le llegó nada. */
+        if (!salio) {
+            const t = getLlamadas();
+            delete t[aQuien];
+            write(K.llamadas, t);
+            alCambiar();
+        }
+        return salio;
+    }
+
+    /** ¿Me están llamando a mí ahora mismo? Devuelve quién, o null. */
+    function llamadaPara(quien) {
+        const l = getLlamadas()[quien];
+        if (!l || Date.now() - (l.cuando || 0) >= DURA_LLAMADA) return null;
+        return l;
+    }
+
+    /** Lo mismo, para pintar el botón encendido en la estación que llamó. */
+    const llamadaViva = quien => !!llamadaPara(quien);
+
     /** Un solo toque en la cocina: el plato salió y desaparece de todas las pantallas. */
     const marcarEntregado = id => parchearComanda(id, { estado: 'entregado', entregado: Date.now() });
 
@@ -1778,6 +1849,20 @@ const Servicio = (() => {
             alCambiar();
         }, true);
 
+        /* Las llamadas van por su propio canal y no dentro de la comanda,
+           porque el botón está en la cabecera y no en una tarjeta. Es la
+           segunda conexión de esta pantalla y la última: el navegador
+           permite unas seis por sitio y quedarse sin ninguna libre para
+           enviar fue lo que obligaba a actualizar tres veces.
+
+           Va en vivo y no en la ronda de cada seis segundos a propósito:
+           un timbre que llega seis segundos tarde es un timbre que el de
+           la cocina cree que no funcionó, y va a tocarlo otra vez. */
+        Red.escuchar('servicio/llamadas', (datos, ruta, esRetoque) => {
+            aplicarEnRuta(K.llamadas, ruta, datos, esRetoque);
+            alCambiar();
+        }, true);
+
         // La parrilla y la cocina no necesitan nada más que las comandas
         if (modo === 'estacion') return;
 
@@ -1907,6 +1992,8 @@ const Servicio = (() => {
         rol, permisoEn, puedeTocar, puedeAnotar, puedeCobrar,
         // hacer
         enviarComanda, editarComanda, marcarEntregado, devolverANuevo, marcarSacado, anularComanda,
+        // llamar al salón desde la cocina o la parrilla
+        llamar, llamadaPara, llamadaViva, getLlamadas,
         abrirSesion, cerrarSesion, cerrarMesa, cerrarCuenta, registrarPago,
         // mover una cuenta: de mesa, o entre servirse y llevar
         moverMesa, moverCuenta, puedeCambiarServicio, efectoDeCambiarServicio,

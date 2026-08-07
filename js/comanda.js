@@ -1424,6 +1424,12 @@ function mostrarVista(cual) {
 
 function redibujar() {
     pintarRed();
+    /* ¿La cocina o el asador están llamando? Va fuera de los "if" de
+       abajo a propósito: el mesero puede estar en cualquier vista
+       —tomando un pedido, cobrando— y el timbre tiene que llegarle
+       igual. */
+    if (typeof Llamada !== 'undefined') Llamada.revisar('mesero');
+
     if (!$('vista-mesas').hidden) { pintarEntrantes(); pintarMesas(); }
     if (!$('vista-mesa').hidden)  pintarTandasPrevias();
     if (!$('vista-cobrar').hidden) pintarCobrar();
@@ -1696,20 +1702,26 @@ function iniciar() {
         $('lock-entrar').disabled = true;
     }
 
-    // Los agotados que marca el gerente también valen aquí
-    if (Sync.activo) {
-        Sync.escuchar('menu/overrides', datos => {
-            Store.aplicarOverridesRemotos(datos);
-            if (!$('vista-mesa').hidden) { pintarRapidos(); pintarTodoElMenu(); }
-        });
+    /* Los agotados y el stock que pone el gerente valen aquí también.
+       Se PREGUNTAN cada seis segundos en vez de escucharlos en vivo, y
+       de un solo tirón: la rama 'menu' trae los dos dentro.
 
-        /* Y lo que hay en la nevera. El gerente pone "quedan 12 pollos"
-           desde su celular y los meseros lo ven sin recargar: si se
-           enteran tarde, venden lo que ya no hay. */
-        Sync.escuchar('menu/stock', datos => {
-            Store.aplicarStockRemoto(datos);
+       El motivo es contar conexiones. El navegador permite unas seis por
+       sitio; esta pantalla tenía tres abiertas y con la de las llamadas
+       serían cuatro, dejando dos para enviar — que es el barrio donde ya
+       nos quedamos una vez sin poder mandar un pedido. Un plato que se
+       agota puede tardar seis segundos en avisarse; un timbre, no. Así
+       que el timbre se queda con la conexión y el menú pasa a la ronda. */
+    if (Sync.activo) {
+        const mirarElMenu = async () => {
+            const m = await Sync.leer('menu');
+            if (!m) return;
+            Store.aplicarOverridesRemotos(m.overrides);
+            Store.aplicarStockRemoto(m.stock);
             if (!$('vista-mesa').hidden) { pintarRapidos(); pintarTodoElMenu(); }
-        });
+        };
+        mirarElMenu();
+        setInterval(mirarElMenu, 6000);
     }
 }
 

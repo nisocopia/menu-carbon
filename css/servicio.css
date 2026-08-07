@@ -94,6 +94,74 @@
 
 .srv-top h1 i { color: #FFC107; margin-right: 6px; }
 
+/* ---------- Llamar al salón ----------
+
+   En la cabecera, entre el título y el punto de la conexión, para que
+   estén SIEMPRE: en las tarjetas, un tablero vacío se quedaba sin poder
+   pedir cubiertos. Y bien lejos del ENTREGADO, que vive al fondo de
+   cada tarjeta y es el único botón grande y lleno de la pantalla. */
+
+.srv-llamadas { display: flex; gap: 8px; flex: none; }
+
+.srv-llamar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #1f1f1f;
+    border: 1px solid #3a3a3a;
+    border-radius: 10px;
+    color: #ddd;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    /* Alto de sobra: se toca con la mano ocupada y a veces con grasa */
+    padding: 10px 12px;
+    cursor: pointer;
+}
+
+.srv-llamar i { color: #FFC107; font-size: 0.9rem; }
+
+/* Mientras la llamada está viva, el que llamó lo ve. Así no la repite
+   tres veces creyendo que no salió. */
+.srv-llamar.sonando {
+    background: #4a3a08;
+    border-color: #FFC107;
+    color: #FFC107;
+}
+
+/* En pantalla angosta el texto sobra: el icono ya lo dice */
+@media (max-width: 400px) {
+    .srv-llamar span { display: none; }
+    .srv-llamar { padding: 10px; }
+}
+
+/* ---------- Y el cartel del que lo recibe ----------
+
+   El sonido dura cinco segundos. El cartel se queda mientras la llamada
+   esté viva, porque el mesero puede oír el pitido con las manos
+   ocupadas y no llegar a mirar. */
+
+.llamada-caja {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 9800;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #4a3a08;
+    border: 2px solid #FFC107;
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+    cursor: pointer;
+}
+
+.llamada-caja i { color: #FFC107; font-size: 1.5rem; }
+.llamada-quien  { flex: 1; color: #fff; font-size: 1.05rem; font-weight: 700; }
+.llamada-toca   { color: #c8a94a; font-size: 0.7rem; }
+
 .srv-volver {
     background: #222;
     border: none;

@@ -618,6 +618,7 @@ const minutosDe = c => Math.floor((Date.now() - c.creado) / 60000);
 
 function pintar() {
     pintarRed();
+    pintarLlamar();
 
     const todas = Servicio.comandasDe(ESTACION);
 
@@ -765,6 +766,38 @@ function tarjeta(c, turno) {
 
         ${PUEDE ? botonDe(c) : ''}
     </article>`;
+}
+
+/**
+ * Llamar al salón sin salir de la cocina.
+ *
+ * Van en la CABECERA, entre el título y el punto de la conexión. Lo
+ * decidió el dueño y es lo correcto: ahí están siempre. Puestos en cada
+ * tarjeta, una cocina con el tablero vacío se quedaba sin poder llamar
+ * — que es justo cuando hay que pedir cubiertos.
+ *
+ * Y lejos del botón de ENTREGADO, que vive al fondo de cada tarjeta:
+ * son el único botón grande y lleno de la pantalla, así que un dedo con
+ * prisa no los confunde.
+ */
+function pintarLlamar() {
+    const caja = $('llamar');
+    if (!caja) return;
+
+    if (!PUEDE) { caja.hidden = true; return; }
+    caja.hidden = false;
+
+    const boton = (quien, icono, texto) => {
+        const sonando = Servicio.llamadaViva(quien);
+        return `
+            <button class="srv-llamar ${sonando ? 'sonando' : ''}" data-llamar="${quien}">
+                <i class="fas ${sonando ? 'fa-bell fa-shake' : icono}"></i>
+                <span>${sonando ? 'Llamado' : texto}</span>
+            </button>`;
+    };
+
+    caja.innerHTML = boton('mesero', 'fa-bell', 'Mesero') +
+                     boton('servir', 'fa-utensils', 'Cubiertos');
 }
 
 /**
@@ -1067,6 +1100,22 @@ function iniciarEstacion(cual) {
 
             const btn = e.target.closest('[data-accion]');
             if (btn) { accion(btn.dataset.accion); return; }
+
+            const llama = e.target.closest('[data-llamar]');
+            if (llama) {
+                const quien = llama.dataset.llamar;
+                pintarLlamar();                       // se enciende de una, sin esperar
+                Servicio.llamar(quien).then(salio => {
+                    /* Si no salió hay que decirlo. Un botón que se
+                       enciende igual haya salido o no deja al cocinero
+                       esperando a alguien que nunca oyó nada. */
+                    toast(salio
+                        ? (quien === 'mesero' ? 'Llamando al mesero' : 'Llamando por los cubiertos')
+                        : 'No salió la llamada. Sin conexión: toca gritar.');
+                    if (!salio) pintarLlamar();
+                });
+                return;
+            }
 
             const rech = e.target.closest('[data-rechazadas]');
             if (rech) { resolverRechazadas(rech.dataset.rechazadas); return; }
