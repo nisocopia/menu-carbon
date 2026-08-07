@@ -1800,11 +1800,52 @@ const Servicio = (() => {
        ESCUCHAR A LOS OTROS CELULARES
        ============================================================ */
 
+    /**
+     * UN VACÍO TAMBIÉN ES UNA NOTICIA.
+     *
+     * Antes esto empezaba con `if (!remotos) return;` — o sea, "si no
+     * viene nada, no hagas nada". Suena prudente y estaba mal, porque
+     * hay alguien que sí vacía la rama a propósito: el gerente, con el
+     * botón "Vaciar el servicio".
+     *
+     * El panel borraba la nube, se limpiaba a sí mismo y decía
+     * "Servicio vaciado". Pero las pantallas del salón recibían ese
+     * vacío, lo tomaban por "no hay novedades" y se quedaban con las
+     * mesas ocupadas para siempre. Desde el salón, el botón no borraba
+     * nada.
+     *
+     * Ojo con la diferencia, que es la misma de siempre: `undefined` es
+     * "no se pudo leer" y lo filtra quien llama; `null` es "esto está
+     * vacío" y hay que obedecerlo.
+     */
     function mezclar(clave, remotos) {
-        if (!remotos) return;
+        if (remotos == null) { vaciarSegunNube(clave); return; }
         const propios = read(clave, {});
         // Lo que llega de la nube manda: es lo que ya vieron los demás
         write(clave, Object.assign({}, propios, remotos));
+    }
+
+    /**
+     * La nube dice que esta rama quedó vacía.
+     *
+     * Se obedece, PERO no se tira lo que este celular todavía no ha
+     * conseguido mandar. Si el mesero anotó una mesa sin señal y en ese
+     * momento el gerente vacía el servicio, ese pedido no puede
+     * desaparecer: nadie más lo ha visto todavía, así que no es algo
+     * que el gerente estuviera borrando.
+     */
+    function vaciarSegunNube(clave) {
+        const pendientes = new Set(
+            read(K.cola, [])
+                .map(t => String(t.rama || '').split('/')[2])
+                .filter(Boolean));
+
+        if (!pendientes.size) { write(clave, {}); return; }
+
+        const propios = read(clave, {});
+        const quedan = {};
+        Object.keys(propios).forEach(id => { if (pendientes.has(id)) quedan[id] = propios[id]; });
+        write(clave, quedan);
     }
 
     /**
@@ -2001,6 +2042,7 @@ const Servicio = (() => {
         write(K.sesiones, {});
         write(K.pagos, {});
         write(K.tomados, {});
+        write(K.llamadas, {});
         /* También lo que este celular tenía sin mandar. Si no, "dejar
            limpio" dejaba la cola llena de cosas que se refieren a
            comandas que ya no existen. */
@@ -2014,7 +2056,7 @@ const Servicio = (() => {
            gerente. Si lo intenta otra cuenta, la nube dice que no y aquí
            se devuelve false para que la pantalla no mienta. */
         const ramas = ['servicio/comandas', 'servicio/sesiones', 'servicio/pagos',
-                       'servicio/entrantes', 'servicio/tomados'];
+                       'servicio/entrantes', 'servicio/tomados', 'servicio/llamadas'];
         const hechos = await Promise.all(ramas.map(r => Red.guardar(r, null)));
         alCambiar();
         return hechos.every(Boolean);

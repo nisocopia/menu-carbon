@@ -141,8 +141,14 @@ function celular(rol) {
         /* Copia y no el mismo objeto: cada celular recibe su propia
            respuesta, y lo que borra uno no desaparece del otro hasta
            que la nube se lo diga. Ahí es donde está la carrera. */
-        leer: async rama =>
-            (rama === 'servicio/entrantes' ? JSON.parse(JSON.stringify(nube.entrantes)) : undefined),
+        /* `undefined` es "no se pudo leer" y `null` es "esta vacio": el
+           codigo los trata distinto y la mentira tambien tiene que
+           hacerlo, o las pruebas de vaciado no prueban nada. */
+        leer: async rama => {
+            if (rama === 'servicio/entrantes') return JSON.parse(JSON.stringify(nube.entrantes));
+            if (nube.vacio) return null;
+            return undefined;
+        },
         /* Guardar tambien se cae con la nube. Antes devolvia true pase lo
            que pase, asi que una prueba de "sin conexion" no probaba
            nada: todo lo que no pasara por la cola se daba por enviado. */
@@ -2738,6 +2744,69 @@ function probarCuantasConexiones() {
         /\.llamada-caja\[hidden\]\s*\{\s*display:\s*none/.test(css), true);
 }
 
+/* ============================================================
+   "ESCRIBO BORRAR Y NO SE BORRA"
+
+   Lo reporto el dueño. El panel borraba la nube, se limpiaba a si mismo
+   y decia "Servicio vaciado" — pero las pantallas del salon recibian
+   ese vacio, lo tomaban por "no hay novedades" y se quedaban con las
+   mesas ocupadas. Desde donde se trabaja, el boton no borraba nada.
+   ============================================================ */
+
+async function probarVaciarDeVerdad() {
+    console.log('\n--- Vaciar el servicio se tiene que notar en el salón ---');
+    nubeLimpia();
+    const gerente = celular('gerente');
+    const mesero  = celular('mesero');
+    mesero.corre(`Servicio.iniciar(() => {})`);
+
+    // El mesero tiene la mesa 3 abierta con su pedido
+    mesero.corre(`Servicio.enviarComanda({ mesa: 3, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 }] })`);
+    comprobar('el mesero tiene la mesa 3 ocupada',
+        mesero.corre(`!!Servicio.sesionDeMesa(3)`), true);
+
+    // Se le da tiempo a que la cola salga: lo pendiente no se tira
+    await respirar();
+    comprobar('y ya salió a la nube', mesero.corre(`Servicio.pendientes()`), 0);
+
+    // El gerente vacia el servicio desde el panel
+    await gerente.corre(`Servicio.vaciarTodo()`);
+    comprobar('en el panel se vacía', gerente.corre(`Object.keys(Servicio.getComandas()).length`), 0);
+
+    /* Y la nube le grita el vacio al celular del mesero. ESTO es lo que
+       se ignoraba: llegaba null y se leia como "no hay novedades". */
+    mesero.eco('/', null, false);
+    comprobar('al mesero también se le vacían las comandas',
+        mesero.corre(`Object.keys(Servicio.getComandas()).length`), 0);
+
+    /* Las mesas no van por el canal en vivo sino por la ronda: llegan
+       unos segundos despues, y tambien tienen que irse. */
+    nube.vacio = true;
+    mesero.corre(`Servicio.iniciar(() => {})`);
+    await respirar();
+    comprobar('y la mesa 3 queda libre',
+        mesero.corre(`!!Servicio.sesionDeMesa(3)`), false);
+    nube.vacio = false;
+
+    /* PERO lo que este celular todavia no ha podido mandar NO se tira:
+       nadie mas lo ha visto, asi que no es algo que el gerente
+       estuviera borrando. */
+    nubeLimpia();
+    nube.caida = true;
+    const solo = celular('mesero');
+    solo.corre(`Servicio.iniciar(() => {})`);
+    solo.corre(`Servicio.enviarComanda({ mesa: 7, items: [
+        { platoId: 'p1', nombre: 'Carne Asada', precio: 3.5, cantidad: 1 }] })`);
+    comprobar('quedó sin mandar', solo.corre(`Servicio.pendientes() > 0`), true);
+
+    solo.eco('/', null, false);
+    comprobar('el pedido sin mandar NO se pierde',
+        solo.corre(`Object.keys(Servicio.getComandas()).length`), 1);
+    comprobar('y su mesa sigue en pie', solo.corre(`!!Servicio.sesionDeMesa(7)`), true);
+    nube.caida = false;
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -2771,6 +2840,7 @@ async function main() {
     await probarCambiarBebidaYaServida();
     await probarLlamarAlSalon();
     probarCuantasConexiones();
+    await probarVaciarDeVerdad();
     await probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();
