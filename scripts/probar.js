@@ -2614,6 +2614,48 @@ async function probarLlamarAlSalon() {
     comprobar('pero no el del otro',
         c2.corre(`Servicio.llamadaViva('mesero')`), false);
 
+    /* ---- EL FRENO: uno cada 5 segundos y 4 por minuto ----
+
+       Sin el, un cocinero apurado toca seis veces y al mesero le suenan
+       seis alarmas seguidas; a la septima ya no las mira. Y el boton se
+       quedaba en campana para siempre porque nada lo volvia a dibujar. */
+    nubeLimpia();
+    const f = celular('cocina');
+
+    comprobar('al principio se puede llamar', f.corre(`Servicio.puedeLlamar('mesero').ok`), true);
+    await f.corre(`Servicio.llamar('mesero')`);
+
+    const recien = f.corre(`Servicio.puedeLlamar('mesero')`);
+    comprobar('recien llamado, no se puede', recien.ok, false);
+    comprobar('y dice que es por rapido', recien.motivo, 'recien');
+    comprobar('con la cuenta atras a la vista', recien.faltan <= 5 && recien.faltan > 0, true);
+
+    /* El otro boton no se frena: llamar al mesero y pedir cubiertos son
+       dos cosas distintas y no comparten cupo. */
+    comprobar('el otro boton sigue libre', f.corre(`Servicio.puedeLlamar('servir').ok`), true);
+
+    // Pasados los 5 segundos vuelve solo
+    f.corre(`(() => {
+        const t = JSON.parse(localStorage.getItem('srv_mis_llamadas'));
+        t.mesero = t.mesero.map(x => x - 6000);
+        localStorage.setItem('srv_mis_llamadas', JSON.stringify(t));
+    })()`);
+    comprobar('a los 5 segundos vuelve solo', f.corre(`Servicio.puedeLlamar('mesero').ok`), true);
+
+    // Cuatro en un minuto y se acabo
+    f.corre(`localStorage.setItem('srv_mis_llamadas', JSON.stringify(
+        { mesero: [Date.now() - 50000, Date.now() - 40000, Date.now() - 30000, Date.now() - 20000] }))`);
+    const tope = f.corre(`Servicio.puedeLlamar('mesero')`);
+    comprobar('cuatro en un minuto es el tope', tope.ok, false);
+    comprobar('y ahi el motivo es otro', tope.motivo, 'tope');
+    comprobar('llamar no hace nada mientras tanto',
+        await f.corre(`Servicio.llamar('mesero')`), false);
+
+    /* El boton tiene que volver SOLO: se redibuja cada segundo. */
+    const est = fuente('js/estacion.js');
+    comprobar('el boton se redibuja cada segundo',
+        /setInterval\(pintarLlamar, 1000\)/.test(est), true);
+
     /* SIN LINEA NO SE GUARDA PARA DESPUES. Todo lo demas se encola y se
        reintenta; un timbre no. Llegar diez minutos tarde manda al mesero
        a la cocina a preguntar para que lo llamaron. */

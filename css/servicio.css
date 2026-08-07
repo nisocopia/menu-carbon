@@ -121,12 +121,30 @@
 
 .srv-llamar i { color: #FFC107; font-size: 0.9rem; }
 
-/* Mientras la llamada está viva, el que llamó lo ve. Así no la repite
-   tres veces creyendo que no salió. */
+/* Los cinco segundos siguientes al toque: ya se avisó, espera. Se ve
+   encendido para que sepa que salió, y cuenta atrás para que sepa
+   cuándo puede volver a tocar. */
 .srv-llamar.sonando {
     background: #4a3a08;
     border-color: #FFC107;
     color: #FFC107;
+}
+
+/* Cuatro llamadas en un minuto es el tope. Este se ve apagado y no
+   encendido a propósito: no es "ya avisé", es "deja de tocar y anda a
+   buscarlo". */
+.srv-llamar.frenado {
+    background: #1a1a1a;
+    border-color: #333;
+    color: #777;
+}
+.srv-llamar.frenado i { color: #777; }
+.srv-llamar[disabled] { cursor: not-allowed; }
+
+/* Aquí el texto NO se esconde en pantalla angosta: los segundos que
+   faltan son justo lo que hay que leer. */
+@media (max-width: 400px) {
+    .srv-llamar.sonando span, .srv-llamar.frenado span { display: inline; }
 }
 
 /* En pantalla angosta el texto sobra: el icono ya lo dice */

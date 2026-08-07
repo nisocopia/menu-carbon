@@ -787,12 +787,33 @@ function pintarLlamar() {
     if (!PUEDE) { caja.hidden = true; return; }
     caja.hidden = false;
 
+    /* EL BOTÓN TIENE QUE VOLVER SOLO.
+     *
+     * Antes se quedaba en campana para siempre: la llamada caducaba por
+     * reloj, pero nada volvía a dibujar el botón hasta que llegara otra
+     * cosa de la nube. En una cocina tranquila eso es "nunca". */
     const boton = (quien, icono, texto) => {
-        const sonando = Servicio.llamadaViva(quien);
+        const puede = Servicio.puedeLlamar(quien);
+
+        if (puede.ok) {
+            return `
+                <button class="srv-llamar" data-llamar="${quien}">
+                    <i class="fas ${icono}"></i>
+                    <span>${texto}</span>
+                </button>`;
+        }
+
+        /* Y se dice POR QUÉ no se puede. "Espera 3s" es que el dedo fue
+           rápido; "ya llamaste 4 veces" es que al mesero le pasa algo y
+           hay que ir a buscarlo, no seguir tocando. */
+        const esperando = puede.motivo === 'recien';
         return `
-            <button class="srv-llamar ${sonando ? 'sonando' : ''}" data-llamar="${quien}">
-                <i class="fas ${sonando ? 'fa-bell fa-shake' : icono}"></i>
-                <span>${sonando ? 'Llamado' : texto}</span>
+            <button class="srv-llamar ${esperando ? 'sonando' : 'frenado'}"
+                    data-llamar="${quien}" disabled
+                    title="${esperando ? 'Ya se avisó' : 'Cuatro llamadas en un minuto es el tope'}">
+                <i class="fas ${esperando ? 'fa-bell fa-shake' : 'fa-hourglass-half'}"></i>
+                <span>${esperando ? 'Llamado ' + puede.faltan + 's'
+                                  : 'Espera ' + puede.faltan + 's'}</span>
             </button>`;
     };
 
@@ -1104,7 +1125,7 @@ function iniciarEstacion(cual) {
             const llama = e.target.closest('[data-llamar]');
             if (llama) {
                 const quien = llama.dataset.llamar;
-                pintarLlamar();                       // se enciende de una, sin esperar
+                if (llama.disabled) return;
                 Servicio.llamar(quien).then(salio => {
                     /* Si no salió hay que decirlo. Un botón que se
                        enciende igual haya salido o no deja al cocinero
@@ -1112,7 +1133,7 @@ function iniciarEstacion(cual) {
                     toast(salio
                         ? (quien === 'mesero' ? 'Llamando al mesero' : 'Llamando por los cubiertos')
                         : 'No salió la llamada. Sin conexión: toca gritar.');
-                    if (!salio) pintarLlamar();
+                    pintarLlamar();
                 });
                 return;
             }
@@ -1150,6 +1171,13 @@ function iniciarEstacion(cual) {
            De paso se revisa si quedó algo sin anunciar: si el canal se
            cayó y volvió sin avisar a nadie, esta es la red de seguridad. */
         setInterval(alLlegarDatos, 20000);
+
+        /* El botón de llamar cuenta hacia atrás, así que se redibuja cada
+           segundo. Sin esto se quedaba en campana para siempre: la espera
+           se acababa por reloj, pero nada volvía a dibujarlo hasta que
+           llegara algo de la nube — y en una cocina tranquila eso es
+           nunca. Es un botón, no toca la nube: repintarlo cuesta nada. */
+        setInterval(pintarLlamar, 1000);
 
         /* La conexión se vigila aparte y más seguido: si se cae, hay que
            decirlo en segundos, no esperar al siguiente repintado. */
