@@ -2441,6 +2441,103 @@ function probarStock() {
         !/rgi36tpn1KNHeDEqJN17dpbWguy2/.test(reglas.stock['.write']), true);
 }
 
+/* ============================================================
+   LOS DOS ERRORES DEL PRIMER SERVICIO DE VERDAD
+
+   No son casos inventados: los dos pasaron con gente en las mesas.
+   ============================================================ */
+
+async function probarBebidaDeLaTienda() {
+    console.log('\n--- "Otra bebida" no se puede haber acabado ---');
+    nubeLimpia();
+    const { corre } = pantallaComanda();
+
+    /* Una cerveza de la tienda de al lado. NO está en menu-data.js: se
+       crea al vuelo con id 'x…'. El candado del stock preguntaba por
+       ella al menú, no la encontraba y la daba por agotada — en el salón
+       salía "Se acabó el xmsdwl45nppiz7". */
+    const extra = corre(`Servicio.guardarExtra('Pilsener', 2.50)`);
+    comprobar('la bebida de la tienda no está en el menú',
+        corre(`!!Store.findPlato('${extra.id}')`), false);
+
+    comprobar('y aun así se puede pedir',
+        corre(`Servicio.sePuedePedir('${extra.id}')`), true);
+
+    corre(`verMesa(6)`);
+    corre(`agregarAlBorrador({ id: '${extra.id}', nombre: 'Pilsener', precio: 2.5 }, 1)`);
+    comprobar('entra al pedido',
+        corre(`borrador.map(i => i.nombre)`), ['Pilsener']);
+
+    // Y sigue entrando aunque el local tenga stock puesto en otras cosas
+    corre(`Store.setStock('pollo', 0)`);
+    corre(`agregarAlBorrador({ id: '${extra.id}', nombre: 'Pilsener', precio: 2.5 }, 1)`);
+    comprobar('el stock de otra cosa no la estorba',
+        corre(`borrador.find(i => i.nombre === 'Pilsener').cantidad`), 2);
+    comprobar('pero el pollo sí está agotado',
+        corre(`Servicio.sePuedePedir('p5')`), false);
+}
+
+async function probarCambiarBebidaYaServida() {
+    console.log('\n--- La mesa cambia el jugo por una cola con el plato ya servido ---');
+    nubeLimpia();
+    const { corre } = pantallaComanda();
+
+    /* Tal cual pasó: mesa 2 pide 4 pollos y 2 jugos de mora. La cocina
+       marca entregado. Al llevar los jugos, la mesa cambia uno por una
+       cola de litro — y no lo dejaba tocar. */
+    corre(`verMesa(2)`);
+    corre(`agregarAlBorrador(Store.findPlato('p5'), 4)`);   // 4 pollos
+    corre(`agregarAlBorrador(Store.findPlato('b2'), 2)`);   // 2 jugos de mora
+    await corre.esperando(`enviar()`);
+
+    const id = corre(`Servicio.tandasDe({ mesa: 2 })[0].id`);
+    corre(`Servicio.marcarEntregado('${id}')`);
+    comprobar('la cocina la entregó',
+        corre(`Servicio.getComandas()['${id}'].estado`), 'entregado');
+
+    // Antes esto decía 'no' y el mesero se quedaba con el jugo en la mano
+    comprobar('servida no es cerrada: se puede tocar',
+        corre(`Servicio.edicionDe(Servicio.getComandas()['${id}'])`), 'agregados');
+
+    corre(`abrirEdicion('${id}')`);
+
+    /* Lo que se cocinó queda bloqueado; la bebida no. Es lo que pidió el
+       dueño: bebidas y porciones sí, porciones de proteína no. */
+    const bloqueos = corre(`borrador.map(i => i.nombre + ':' + (i.bloqueado ? 'no' : 'si'))`);
+    comprobar('el pollo no se toca, el jugo sí',
+        bloqueos, ['Pollo Asado:no', 'Jugo de Mora:si']);
+
+    // Se le quita un jugo y se le pone una cola de litro
+    const uidJugo = corre(`borrador.find(i => i.platoId === 'b2').uid`);
+    corre(`(() => { const it = borrador.find(i => i.uid === '${uidJugo}'); it.cantidad = 1; })()`);
+    corre(`agregarAlBorrador(Store.findPlato('b4'), 1)`);   // Cola 1 L
+    corre(`guardarEdicion()`);
+
+    const quedo = corre(`Servicio.tandasDe({ mesa: 2 })
+        .flatMap(c => c.items).map(i => i.cantidad + ' ' + i.nombre)`);
+    comprobar('quedó 1 jugo y 1 cola de litro',
+        quedo, ['4 Pollo Asado', '1 Jugo de Mora', '1 Cola 1 L']);
+
+    /* La bebida no va a ninguna estación, así que NO reabre la tanda ni
+       le vuelve a salir a la cocina lo que ya entregó. */
+    comprobar('la tanda sigue entregada',
+        corre(`Servicio.getComandas()['${id}'].estado`), 'entregado');
+    comprobar('y a la cocina no le vuelve a salir',
+        corre(`Servicio.comandasDe('cocina').length`), 0);
+
+    // La cuenta se ajusta sola: se fue un jugo de 1.00 y entró una cola de 1.50
+    comprobar('la cuenta cuadra', corre(`Servicio.cuentaDe({ mesa: 2 }).total`), 16.5);
+
+    /* Y el límite que puso el dueño: cobrada la mesa, se acabó de tocar. */
+    corre(`(() => {
+        const c = Servicio.cuentaDe({ mesa: 2 });
+        Servicio.registrarPago({ mesa: 2, forma: 'efectivo',
+            lineas: c.items.map(l => ({ platoId: l.platoId, precio: l.precio, cantidad: l.pendiente })) });
+    })()`);
+    comprobar('cobrada la mesa, ya no se toca',
+        corre(`Servicio.edicionDe(Servicio.getComandas()['${id}'])`), 'no');
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -2470,6 +2567,8 @@ async function main() {
     probarLlevarEnServir();
     probarFormaDeServir();
     probarStock();
+    await probarBebidaDeLaTienda();
+    await probarCambiarBebidaYaServida();
     await probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();
