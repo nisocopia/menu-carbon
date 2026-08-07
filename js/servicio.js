@@ -29,7 +29,8 @@ const Servicio = (() => {
         extras:   NS + 'extras',      // bebidas sueltas que se fueron aprendiendo
         tomados:  NS + 'tomados',     // pedidos del comensal que este celular ya pasó a comanda
         apartado: NS + 'apartado',    // lo que la nube rechaza y nunca va a salir
-        llamadas: NS + 'llamadas'     // la cocina o el asador llamando al salón
+        llamadas: NS + 'llamadas',    // la cocina o el asador llamando al salón
+        misLlam:  NS + 'mis_llamadas' // cuándo llamó ESTE aparato, para el freno
     };
 
     /* Un dispositivo puede quedarse sin nube (sync.js no cargó o el
@@ -1093,7 +1094,60 @@ const Servicio = (() => {
 
     const DURA_LLAMADA = 90 * 1000;
 
+    /* EL FRENO.
+
+       Sin él, un cocinero apurado toca el botón seis veces y al mesero
+       le suenan seis alarmas seguidas — y a la séptima ya no las mira.
+       Un timbre que se abusa deja de ser un timbre.
+
+       Dos topes, los que pidió el dueño: uno cada 5 segundos y no más de
+       4 en un minuto. El primero corta el dedo nervioso; el segundo, la
+       insistencia. Y se cuentan POR APARATO: es su propio freno, no una
+       cuota que se pelee con la parrilla.
+
+       Se guardan en el celular y no en la nube: son cuatro números y
+       nadie más necesita saberlos. */
+    const ESPERA_LLAMADA  = 5 * 1000;
+    const TOPE_POR_MINUTO = 4;
+
     const getLlamadas = () => read(K.llamadas, {});
+
+    const misLlamadas = aQuien => {
+        const ahora = Date.now();
+        const todas = read(K.misLlam, {});
+        return (todas[aQuien] || []).filter(t => ahora - t < 60000);
+    };
+
+    /**
+     * ¿Puedo llamar ahora? Y si no, cuántos segundos faltan.
+     *
+     * Devuelve también POR QUÉ, porque no es lo mismo "acabas de
+     * llamar" que "ya llamaste cuatro veces este minuto": el segundo
+     * quiere decir que al mesero le pasa algo, y hay que ir a buscarlo.
+     */
+    function puedeLlamar(aQuien) {
+        const ahora = Date.now();
+        const h = misLlamadas(aQuien);
+
+        if (h.length) {
+            const desdeLaUltima = ahora - h[h.length - 1];
+            if (desdeLaUltima < ESPERA_LLAMADA) {
+                return { ok: false, motivo: 'recien',
+                         faltan: Math.ceil((ESPERA_LLAMADA - desdeLaUltima) / 1000) };
+            }
+        }
+        if (h.length >= TOPE_POR_MINUTO) {
+            return { ok: false, motivo: 'tope',
+                     faltan: Math.ceil((60000 - (ahora - h[0])) / 1000) };
+        }
+        return { ok: true, motivo: '', faltan: 0 };
+    }
+
+    function apuntarMiLlamada(aQuien) {
+        const todas = read(K.misLlam, {});
+        todas[aQuien] = misLlamadas(aQuien).concat(Date.now());
+        write(K.misLlam, todas);
+    }
 
     /**
      * La cocina o el asador llaman al mesero o al que sirve.
@@ -1106,6 +1160,11 @@ const Servicio = (() => {
      * le dice al que llamó, para que grite como toda la vida.
      */
     async function llamar(aQuien) {
+        // El freno manda: aquí, y no solo en el botón, porque al botón se
+        // puede llegar por más de un camino.
+        if (!puedeLlamar(aQuien).ok) return false;
+        apuntarMiLlamada(aQuien);
+
         const dato = { cuando: Date.now(), de: rol() };
         const todas = getLlamadas();
         todas[aQuien] = dato;
@@ -1123,6 +1182,14 @@ const Servicio = (() => {
             const t = getLlamadas();
             delete t[aQuien];
             write(K.llamadas, t);
+
+            /* Y no gasta cupo: una llamada que no salió no es una
+               llamada. Cobrarle los 5 segundos de espera por algo que
+               nadie oyó sería castigarlo por un fallo que no es suyo. */
+            const mias = read(K.misLlam, {});
+            mias[aQuien] = (mias[aQuien] || []).slice(0, -1);
+            write(K.misLlam, mias);
+
             alCambiar();
         }
         return salio;
@@ -1993,7 +2060,7 @@ const Servicio = (() => {
         // hacer
         enviarComanda, editarComanda, marcarEntregado, devolverANuevo, marcarSacado, anularComanda,
         // llamar al salón desde la cocina o la parrilla
-        llamar, llamadaPara, llamadaViva, getLlamadas,
+        llamar, llamadaPara, llamadaViva, getLlamadas, puedeLlamar,
         abrirSesion, cerrarSesion, cerrarMesa, cerrarCuenta, registrarPago,
         // mover una cuenta: de mesa, o entre servirse y llevar
         moverMesa, moverCuenta, puedeCambiarServicio, efectoDeCambiarServicio,

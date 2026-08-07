@@ -399,8 +399,24 @@ El precio de tenerlos ahí es que la llamada **no dice de qué mesa es**. Se
 acepta: un timbre en la cocina significa "ven a la cocina", que es lo que ya
 quería decir el grito al que reemplaza.
 
-**Nadie tiene que apagarla.** Se guarda cuándo se llamó y se da por viva
-mientras sea reciente; al minuto y medio desaparece sola. Un aviso que hay que
+**El botón tiene freno**, y vuelve solo. Después de tocarlo se queda cinco
+segundos apagado contando atrás —*Llamado 3s*— y luego vuelve a decir *Mesero*.
+Pasadas cuatro llamadas en un minuto se frena hasta que se libere una, y ahí lo
+dice distinto: *Espera 34s*, apagado en vez de encendido. No es lo mismo "ya
+avisé" que "deja de tocar y anda a buscarlo".
+
+Sin eso, un cocinero apurado toca seis veces y al mesero le suenan seis alarmas
+seguidas — y a la séptima ya no las mira. Un timbre que se abusa deja de ser un
+timbre. El cupo es **por aparato y por botón**: llamar al mesero y pedir
+cubiertos no se quitan turnos.
+
+Y se redibuja **cada segundo**, que es lo que hace que vuelva solo. Sin eso se
+quedaba en campana para siempre: la espera se acababa por reloj, pero nada
+volvía a dibujar el botón hasta que llegara algo de la nube — y en una cocina
+tranquila eso es nunca.
+
+**Nadie tiene que apagar la llamada.** Se guarda cuándo se llamó y se da por
+viva mientras sea reciente; al minuto y medio desaparece sola. Un aviso que hay que
 apagar es un aviso que alguien se olvida de apagar, y el de al lado ya no sabe
 si es de ahora o de hace media hora.
 

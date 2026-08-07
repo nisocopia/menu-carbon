@@ -78,6 +78,15 @@ Ahora toca **Cubiertos** desde la parrilla:
 - [ ] Suena en la pantalla de **servir**, no en la del mesero
 - [ ] El cartel dice **La parrilla te llama**
 
+**El botón, en la pantalla que llamó:**
+
+- [ ] Queda apagado y **cuenta atrás**: *Llamado 5s, 4s, 3s…*
+- [ ] A los 5 segundos **vuelve solo** a decir *Mesero*, sin tocar nada
+- [ ] Toca cuatro veces (esperando entre cada una): a la cuarta dice
+      **Espera 34s** y se ve apagado, no encendido
+- [ ] Machácalo: **no salen más llamadas**
+- [ ] El botón de **Cubiertos sigue libre** — no comparten cupo
+
 Y déjalo pasar minuto y medio sin tocar nada:
 
 - [ ] La llamada **se apaga sola** en las dos pantallas
