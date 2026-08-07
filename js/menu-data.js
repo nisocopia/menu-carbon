@@ -240,6 +240,10 @@ const PRODUCTOS = {
                 su propio producto. Los mixtos NO lo llevan: sus carnes se
                 escogen al tomar el pedido, así que se descuentan de lo que
                 el mesero eligió.
+   - interno:   cómo se le dice al plato PUERTAS ADENTRO. El comensal ve
+                "Mixto 2 Carnes" en la carta, que es como se vende; el
+                personal lo ve como "Mixto 2 Proteínas", que es como se
+                habla en la cocina. Sin este campo, los dos ven lo mismo.
    - atajo:     lo que se teclea al tomar el pedido. "3p" = 3 pollos.
    - minutos:   cuánto demora, para decirle la verdad al comensal
    - termino:   true si se le puede pedir el término (solo la carne)
@@ -283,13 +287,13 @@ const MENU = [
         // El mixto llega entero al asador ("Mixto: pollo + carne"), no
         // desarmado en proteínas sueltas: sus dos carnes salen juntas.
         platos: [
-            { id: 'm1', nombre: 'Mixto 2 Carnes',           precio: 6.00,  img: '', sigla: 'X2',  atajo: 'x2',  minutos: 15, descripcion: 'Pollo + Carne o Chuleta',
+            { id: 'm1', nombre: 'Mixto 2 Carnes',           interno: 'Mixto 2 Proteínas',          precio: 6.00,  img: '', sigla: 'X2',  atajo: 'x2',  minutos: 15, descripcion: 'Pollo + Carne o Chuleta',
               elegir: { cuantas: 2, entre: ['p5', 'p1', 'p2'] } },
-            { id: 'm2', nombre: 'Mixto 2 Carnes Especial',  precio: 7.00,  img: '', sigla: 'X2E', atajo: 'x2e', minutos: 20, descripcion: 'Costilla o Matambre + Pollo, Carne o Chuleta',
+            { id: 'm2', nombre: 'Mixto 2 Carnes Especial',  interno: 'Mixto 2 Proteínas Especial', precio: 7.00,  img: '', sigla: 'X2E', atajo: 'x2e', minutos: 20, descripcion: 'Costilla o Matambre + Pollo, Carne o Chuleta',
               elegir: { cuantas: 2, entre: ['p3', 'p4', 'p5', 'p1', 'p2'] } },
-            { id: 'm3', nombre: 'Mixto 3 Carnes',           precio: 8.00,  img: '', sigla: 'X3',  atajo: 'x3',  minutos: 15, descripcion: 'Pollo + Carne + Chuleta',
+            { id: 'm3', nombre: 'Mixto 3 Carnes',           interno: 'Mixto 3 Proteínas',          precio: 8.00,  img: '', sigla: 'X3',  atajo: 'x3',  minutos: 15, descripcion: 'Pollo + Carne + Chuleta',
               elegir: { cuantas: 3, entre: ['p5', 'p1', 'p2'] } },
-            { id: 'm4', nombre: 'Mixto 3 Carnes Especial',  precio: 10.00, img: '', sigla: 'X3E', atajo: 'x3e', minutos: 20, descripcion: 'Costilla, Matambre, Pollo, Carne, Chuleta',
+            { id: 'm4', nombre: 'Mixto 3 Carnes Especial',  interno: 'Mixto 3 Proteínas Especial', precio: 10.00, img: '', sigla: 'X3E', atajo: 'x3e', minutos: 20, descripcion: 'Costilla, Matambre, Pollo, Carne, Chuleta',
               elegir: { cuantas: 3, entre: ['p3', 'p4', 'p5', 'p1', 'p2'] } }
         ]
     },

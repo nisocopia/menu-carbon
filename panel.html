@@ -9,10 +9,10 @@
     <meta name="referrer" content="no-referrer">
     <title>Panel del Gerente</title>
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608071543">
-    <link rel="stylesheet" href="css/iconos.css?v=202608071543">
-    <link rel="stylesheet" href="css/style.css?v=202608071543">
-    <link rel="stylesheet" href="css/panel.css?v=202608071543">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608071555">
+    <link rel="stylesheet" href="css/iconos.css?v=202608071555">
+    <link rel="stylesheet" href="css/style.css?v=202608071555">
+    <link rel="stylesheet" href="css/panel.css?v=202608071555">
 </head>
 
 <body class="panel-body">
@@ -51,6 +51,7 @@
             <button class="tab activo" data-tab="hoy"><i class="fas fa-bell-concierge"></i> Pedidos</button>
             <button class="tab" data-tab="menu"><i class="fas fa-pen-to-square"></i> Menú</button>
             <button class="tab" data-tab="numeros"><i class="fas fa-chart-simple"></i> Números</button>
+            <button class="tab" data-tab="platos"><i class="fas fa-clipboard-list"></i> Contabilidad</button>
             <button class="tab" data-tab="local"><i class="fas fa-store"></i> Local</button>
         </nav>
 
@@ -116,6 +117,34 @@
             </div>
         </section>
 
+        <!-- ===== CONTABILIDAD DE PLATOS =====
+             Solo lo que se cocina: platos fuertes, porciones de proteína y
+             juniors. Las bebidas y las porciones de guarnición quedan
+             fuera a propósito — no es lo que se quiere contar aquí. -->
+        <section class="panel-vista" id="vista-platos">
+            <div class="bloque">
+                <div class="bloque-head">
+                    <h2>Contabilidad de platos</h2>
+                    <div class="cont-dias" id="cont-dias"></div>
+                </div>
+                <p class="ayuda">
+                    Lo que salió de la cocina y de la parrilla. <b>No se cuentan las
+                    bebidas ni las porciones de arroz, menestra, patacones o plátano</b>
+                    — aquí solo va lo que se cocina.
+                </p>
+                <div id="cont-platos"></div>
+            </div>
+
+            <div class="bloque">
+                <h2>Proteínas que salieron</h2>
+                <p class="ayuda">
+                    Un mixto es un plato pero son dos o tres proteínas. Aquí se
+                    cuentan desarmadas, que es como se compran.
+                </p>
+                <div id="cont-proteinas"></div>
+            </div>
+        </section>
+
         <!-- ===== LOCAL ===== -->
         <section class="panel-vista" id="vista-local">
             <div class="bloque">
@@ -128,12 +157,12 @@
 
     </div>
 
-    <script src="js/menu-data.js?v=202608071543"></script>
-    <script src="js/sync.js?v=202608071543"></script>
-    <script src="js/store.js?v=202608071543"></script>
-    <script src="js/servicio.js?v=202608071543"></script>
-    <script src="js/panel.js?v=202608071543"></script>
-    <script src="js/pwa.js?v=202608071543"></script>
+    <script src="js/menu-data.js?v=202608071555"></script>
+    <script src="js/sync.js?v=202608071555"></script>
+    <script src="js/store.js?v=202608071555"></script>
+    <script src="js/servicio.js?v=202608071555"></script>
+    <script src="js/panel.js?v=202608071555"></script>
+    <script src="js/pwa.js?v=202608071555"></script>
 
 </body>
 

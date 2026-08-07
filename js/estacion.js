@@ -919,7 +919,7 @@ function juntarIguales(items) {
     const filas = new Map();
 
     items.forEach(it => {
-        const seVe = JSON.stringify([it.nombre, !!it.llevar, detallesDe(it)]);
+        const seVe = JSON.stringify([Servicio.nombreDeItem(it), !!it.llevar, detallesDe(it)]);
         const ya = filas.get(seVe);
         if (ya) ya.cantidad += it.cantidad;
         else filas.set(seVe, { ...it });
@@ -949,7 +949,7 @@ function itemHtml(it, c) {
         return `
         <li class="ticket-item ${it.llevar ? 'llevar' : ''}">
             <span class="ti-cant">${it.cantidad}</span>
-            <span class="ti-nom">${it.nombre}${cola}</span>
+            <span class="ti-nom">${Servicio.nombreDeItem(it)}${cola}</span>
         </li>`;
     }
 
@@ -966,7 +966,7 @@ function itemHtml(it, c) {
             data-tarea="${c.id}" data-uid="${it.uid}" data-n="${hecha ? i : i + 1}">
             <span class="ti-caja">${hecha ? '<i class="fas fa-check"></i>' : ''}</span>
             <span class="ti-nom">
-                ${it.nombre}${it.cantidad > 1 ? ` <em class="ti-de">${i + 1} de ${it.cantidad}</em>` : ''}
+                ${Servicio.nombreDeItem(it)}${it.cantidad > 1 ? ` <em class="ti-de">${i + 1} de ${it.cantidad}</em>` : ''}
                 ${cola}
             </span>
         </li>`;

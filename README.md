@@ -246,6 +246,35 @@ asador lee con las manos ocupadas:
 hornada y los apanados no llevan sigla porque no son de parrilla — salen con
 su nombre.
 
+### Dos nombres para el mismo plato
+
+En la carta se vende **Mixto 2 Carnes**, que es lo que el comensal entiende.
+Puertas adentro ese mismo plato es **Mixto 2 Proteínas**, que es como se habla
+en la cocina. Se declara con `interno` en `menu-data.js` y lo usan la comanda,
+la cocina, la parrilla, servir y el panel — **la carta del comensal no**.
+
+Un plato sin `interno` se llama igual en los dos lados, así que no hay que
+declarar nada para los otros cuarenta y pico.
+
+Se resuelve **por el plato y no por lo que quedó escrito en la comanda**: el
+nombre se guarda tal como estaba el día del pedido, y si el gerente lo cambia,
+lo viejo seguiría diciendo lo de antes. El de repuesto es ese texto guardado,
+para lo que ya no está en el menú — las bebidas de la tienda, por ejemplo.
+
+### Contabilidad de platos
+
+Pestaña del panel con **lo que salió de la cocina y de la parrilla**, contado
+plato por plato y agrupado por categoría. Hoy, dos días o la semana.
+
+**No cuenta las bebidas ni las porciones de guarnición** —arroz, menestra,
+patacones, plátano—. No es un descuido: meter cuarenta colas en la misma tabla
+esconde justo lo que se quiere mirar. Las porciones de **proteína** sí entran,
+y los juniors también.
+
+Debajo, las **proteínas desarmadas**: un mixto es un plato pero son dos o tres
+proteínas, y de la nevera salieron dos o tres. Las dos cuentas son verdad y
+responden preguntas distintas — cuánto se vendió, y cuánto hay que comprar.
+
 ### Lo que no se anuncia
 
 Los **juniors no salen en el menú del comensal**. Son porción de niño y

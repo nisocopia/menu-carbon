@@ -240,7 +240,7 @@ function verCuenta(sesionId, titulo) {
                     <li>
                         <span class="vmesa-cant">${it.cantidad}</span>
                         <span>
-                            ${it.nombre}
+                            ${Servicio.nombreDeItem(it)}
                             ${it.llevar ? '<em>🥡 para llevar</em>' : ''}
                             ${it.cambio ? `<em>${Servicio.comoSeSirve(it)}</em>` : ''}
                             ${(it.sin && it.sin.length)

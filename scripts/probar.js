@@ -2807,6 +2807,108 @@ async function probarVaciarDeVerdad() {
     nube.caida = false;
 }
 
+/* ============================================================
+   DOS NOMBRES PARA EL MISMO PLATO
+
+   En la carta se vende "Mixto 2 Carnes", que es lo que el comensal
+   entiende. En la cocina se habla de proteinas. Son dos nombres para lo
+   mismo y cada uno vale en su sitio.
+   ============================================================ */
+
+function probarNombreInterno() {
+    console.log('\n--- El mixto se llama distinto adentro y afuera ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    comprobar('en la carta sigue diciendo Carnes',
+        corre(`Store.findPlato('m1').nombre`), 'Mixto 2 Carnes');
+    comprobar('pero puertas adentro son Proteinas',
+        corre(`Servicio.nombreInterno('m1')`), 'Mixto 2 Proteínas');
+    comprobar('y el especial tambien',
+        corre(`Servicio.nombreInterno('m4')`), 'Mixto 3 Proteínas Especial');
+
+    /* Un plato sin nombre interno usa el suyo: no hay que declarar nada
+       para los 44 platos que se llaman igual en los dos lados. */
+    comprobar('un pollo se llama igual en todos lados',
+        corre(`Servicio.nombreInterno('p5')`), 'Pollo Asado');
+
+    /* Y lo que ya no esta en el menu —una cerveza de la tienda— se queda
+       con el nombre que quedo escrito en la comanda. */
+    comprobar('una bebida de la tienda conserva el suyo',
+        corre(`Servicio.nombreDeItem({ platoId: 'x9', nombre: 'Pilsener' })`), 'Pilsener');
+
+    /* LA CARTA DEL COMENSAL NO SE TOCA. Esto es lo que pidio el dueño:
+       el cambio es para el personal. Si app.js empezara a usar el nombre
+       interno, el comensal veria "proteinas" en el menu. */
+    const app = fuente('js/app.js');
+    comprobar('la carta del comensal no usa el nombre interno',
+        /nombreInterno|nombreDeItem/.test(app), false);
+
+    // Y las pantallas del personal si
+    ['js/comanda.js', 'js/estacion.js', 'js/servir.js', 'js/panel.js'].forEach(f => {
+        comprobar('   ' + f.replace('js/', '') + ' usa el interno',
+            /nombreInterno|nombreDeItem/.test(fuente(f)), true);
+    });
+}
+
+/* ============================================================
+   CONTABILIDAD DE PLATOS
+
+   Lo que salio de la cocina y de la parrilla. Sin bebidas ni porciones
+   de guarnicion: el gerente pidio ver lo que se cocina.
+   ============================================================ */
+
+function probarContabilidad() {
+    console.log('\n--- Contabilidad de platos ---');
+    nubeLimpia();
+    const { corre } = celular('gerente');
+
+    corre(`Servicio.enviarComanda({ mesa: 2, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado',   precio: 3.5, cantidad: 2 },
+        { platoId: 'q1', nombre: 'Porción de Pollo', precio: 2, cantidad: 1 },
+        { platoId: 'j1', nombre: 'Junior de Pollo',  precio: 2.5, cantidad: 1 },
+        { platoId: 'b3', nombre: 'Cola personal', precio: 0.5, cantidad: 4 },
+        { platoId: 'r1', nombre: 'Arroz',         precio: 1.5, cantidad: 3 },
+        { platoId: 'm1', nombre: 'Mixto 2 Carnes', precio: 6, cantidad: 1,
+          elegidas: ['p5', 'p1'] }] })`);
+
+    /* Se cuenta con la misma regla que el panel: fuera bebidas,
+       porciones de guarnicion y extras. */
+    const cuenta = corre(`(() => {
+        const FUERA = ['bebidas', 'porciones', 'extras'];
+        const platos = {}, proteinas = {};
+        Object.values(Servicio.getComandas()).forEach(c => c.items.forEach(it => {
+            if (it.automatico) return;
+            const cat = Servicio.categoriaDe(it.platoId);
+            if (!cat || FUERA.includes(cat.id)) return;
+            platos[Servicio.nombreDeItem(it)] = (platos[Servicio.nombreDeItem(it)] || 0) + it.cantidad;
+            const cons = Servicio.consumoDe(it);
+            Object.keys(cons).forEach(p => { proteinas[p] = (proteinas[p] || 0) + cons[p]; });
+        }));
+        return { platos, proteinas };
+    })()`);
+
+    comprobar('el pollo asado se cuenta',        cuenta.platos['Pollo Asado'], 2);
+    comprobar('la porción de proteína también',  cuenta.platos['Porción de Pollo'], 1);
+    comprobar('y el junior',                     cuenta.platos['Junior de Pollo'], 1);
+    comprobar('el mixto sale con su nombre de adentro',
+        cuenta.platos['Mixto 2 Proteínas'], 1);
+
+    comprobar('las colas NO se cuentan',   cuenta.platos['Cola personal'], undefined);
+    comprobar('el arroz suelto tampoco',   cuenta.platos['Arroz'], undefined);
+
+    /* Y desarmado: el mixto es UN plato pero DOS proteinas. Las dos
+       cuentas son verdad y responden preguntas distintas. */
+    comprobar('el mixto suma sus dos proteínas por separado',
+        [cuenta.proteinas.pollo, cuenta.proteinas.carne], [5, 1]);
+
+    // La pestaña existe y el panel la dibuja
+    comprobar('el panel tiene su pestaña',
+        /data-tab="platos"/.test(fuente('panel.html')), true);
+    comprobar('y sabe qué dejar fuera',
+        /FUERA_DE_CUENTA = \['bebidas', 'porciones', 'extras'\]/.test(fuente('js/panel.js')), true);
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -2841,6 +2943,8 @@ async function main() {
     await probarLlamarAlSalon();
     probarCuantasConexiones();
     await probarVaciarDeVerdad();
+    probarNombreInterno();
+    probarContabilidad();
     await probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();

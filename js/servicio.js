@@ -645,6 +645,29 @@ const Servicio = (() => {
         return String(nombre || '').replace(/\s+(al|a la|de|con)\s+/gi, ' ');
     }
 
+    /**
+     * Cómo se le dice al plato PUERTAS ADENTRO.
+     *
+     * En la carta se vende "Mixto 2 Carnes", que es lo que el comensal
+     * entiende. En la cocina se habla de proteínas, y ahí ese mismo
+     * plato es "Mixto 2 Proteínas". Son dos nombres para lo mismo y
+     * cada uno vale en su sitio.
+     *
+     * Se resuelve POR EL PLATO y no por lo que quedó escrito en la
+     * comanda: el nombre se guarda tal como estaba el día del pedido, y
+     * si el gerente lo cambia, lo viejo seguiría diciendo lo de antes.
+     * El de repuesto es ese texto guardado, para lo que ya no está en el
+     * menú — las bebidas de la tienda, por ejemplo.
+     */
+    function nombreInterno(platoId, deRepuesto) {
+        const p = Store.findPlato(platoId);
+        if (p && p.interno) return p.interno;
+        return deRepuesto || (p && p.nombre) || '';
+    }
+
+    /** Igual, pero recibiendo el ítem de una comanda. */
+    const nombreDeItem = it => nombreInterno(it.platoId || it.id, it.nombre);
+
     /* ============================================================
        EL CÓDIGO DEL PEDIDO
 
@@ -2088,7 +2111,7 @@ const Servicio = (() => {
         cambiosDe, guarnicionFinal, comoSeSirve,
         productoDe, nombreProducto, consumoDe, quedanDe, quedanDePlato,
         sePuedePedir, quedanTodos, revisarStock,
-        cubiertosDe, nombreCorto, resumirItems,
+        cubiertosDe, nombreCorto, resumirItems, nombreInterno, nombreDeItem,
         // una cuenta: una mesa o un pedido para llevar
         sesionesDe, tandasDe, cuentaDe, nombreDeCuenta, llevarAbiertos, llevarPorNombre,
         // reglas de lo que todavía se puede tocar
