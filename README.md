@@ -383,6 +383,59 @@ que el arroz y la menestra que reemplazan.
 En la parrilla no se muestra. Al asador no le cambia nada — él saca la
 proteína igual. La que necesita leerlo es la cocina, que es la que emplata.
 
+### Llamar al salón
+
+La cocina y el asador no pueden salir de su sitio, así que gritaban. Ahora
+tienen dos botones —**Mesero** y **Cubiertos**— y suena en el celular de quien
+les toca.
+
+**Van en la cabecera**, entre el título y el punto de la conexión. No en cada
+tarjeta: ahí estarían solo cuando hay pedidos, y un tablero vacío es justo
+cuando hace falta pedir cubiertos. Además quedan lejos del **ENTREGADO**, que
+vive al fondo de cada tarjeta y es el único botón grande y lleno de la
+pantalla — un dedo con prisa no los confunde.
+
+El precio de tenerlos ahí es que la llamada **no dice de qué mesa es**. Se
+acepta: un timbre en la cocina significa "ven a la cocina", que es lo que ya
+quería decir el grito al que reemplaza.
+
+**Nadie tiene que apagarla.** Se guarda cuándo se llamó y se da por viva
+mientras sea reciente; al minuto y medio desaparece sola. Un aviso que hay que
+apagar es un aviso que alguien se olvida de apagar, y el de al lado ya no sabe
+si es de ahora o de hace media hora.
+
+**No se encola.** Todo lo demás se guarda y se reintenta hasta que sale,
+porque un pedido no se puede perder. Un timbre es al revés: si llega diez
+minutos tarde, el mesero camina hasta la cocina y ya nadie se acuerda de para
+qué lo llamaron. Si no sale ahora no sale, el botón no se queda encendido
+mintiendo, y se le dice al que llamó — para que grite como toda la vida.
+
+**El tono es distinto** al del pedido nuevo: el de la cocina es agudo y cae
+(2600 → 1950 Hz); este es más grave y sube, en pares lentos, durante **cinco
+segundos**. Si sonaran igual, el mesero miraría la pantalla creyendo que entró
+un pedido.
+
+#### Cuántas conexiones abre cada pantalla
+
+El navegador solo permite unas **seis por sitio**. Cuando el sistema abría una
+por rama no quedaba ninguna libre para *enviar*, y el pedido esperaba turno
+hasta agotar el plazo — fue lo de "actualiza tres veces". Por eso se cuentan:
+
+| Pantalla | Conexiones | Cuáles |
+|---|---|---|
+| Cocina · Parrilla | 2 | comandas, llamadas |
+| Servir | 2 | comandas, llamadas |
+| Comanda | 2 | comandas, llamadas |
+
+Al agregar el timbre, la comanda **bajó** de 3 a 2: los agotados y el stock
+dejaron de escucharse en vivo y pasaron a preguntarse cada seis segundos, de
+un solo tirón (la rama `menu` trae los dos). Un plato agotado puede tardar
+seis segundos en avisarse; un timbre que tarda seis segundos es un timbre que
+el de la cocina cree que no funcionó, y lo toca otra vez.
+
+`scripts/probar.js` cuenta las conexiones en cada cambio, para que esto no
+vuelva a crecer sin que nadie se dé cuenta.
+
 ### Quién ve qué
 
 | Pantalla | Ve |

@@ -42,6 +42,7 @@
             ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'rgi36tpn1KNHeDEqJN17dpbWguy2')"
           },
 
+
           "items": {
             ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')"
           },
@@ -81,6 +82,18 @@
             ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
             ".validate": "newData.isString() && newData.val().length < 300"
           }
+        }
+      },
+
+      "llamadas": {
+        ".read": "auth != null",
+        ".write": false,
+        "$aQuien": {
+          ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'rgi36tpn1KNHeDEqJN17dpbWguy2' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
+          ".validate": "newData.hasChildren(['cuando'])",
+          "cuando": { ".validate": "newData.isNumber()" },
+          "de":     { ".validate": "newData.isString() && newData.val().length < 20" },
+          "$otro":  { ".validate": false }
         }
       },
 

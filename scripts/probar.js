@@ -129,13 +129,29 @@ function celular(rol) {
            a todos —incluido a quien escribió— lo que se acaba de guardar,
            y ahí es donde se rompían los vistos de la cocina. Sin esto las
            pruebas nunca veían la mitad de la conversación. */
-        escuchar: (rama, avisar) => { propio.avisar = avisar; return () => {}; },
+        /* Un oyente POR RAMA. Antes era uno solo, y desde que iniciar()
+           escucha tambien las llamadas, el segundo pisaba al primero: el
+           eco de la nube le llegaba al oyente equivocado y las pruebas
+           de la cocina fallaban sin que nada estuviera roto. */
+        escuchar: (rama, avisar) => {
+            propio.oyentes = propio.oyentes || {};
+            propio.oyentes[rama] = avisar;
+            return () => {};
+        },
         /* Copia y no el mismo objeto: cada celular recibe su propia
            respuesta, y lo que borra uno no desaparece del otro hasta
            que la nube se lo diga. Ahí es donde está la carrera. */
         leer: async rama =>
             (rama === 'servicio/entrantes' ? JSON.parse(JSON.stringify(nube.entrantes)) : undefined),
-        guardar:  async (rama, valor) => { propio.enviado.push({ metodo: 'PUT',   rama, valor }); return true; },
+        /* Guardar tambien se cae con la nube. Antes devolvia true pase lo
+           que pase, asi que una prueba de "sin conexion" no probaba
+           nada: todo lo que no pasara por la cola se daba por enviado. */
+        guardar:  async (rama, valor) => {
+            if (nube.caida) return false;
+            if (nube.prohibido && nube.prohibido(rama, valor, 'PUT')) return false;
+            propio.enviado.push({ metodo: 'PUT', rama, valor });
+            return true;
+        },
         parchear: async (rama, valor) => { propio.enviado.push({ metodo: 'PATCH', rama, valor }); return true; },
         agregar:  async (rama, valor) => { propio.enviado.push({ metodo: 'POST',  rama, valor }); return true; },
         /* La cola manda por aquí. `nube.prohibido` deja simular que las
@@ -183,8 +199,9 @@ function celular(rol) {
      *   eco('/k1/listos', { i1: 1 }, true)   solo cambió eso  (patch)
      *   eco('/k1', {...}, false)             esto es todo lo que hay (put)
      */
-    const eco = (ruta, dato, esRetoque) => {
-        if (propio.avisar) propio.avisar(dato, ruta, esRetoque);
+    const eco = (ruta, dato, esRetoque, rama) => {
+        const f = propio.oyentes && propio.oyentes[rama || 'servicio/comandas'];
+        if (f) f(dato, ruta, esRetoque);
     };
 
     return { propio, corre, eco };
@@ -2538,6 +2555,135 @@ async function probarCambiarBebidaYaServida() {
         corre(`Servicio.edicionDe(Servicio.getComandas()['${id}'])`), 'no');
 }
 
+/* ============================================================
+   LLAMAR AL SALÓN
+
+   La cocina y el asador no pueden salir de su sitio y hasta ahora
+   gritaban. El botón va en la cabecera, no en las tarjetas: ahí está
+   siempre, y un tablero vacío es justo cuando hace falta pedir
+   cubiertos.
+   ============================================================ */
+
+async function probarLlamarAlSalon() {
+    console.log('\n--- La cocina llama al salón ---');
+    nubeLimpia();
+    const cocina = celular('cocina');
+    const mesero = celular('mesero');
+    // Las dos pantallas arrancan: es lo que abre los canales en vivo
+    cocina.corre(`Servicio.iniciar(() => {}, 'estacion')`);
+    mesero.corre(`Servicio.iniciar(() => {})`);
+
+    comprobar('al principio no llama nadie',
+        mesero.corre(`Servicio.llamadaPara('mesero')`), null);
+
+    await cocina.corre(`Servicio.llamar('mesero')`);
+
+    // Sale de la cocina por su propia rama, no metida en una comanda
+    const enviado = cocina.propio.enviado.find(e => e.rama.startsWith('servicio/llamadas'));
+    comprobar('se manda por la rama de las llamadas',
+        !!enviado && enviado.rama, 'servicio/llamadas/mesero');
+    comprobar('y dice quién llamó', enviado.valor.de, 'cocina');
+
+    // Le llega al mesero por el canal en vivo
+    mesero.eco('/mesero', enviado.valor, false, 'servicio/llamadas');
+    const l = mesero.corre(`Servicio.llamadaPara('mesero')`);
+    comprobar('al mesero le llega', !!l && l.de, 'cocina');
+
+    /* Al que sirve NO le llega: cada uno recibe lo suyo. Si sonaran las
+       dos pantallas con cada llamada, en dos noches nadie mira ninguna. */
+    comprobar('al que sirve no le suena',
+        mesero.corre(`Servicio.llamadaPara('servir')`), null);
+
+    /* NADIE LA APAGA: se apaga sola. Un aviso que hay que apagar es un
+       aviso que alguien se olvida de apagar, y el de al lado ya no sabe
+       si es de ahora o de hace media hora. */
+    mesero.corre(`(() => {
+        const t = Servicio.getLlamadas();
+        t.mesero.cuando = Date.now() - 91 * 1000;
+        localStorage.setItem('srv_llamadas', JSON.stringify(t));
+    })()`);
+    comprobar('al minuto y medio se apaga sola',
+        mesero.corre(`Servicio.llamadaPara('mesero')`), null);
+
+    // Y la cocina ve encendido su propio botón mientras dure
+    nubeLimpia();
+    const c2 = celular('parrilla');
+    await c2.corre(`Servicio.llamar('servir')`);
+    comprobar('el que llamó ve su botón encendido',
+        c2.corre(`Servicio.llamadaViva('servir')`), true);
+    comprobar('pero no el del otro',
+        c2.corre(`Servicio.llamadaViva('mesero')`), false);
+
+    /* SIN LINEA NO SE GUARDA PARA DESPUES. Todo lo demas se encola y se
+       reintenta; un timbre no. Llegar diez minutos tarde manda al mesero
+       a la cocina a preguntar para que lo llamaron. */
+    nubeLimpia();
+    nube.caida = true;
+    const c3 = celular('cocina');
+    const salio = await c3.corre(`Servicio.llamar('mesero')`);
+    comprobar('sin conexion la llamada no sale', salio, false);
+    comprobar('y el boton NO se queda encendido mintiendo',
+        c3.corre(`Servicio.llamadaViva('mesero')`), false);
+    comprobar('ni se queda encolada para sonar tarde',
+        c3.corre(`Servicio.pendientes()`), 0);
+    nube.caida = false;
+}
+
+/* ============================================================
+   CUÁNTAS CONEXIONES ABRE CADA PANTALLA
+
+   El navegador solo permite unas SEIS por sitio. Cuando el sistema
+   abría una por rama no quedaba ninguna libre para ENVIAR, y el pedido
+   esperaba turno hasta agotar el plazo: fue lo de "actualiza tres
+   veces". Esto se cuenta en cada cambio para que no vuelva a pasar sin
+   que nadie se dé cuenta.
+   ============================================================ */
+
+function probarCuantasConexiones() {
+    console.log('\n--- Conexiones permanentes por pantalla (el tope del navegador son 6) ---');
+
+    const abiertas = modo => {
+        nubeLimpia();
+        const { corre, propio } = celular('gerente');
+        corre(`Servicio.iniciar(() => {}${modo ? ", '" + modo + "'" : ''})`);
+        return Object.keys(propio.oyentes || {});
+    };
+
+    const estacion = abiertas('estacion');
+    comprobar('cocina y parrilla abren 2', estacion.length, 2);
+    comprobar('y son las comandas y las llamadas', estacion.sort(),
+        ['servicio/comandas', 'servicio/llamadas']);
+
+    const servir = abiertas('servir');
+    comprobar('la de servir, las mismas 2', servir.length, 2);
+
+    const comanda = abiertas(null);
+    comprobar('la comanda, también 2', comanda.length, 2);
+
+    /* El menú del gerente —agotados y stock— dejó de escucharse en vivo
+       y pasó a preguntarse cada seis segundos, para dejarle la conexión
+       al timbre. Un plato agotado puede tardar seis segundos; un timbre
+       que tarda seis segundos es un timbre que el de la cocina cree que
+       no funcionó, y lo toca otra vez. */
+    const com = fuente('js/comanda.js');
+    comprobar('la comanda ya no escucha el menú en vivo',
+        /escuchar\('menu\//.test(com), false);
+    comprobar('lo pregunta en la ronda, de un solo tirón',
+        /Sync\.leer\('menu'\)/.test(com), true);
+
+    // Y la nube tiene que dejar escribir la llamada a quien la hace
+    const reglas = JSON.parse(fuente('firebase-rules.json')).rules.servicio.llamadas;
+    comprobar('la rama de las llamadas existe', !!reglas, true);
+    comprobar('la lee cualquiera del local', reglas['.read'], 'auth != null');
+    comprobar('la escriben la cocina y el asador',
+        /rgi36tpn1KNHeDEqJN17dpbWguy2/.test(reglas.$aQuien['.write']) &&
+        /0elTDMQYcHSZYZHHyZ4i3RFPQEo1/.test(reglas.$aQuien['.write']), true);
+    comprobar('pero no el mesero, que es a quien llaman',
+        /YHeMmcUbMFdsPQrIcvT561FDunt1/.test(reglas.$aQuien['.write']), false);
+    comprobar('y un campo que no está en la lista no entra',
+        reglas.$aQuien.$otro['.validate'], false);
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -2569,6 +2715,8 @@ async function main() {
     probarStock();
     await probarBebidaDeLaTienda();
     await probarCambiarBebidaYaServida();
+    await probarLlamarAlSalon();
+    probarCuantasConexiones();
     await probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();
