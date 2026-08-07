@@ -432,7 +432,8 @@ function previaHtml(c) {
         </div>`;
 }
 
-const lineaCorta = it => `${it.cantidad} ${it.nombre}${it.llevar ? ' 🥡' : ''}`;
+const lineaCorta = it =>
+    `${it.cantidad} ${Servicio.nombreDeItem(it)}${it.llevar ? ' 🥡' : ''}`;
 
 /* ---------- Escritura rápida ---------- */
 
@@ -592,7 +593,7 @@ function pintarRapidos() {
         [...platos, ...jugos].map(p => `
             <button class="rapido ${seVende(p) ? '' : 'sin-stock'}" data-plato="${p.id}"
                     ${seVende(p) ? '' : 'disabled'}>
-                <span class="rapido-nom">${p.nombre}</span>
+                <span class="rapido-nom">${Servicio.nombreInterno(p.id, p.nombre)}</span>
                 <span class="rapido-pre">${avisoDeStock(p) || money(p.precio)}</span>
             </button>`).join('') +
         `<button class="rapido otra" id="btn-otra-bebida">
@@ -611,7 +612,7 @@ function pintarTodoElMenu() {
                 ${platos.map(p => `
                     <button class="tm-plato ${seVende(p) ? '' : 'sin-stock'}" data-plato="${p.id}"
                             ${seVende(p) ? '' : 'disabled'}>
-                        <span>${p.nombre}</span>
+                        <span>${Servicio.nombreInterno(p.id, p.nombre)}</span>
                         <span class="tm-pre">${avisoDeStock(p) || money(p.precio)}</span>
                     </button>`).join('')}
             </div>`;
@@ -789,7 +790,7 @@ function bitemHtml(it) {
         <div class="bitem bloqueado">
             <div class="bitem-cant"><span>${it.cantidad}</span></div>
             <div class="bitem-info">
-                <span class="bitem-nom">${it.nombre}</span>
+                <span class="bitem-nom">${Servicio.nombreDeItem(it)}</span>
                 ${detalleItem(it, false) || '<span class="bitem-det">ya está en la parrilla</span>'}
             </div>
             <span class="bitem-pre">${money(it.precio * it.cantidad)}</span>
@@ -808,7 +809,7 @@ function bitemHtml(it) {
                 <button data-mas="${it.uid}" aria-label="Agregar uno">+</button>
             </div>
             <div class="bitem-info" data-mod="${it.uid}">
-                <span class="bitem-nom">${it.nombre}</span>
+                <span class="bitem-nom">${Servicio.nombreDeItem(it)}</span>
                 ${aparte ? '<span class="bitem-aparte">tanda nueva</span>' : ''}
                 ${detalleItem(it, faltaElegir)}
             </div>
@@ -874,7 +875,7 @@ function abrirMod(uid) {
     const plato = Store.findPlato(it.platoId);
     const guarnicion = Servicio.guarnicionDe(it.platoId);
 
-    $('hoja-titulo').textContent = it.nombre;
+    $('hoja-titulo').textContent = Servicio.nombreDeItem(it);
 
     const bloques = [];
 

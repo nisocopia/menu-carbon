@@ -405,7 +405,7 @@ function renderPedidos() {
             <ul class="pedido-items">
                 ${(p.items || []).map(i => `
                     <li>
-                        <span>${i.cantidad}×</span> ${i.nombre}
+                        <span>${i.cantidad}×</span> ${Servicio.nombreDeItem(i)}
                         ${i.llevar ? ' 🥡' : ''}
                         ${i.cambio ? `<em>${Servicio.comoSeSirve(i)}</em>` : ''}
                         ${(i.sin && i.sin.length) ? `<em>sin ${i.sin.map(g => GUARNICIONES[g] || g).join(', ')}</em>` : ''}
@@ -415,6 +415,151 @@ function renderPedidos() {
             <div class="pedido-total">${dinero(p.total)}</div>
         </div>`;
     }).join('');
+}
+
+/* ============================================================
+   CONTABILIDAD DE PLATOS
+
+   Lo que salió de la cocina y de la parrilla, contado plato por plato.
+
+   QUÉ NO ENTRA, y es a propósito: las bebidas y las porciones de
+   guarnición —arroz, menestra, patacones, plátano—. No es descuido: el
+   gerente pidió ver lo que se cocina, y meter cuarenta colas en la
+   misma tabla esconde justo lo que se quiere mirar. Las porciones de
+   PROTEÍNA sí entran, y los juniors también.
+
+   Se lee de las comandas y no de los pedidos del comensal: la mayoría
+   de lo que se vende lo toma el mesero, y contar solo lo que llega por
+   el celular del cliente dejaría fuera casi todo.
+   ============================================================ */
+
+/** Las categorías que NO se cuentan aquí. */
+const FUERA_DE_CUENTA = ['bebidas', 'porciones', 'extras'];
+
+let contDias = 1;          // 1 = hoy; el gerente puede pedir más atrás
+
+function arrancaDelDia(hace) {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() - (hace - 1) * 24 * 3600 * 1000;
+}
+
+/**
+ * Cuenta lo vendido en el periodo, plato por plato y proteína por
+ * proteína.
+ *
+ * El mixto se cuenta DOS VECES a propósito y en dos tablas distintas:
+ * como un plato en la de arriba —porque es un plato y se cobró como
+ * uno— y desarmado en la de abajo, porque de la nevera salieron dos
+ * proteínas. Las dos cuentas son verdad; responden preguntas distintas.
+ */
+function contarPlatos() {
+    const desde = arrancaDelDia(contDias);
+    const comandas = Object.values(Servicio.getComandas())
+        .filter(c => c.estado !== 'anulado' && (c.creado || 0) >= desde);
+
+    const platos = {};       // platoId -> { nombre, catId, cantidad, importe }
+    const proteinas = {};    // producto -> cantidad
+
+    comandas.forEach(c => (c.items || []).forEach(it => {
+        if (it.automatico) return;                       // la tarrina se pone sola
+        const cat = Servicio.categoriaDe(it.platoId);
+        if (!cat || FUERA_DE_CUENTA.includes(cat.id)) return;
+
+        const p = platos[it.platoId] || (platos[it.platoId] = {
+            nombre: Servicio.nombreDeItem(it),
+            catId: cat.id, catNombre: cat.nombre,
+            cantidad: 0, importe: 0
+        });
+        p.cantidad += it.cantidad;
+        p.importe  += it.precio * it.cantidad;
+
+        // Y desarmado: un mixto gasta las carnes que se escogieron
+        const consumo = Servicio.consumoDe(it);
+        Object.keys(consumo).forEach(prod => {
+            proteinas[prod] = (proteinas[prod] || 0) + consumo[prod];
+        });
+    }));
+
+    return { platos, proteinas, desde };
+}
+
+function renderContabilidad() {
+    const caja = document.getElementById('cont-platos');
+    if (!caja || !hayServicio()) {
+        if (caja) caja.innerHTML = `<p class="vacio">Esto necesita el sistema de comandas conectado.</p>`;
+        return;
+    }
+
+    const botones = document.getElementById('cont-dias');
+    if (botones) {
+        botones.innerHTML = [[1, 'Hoy'], [2, '2 días'], [7, 'La semana']]
+            .map(([n, t]) => `<button class="cont-dia ${contDias === n ? 'on' : ''}" data-dias="${n}">${t}</button>`)
+            .join('');
+    }
+
+    const { platos, proteinas } = contarPlatos();
+    const lista = Object.values(platos);
+
+    if (!lista.length) {
+        caja.innerHTML = `<p class="vacio">Todavía no se ha vendido nada en este periodo.</p>`;
+        document.getElementById('cont-proteinas').innerHTML = '';
+        return;
+    }
+
+    // Agrupadas por categoría, y dentro por lo más vendido
+    const porCat = {};
+    lista.forEach(p => (porCat[p.catId] = porCat[p.catId] || { nombre: p.catNombre, filas: [] }).filas.push(p));
+
+    const totalUnidades = lista.reduce((s, p) => s + p.cantidad, 0);
+    const totalDinero   = lista.reduce((s, p) => s + p.importe, 0);
+
+    caja.innerHTML = `
+        <div class="cont-total">
+            <div><span class="cont-cifra">${totalUnidades}</span><span class="cont-pie">platos</span></div>
+            <div><span class="cont-cifra">${dinero(totalDinero)}</span><span class="cont-pie">vendido</span></div>
+        </div>
+
+        ${Object.values(porCat).map(g => `
+            <div class="cont-grupo">
+                <h3>${g.nombre}
+                    <span>${g.filas.reduce((s, p) => s + p.cantidad, 0)}</span>
+                </h3>
+                <table class="tabla cont-tabla">
+                    <tbody>
+                        ${g.filas.sort((a, b) => b.cantidad - a.cantidad).map(p => `
+                            <tr>
+                                <td>${p.nombre}</td>
+                                <td class="cont-num">${p.cantidad}</td>
+                                <td class="cont-num">${dinero(p.importe)}</td>
+                            </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>`).join('')}`;
+
+    const prot = document.getElementById('cont-proteinas');
+    const filas = Object.keys(proteinas)
+        .map(k => ({ nombre: Servicio.nombreProducto(k), cantidad: proteinas[k] }))
+        .sort((a, b) => b.cantidad - a.cantidad);
+
+    prot.innerHTML = `
+        <table class="tabla cont-tabla">
+            <tbody>
+                ${filas.map(f => `
+                    <tr><td>${f.nombre}</td><td class="cont-num">${f.cantidad}</td></tr>`).join('')}
+            </tbody>
+        </table>`;
+}
+
+function conectarContabilidad() {
+    const botones = document.getElementById('cont-dias');
+    if (!botones) return;
+    botones.addEventListener('click', e => {
+        const b = e.target.closest('[data-dias]');
+        if (!b) return;
+        contDias = Number(b.dataset.dias);
+        renderContabilidad();
+    });
 }
 
 /* ============================================================
@@ -794,6 +939,7 @@ function renderTodo() {
     renderStock();
     renderEditorMenu();
     renderNumeros();
+    renderContabilidad();
     renderFormLocal();
 }
 
@@ -805,6 +951,7 @@ document.addEventListener('DOMContentLoaded', () => {
     conectarTabs();
     conectarEditor();
     conectarStock();
+    conectarContabilidad();
 
     // Con nube se entra con correo y clave; sin nube, solo con la clave
     if (Nube.activo) {

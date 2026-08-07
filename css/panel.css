@@ -231,7 +231,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    /* Que baje en vez de encimarse: en un celular angosto, "Contabilidad
+       de platos" con tres botones al lado se partía en dos líneas y los
+       botones se le montaban encima del título. */
+    flex-wrap: wrap;
+    gap: 10px 12px;
     margin-bottom: 12px;
 }
 
@@ -382,6 +386,56 @@
    El número va por producto, no por plato. La fila enseña de qué platos
    come ese producto: sin eso, "Pollo 12" no dice que el apanado y la
    porción salen de ahí mismo. */
+
+/* ---------- Contabilidad de platos ---------- */
+
+.cont-dias { display: flex; gap: 6px; }
+
+.cont-dia {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #999;
+    font-family: inherit;
+    font-size: 0.74rem;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+.cont-dia.on { background: #FFC107; border-color: #FFC107; color: #111; font-weight: 700; }
+
+.cont-total {
+    display: flex;
+    gap: 12px;
+    margin: 14px 0 18px;
+}
+.cont-total > div {
+    flex: 1;
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+}
+.cont-cifra { display: block; font-size: 1.6rem; font-weight: 700; color: #FFC107; }
+.cont-pie   { display: block; font-size: 0.72rem; color: #888; margin-top: 3px; }
+
+.cont-grupo { margin-bottom: 18px; }
+.cont-grupo h3 {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #888;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #262626;
+    margin-bottom: 4px;
+}
+.cont-grupo h3 span { color: #FFC107; font-weight: 700; font-size: 0.95rem; }
+
+.cont-tabla td { padding: 9px 0; border-bottom: 1px solid #1e1e1e; }
+.cont-tabla tr:last-child td { border-bottom: none; }
+.cont-num { text-align: right; font-weight: 600; white-space: nowrap; padding-left: 12px !important; }
 
 .stock-alarma {
     background: #2a1212;
