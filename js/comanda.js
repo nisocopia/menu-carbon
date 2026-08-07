@@ -1715,9 +1715,17 @@ function iniciar() {
     if (Sync.activo) {
         const mirarElMenu = async () => {
             const m = await Sync.leer('menu');
-            if (!m) return;
-            Store.aplicarOverridesRemotos(m.overrides);
-            Store.aplicarStockRemoto(m.stock);
+
+            /* OJO CON LA DIFERENCIA: `undefined` es "no se pudo leer" y
+               `null` es "no hay nada puesto". Tratarlos igual dejaba el
+               último agotado pegado para siempre — al destildarlo, la
+               rama se queda vacía, Firebase la borra, y si eso se lee
+               como "no se pudo", el celular del mesero se queda con el
+               plato agotado hasta que alguien recargue. */
+            if (m === undefined) return;
+
+            Store.aplicarOverridesRemotos(m && m.overrides);
+            Store.aplicarStockRemoto(m && m.stock);
             if (!$('vista-mesa').hidden) { pintarRapidos(); pintarTodoElMenu(); }
         };
         mirarElMenu();

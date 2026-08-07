@@ -383,6 +383,17 @@
    come ese producto: sin eso, "Pollo 12" no dice que el apanado y la
    porción salen de ahí mismo. */
 
+.stock-alarma {
+    background: #2a1212;
+    border: 1px solid #6b2020;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+}
+.stock-alarma strong { display: block; color: #ff8a80; font-size: 0.9rem; margin-bottom: 5px; }
+.stock-alarma span   { display: block; color: #bbb; font-size: 0.78rem; line-height: 1.5; }
+.stock-alarma code   { color: #FFC107; }
+
 .fila-stock {
     display: flex;
     align-items: center;

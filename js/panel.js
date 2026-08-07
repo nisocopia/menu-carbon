@@ -511,13 +511,20 @@ function conectarStock() {
     const caja = document.getElementById('stock-hoy');
     if (!caja) return;
 
-    caja.addEventListener('change', e => {
+    caja.addEventListener('change', async e => {
         const campo = e.target.closest('[data-stock]');
         if (!campo) return;
-        Store.setStock(campo.dataset.stock, campo.value === '' ? null : campo.value);
+
+        const r = Store.setStock(campo.dataset.stock, campo.value === '' ? null : campo.value);
         publicarStockDelPanel();
         renderStock();
         renderEditorMenu();
+
+        /* Si no llegó a la nube hay que decirlo AHORA. Los celulares del
+           salón se quedan con lo que diga la nube, así que en seis
+           segundos este número desaparece solo — y sin aviso, el gerente
+           lo escribe tres veces creyendo que la pantalla falla. */
+        if (Nube.activo && !(await r.salio)) avisarStockNoSalio();
     });
 
     caja.addEventListener('click', e => {
@@ -533,6 +540,28 @@ function conectarStock() {
 /** El número que ve la carta del comensal, que no puede restar sola. */
 function publicarStockDelPanel() {
     Store.publicarEspejo(Servicio.quedanTodos());
+}
+
+/**
+ * El número no llegó a la nube.
+ *
+ * No es un aviso pequeño: el resto de los celulares se queda con lo que
+ * diga la nube, así que dentro de seis segundos este número desaparece
+ * de esta misma pantalla. Sin decirlo, el gerente lo escribe otra vez,
+ * y otra, culpando al programa.
+ */
+function avisarStockNoSalio() {
+    const caja = document.getElementById('stock-hoy');
+    if (!caja || caja.querySelector('.stock-alarma')) return;
+
+    const aviso = document.createElement('div');
+    aviso.className = 'stock-alarma';
+    aviso.innerHTML = `
+        <strong><i class="fas fa-triangle-exclamation"></i> El número no se guardó en la nube</strong>
+        <span>Se va a borrar solo en unos segundos. Suele ser que las reglas de
+              Firebase están sin actualizar: copia <code>firebase-rules.json</code>
+              y pégalo en Firebase → Realtime Database → Reglas.</span>`;
+    caja.prepend(aviso);
 }
 
 /**

@@ -2682,6 +2682,18 @@ function probarCuantasConexiones() {
         /YHeMmcUbMFdsPQrIcvT561FDunt1/.test(reglas.$aQuien['.write']), false);
     comprobar('y un campo que no está en la lista no entra',
         reglas.$aQuien.$otro['.validate'], false);
+
+    /* UN CARTEL ESCONDIDO NO PUEDE SEGUIR TAPANDO.
+
+       El navegador esconde lo que lleva `hidden` con display:none, pero
+       cualquier display escrito en la hoja de estilos le gana. El cartel
+       de la llamada es fixed y ocupa toda la franja de abajo: sin la
+       regla que lo apaga se quedaba invisible PERO PUESTO, y el pie de
+       la pantalla —los enlaces, el botón de "Pedido para llevar"— dejaba
+       de responder al dedo sin que nadie entendiera por qué. */
+    const css = fuente('css/servicio.css');
+    comprobar('el cartel escondido no se come los toques',
+        /\.llamada-caja\[hidden\]\s*\{\s*display:\s*none/.test(css), true);
 }
 
 async function main() {

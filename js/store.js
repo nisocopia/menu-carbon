@@ -151,10 +151,18 @@ const Store = (() => {
         if (hay === null || hay === '' || isNaN(hay)) delete s[producto];
         else s[producto] = { hay: Math.max(0, Math.floor(Number(hay))), puesto: Date.now() };
         write(K.stock, s);
-        if (typeof Sync !== 'undefined' && Sync.activo && Sync.haySesion()) {
-            Sync.guardar('menu/stock', s);
-        }
-        return s[producto] || null;
+
+        /* Se devuelve SI LLEGÓ A LA NUBE, y hay que mirarlo. Los demás
+           celulares preguntan por el menú cada pocos segundos y se
+           quedan con lo que diga la nube: si esta escritura no salió
+           —las reglas sin actualizar, por ejemplo— el número que acaba
+           de escribir el gerente desaparece solo a los seis segundos, sin
+           un solo mensaje. Eso es peor que no dejarlo escribir. */
+        const salio = (typeof Sync !== 'undefined' && Sync.activo && Sync.haySesion())
+            ? Sync.guardar('menu/stock', s)
+            : Promise.resolve(false);
+
+        return { valor: s[producto] || null, salio };
     }
 
     function aplicarStockRemoto(s) { write(K.stock, s || {}); }

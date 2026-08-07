@@ -141,6 +141,14 @@
    esté viva, porque el mesero puede oír el pitido con las manos
    ocupadas y no llegar a mirar. */
 
+/* PRIMERO ESTO, y no es un detalle: el navegador esconde lo que lleva
+   `hidden` poniéndole display:none, pero cualquier display que se
+   escriba aquí le gana. Sin esta línea el cartel se queda invisible
+   PERO PUESTO, tapando toda la franja de abajo de la pantalla: los
+   enlaces del pie y el botón de "Pedido para llevar" dejaban de
+   responder al dedo y nadie entendía por qué. */
+.llamada-caja[hidden] { display: none; }
+
 .llamada-caja {
     position: fixed;
     left: 12px;
