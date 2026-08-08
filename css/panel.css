@@ -387,6 +387,22 @@
    come ese producto: sin eso, "Pollo 12" no dice que el apanado y la
    porción salen de ahí mismo. */
 
+/* Quitar un plato de un día ya cerrado. Chico y discreto: es una
+   corrección rara y no debe invitar al dedo. */
+.btn-corregir {
+    background: none;
+    border: 1px solid #4a2020;
+    border-radius: 6px;
+    color: #b06a6a;
+    font-family: inherit;
+    font-size: 0.95rem;
+    line-height: 1;
+    width: 28px;
+    height: 26px;
+    cursor: pointer;
+}
+.btn-corregir:active { background: #2a1212; }
+
 /* Anular una venta que no fue. Chico y gris: es una corrección rara,
    no una acción de todos los días. */
 .pedido-total {

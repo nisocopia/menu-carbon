@@ -717,6 +717,7 @@ function contarPlatos() {
         Object.keys(d.platos || {}).forEach(id => {
             const cat = Servicio.categoriaDe(id);
             const p = platos[id] || (platos[id] = {
+                id,
                 nombre: Servicio.nombreInterno(id, id),
                 catId: cat ? cat.id : 'otros',
                 catNombre: cat ? cat.nombre : 'Otros',
@@ -807,6 +808,11 @@ function renderContabilidad() {
                                 <td>${p.nombre}</td>
                                 <td class="cont-num">${p.cantidad}</td>
                                 <td class="cont-num">${dinero(p.importe)}</td>
+                                ${/* Corregir solo con un día elegido: "quítame una
+                                      carne" tiene que decir DE QUÉ DÍA. */''}
+                                ${contDia ? `<td class="cont-num">
+                                    <button class="btn-corregir" data-corregir="${p.id}"
+                                            title="Quitar de este día">−</button></td>` : ''}
                             </tr>`).join('')}
                     </tbody>
                 </table>
@@ -846,6 +852,34 @@ function conectarContabilidad() {
         // Volver a tocar el mismo día lo suelta: es el mismo dedo
         contDia = (contDia === f.dataset.dia) ? null : f.dataset.dia;
         renderContabilidad();
+    });
+
+    const platos = document.getElementById('cont-platos');
+    if (platos) platos.addEventListener('click', async e => {
+        const b = e.target.closest('[data-corregir]');
+        if (!b || !contDia) return;
+
+        const id = b.dataset.corregir;
+        const nombre = Servicio.nombreInterno(id, id);
+        const fila = b.closest('tr');
+        const hay = Number((fila.children[1].textContent || '').trim()) || 1;
+
+        const cuantos = prompt(
+            `Quitar ${nombre} del ${diaEnLetras(contDia).toLowerCase()}.
+
+` +
+            `Ese día hay ${hay}. ¿Cuántos quitar?`, '1');
+        if (cuantos === null) return;
+
+        const motivo = (prompt(
+            `Queda anotado en la cuenta de ese día.
+
+¿Por qué se quita?`) || '').trim();
+        if (!motivo) { avisar('Sin motivo no se corrige'); return; }
+
+        const r = await Servicio.corregirDia(contDia, id, cuantos, motivo);
+        renderContabilidad();
+        avisar(r.ok ? 'Corregido' : r.motivo);
     });
 
     const viendo = document.getElementById('cont-viendo');
