@@ -30,7 +30,9 @@ const Servicio = (() => {
         tomados:  NS + 'tomados',     // pedidos del comensal que este celular ya pasó a comanda
         apartado: NS + 'apartado',    // lo que la nube rechaza y nunca va a salir
         llamadas: NS + 'llamadas',    // la cocina o el asador llamando al salón
-        misLlam:  NS + 'mis_llamadas' // cuándo llamó ESTE aparato, para el freno
+        misLlam:  NS + 'mis_llamadas',// cuándo llamó ESTE aparato, para el freno
+        fiados:   NS + 'fiados',      // lo que se llevaron sin pagar
+        conta:    NS + 'contabilidad' // el resumen por día, que no se borra nunca
     };
 
     /* Un dispositivo puede quedarse sin nube (sync.js no cargó o el
@@ -661,8 +663,13 @@ const Servicio = (() => {
      */
     function nombreInterno(platoId, deRepuesto) {
         const p = Store.findPlato(platoId);
+        /* El orden importa y lo tuve al revés: manda el plato, y el de
+           repuesto es el ÚLTIMO recurso. Al revés, quien pasara el
+           identificador como repuesto —la contabilidad, que solo guarda
+           el id— veía "p3" en la pantalla en vez de "Costilla". */
         if (p && p.interno) return p.interno;
-        return deRepuesto || (p && p.nombre) || '';
+        if (p && p.nombre)  return p.nombre;
+        return deRepuesto || '';
     }
 
     /** Igual, pero recibiendo el ítem de una comanda. */
@@ -1656,6 +1663,218 @@ const Servicio = (() => {
     }
 
     /* ============================================================
+       FIAR
+
+       Muy poca gente, pero la hay: se lleva el plato y paga después.
+       Hasta ahora eso vivía en la cabeza del dueño o en un papel.
+
+       FIAR ES UN COBRO CON OTRA FORMA DE PAGO. La mesa se cierra y
+       queda libre —la gente se fue, la mesa está vacía, negarlo sería
+       mentirle a la pantalla— y la venta se anota el día que pasó, que
+       es cuando salió la comida de la cocina.
+
+       Lo que queda aparte es LA DEUDA, con nombre y con lo que se
+       comió. Esa no se borra hasta que paguen, aunque el servicio se
+       vacíe cada noche.
+
+       Y se guarda QUIÉN LA AUTORIZÓ. No es desconfianza: es que dentro
+       de tres semanas nadie se acuerda, y sin eso la única salida es
+       preguntar a todos.
+       ============================================================ */
+
+    const getFiados = () => read(K.fiados, {});
+
+    function fiar({ mesa, sesion, lineas, nombre }) {
+        const quien = String(nombre || '').trim();
+        if (!quien) return null;              // un fiado sin nombre no se puede cobrar
+
+        // Primero se cobra, para que la mesa se libere como con cualquier pago
+        const pago = registrarPago({ mesa, sesion, lineas, forma: 'fiado' });
+        if (!pago) return null;
+
+        const deuda = {
+            id: nuevoId(),
+            nombre: quien,
+            monto: pago.monto,
+            lineas,
+            mesa: pago.mesa || 0,
+            cuando: Date.now(),
+            /* Quién lo autorizó. El correo y no el rol: "mesero" no
+               sirve de nada si hay dos. */
+            autorizo: (Red.correoSesion && Red.correoSesion()) || rol()
+        };
+
+        const todos = getFiados();
+        todos[deuda.id] = deuda;
+        write(K.fiados, todos);
+        encolar(`servicio/fiados/${deuda.id}`, deuda);
+        alCambiar();
+        return deuda;
+    }
+
+    /**
+     * El panel trae de la nube lo que solo el gerente puede leer.
+     *
+     * Estas dos ramas no van en la ronda de `iniciar`: el mesero y la
+     * cocina no tienen permiso para leerlas, y pedirlas desde sus
+     * pantallas solo serviría para encender la alarma de "no llega
+     * nada" por algo que no les toca.
+     */
+    function cargarDelGerente(fiados, conta) {
+        if (fiados !== undefined) write(K.fiados, fiados || {});
+        if (conta  !== undefined) write(K.conta,  conta  || {});
+    }
+
+    /** Pagó lo que debía: la deuda desaparece. La venta ya estaba contada. */
+    function pagarFiado(id) {
+        const todos = getFiados();
+        if (!todos[id]) return false;
+        delete todos[id];
+        write(K.fiados, todos);
+        encolar(`servicio/fiados/${id}`, null);
+        alCambiar();
+        return true;
+    }
+
+    const fiadosPendientes = () =>
+        Object.values(getFiados()).sort((a, b) => a.cuando - b.cuando);
+
+    const totalFiado = () =>
+        fiadosPendientes().reduce((s, f) => s + (f.monto || 0), 0);
+
+    /* ============================================================
+       LA CONTABILIDAD NO SE BORRA
+
+       Los pedidos son pesados y temporales; la cuenta es diminuta y
+       para siempre. Son dos cosas distintas y hasta ahora vivían en la
+       misma caja.
+
+           una mesa completa, con notas y horas ...... 1 200 bytes
+           lo que aporta a la contabilidad ..........     ~30 bytes
+
+       Un día entero resumido pesa unos 2 KB. Diez años son 7 MB.
+
+       LA REGLA QUE LO HACE CORRECTO: una comanda está VIVA o está
+       CONTADA, nunca las dos cosas. Vaciar el servicio es el momento
+       exacto en que pasa de una a otra, así que no se puede contar dos
+       veces ni aunque se vacíe tres veces en un día.
+       ============================================================ */
+
+    const fechaDe = ts => {
+        const d = new Date(ts || Date.now());
+        return d.getFullYear() + '-' +
+               String(d.getMonth() + 1).padStart(2, '0') + '-' +
+               String(d.getDate()).padStart(2, '0');
+    };
+
+    const getContabilidad = () => read(K.conta, {});
+
+    /** Lo que aporta un montón de comandas, repartido por día. */
+    function resumirPorDia(comandas) {
+        const dias = {};
+
+        Object.values(comandas || {}).forEach(c => {
+            if (!c || c.estado === 'anulado') return;
+            const dia = fechaDe(c.creado);
+            const d = dias[dia] || (dias[dia] = {
+                platos: {}, proteinas: {}, sesiones: {}, total: 0
+            });
+
+            (c.items || []).forEach(it => {
+                d.total += (it.precio || 0) * (it.cantidad || 0);
+
+                /* Al resumen solo entra lo que se cocina. Las bebidas y
+                   las porciones de guarnición se cuentan en el dinero,
+                   no en los platos: meter cuarenta colas en la tabla
+                   esconde justo lo que se quiere mirar. */
+                const cat = categoriaDe(it.platoId);
+                if (it.automatico || !cat || ['bebidas', 'porciones', 'extras'].includes(cat.id)) return;
+
+                const p = d.platos[it.platoId] || (d.platos[it.platoId] = { c: 0, i: 0 });
+                p.c += it.cantidad;
+                p.i += (it.precio || 0) * it.cantidad;
+
+                const consumo = consumoDe(it);
+                Object.keys(consumo).forEach(prod => {
+                    d.proteinas[prod] = (d.proteinas[prod] || 0) + consumo[prod];
+                });
+            });
+
+            if (c.sesion) d.sesiones[c.sesion] = 1;
+        });
+
+        // Las mesas se cuentan al final: una mesa con tres tandas es una
+        Object.keys(dias).forEach(k => {
+            dias[k].mesas = Object.keys(dias[k].sesiones).length;
+            delete dias[k].sesiones;
+        });
+        return dias;
+    }
+
+    /** Suma lo nuevo a lo que ya había guardado de ese día. */
+    function sumarAlDia(guardado, nuevo) {
+        const d = guardado || { platos: {}, proteinas: {}, mesas: 0, total: 0 };
+        d.platos = d.platos || {};
+        d.proteinas = d.proteinas || {};
+
+        Object.keys(nuevo.platos).forEach(id => {
+            const p = d.platos[id] || (d.platos[id] = { c: 0, i: 0 });
+            p.c += nuevo.platos[id].c;
+            p.i = Math.round((p.i + nuevo.platos[id].i) * 100) / 100;
+        });
+        Object.keys(nuevo.proteinas).forEach(k => {
+            d.proteinas[k] = (d.proteinas[k] || 0) + nuevo.proteinas[k];
+        });
+        d.mesas = (d.mesas || 0) + (nuevo.mesas || 0);
+        d.total = Math.round(((d.total || 0) + nuevo.total) * 100) / 100;
+        d.cerrado = Date.now();
+        return d;
+    }
+
+    /**
+     * Apunta lo que hubo ANTES de borrarlo.
+     *
+     * Se leen las comandas de la NUBE y no de este celular: el que vacía
+     * puede ser un teléfono que no tomó ni un pedido, y contar solo lo
+     * que él vio dejaría fuera media noche.
+     */
+    async function cerrarElDia() {
+        let comandas = getComandas();
+
+        if (Red.activo && Red.haySesion()) {
+            const frescas = await Red.leer('servicio/comandas', true);
+            /* undefined es "no se pudo leer": ahí NO se sigue. Cerrar el
+               día con lo que este celular tenga a mano sería inventarse
+               la contabilidad. */
+            if (frescas === undefined) return false;
+            comandas = frescas || {};
+        }
+
+        const dias = resumirPorDia(comandas);
+        if (!Object.keys(dias).length) return true;      // no había nada que contar
+
+        const guardada = getContabilidad();
+        const salidas = [];
+
+        for (const dia of Object.keys(dias)) {
+            let previo = guardada[dia];
+            if (Red.activo && Red.haySesion()) {
+                const enNube = await Red.leer(`contabilidad/${dia}`, true);
+                if (enNube !== undefined) previo = enNube || previo;
+            }
+            const nuevo = sumarAlDia(previo, dias[dia]);
+            guardada[dia] = nuevo;
+            if (Red.activo && Red.haySesion()) {
+                salidas.push(Red.guardar(`contabilidad/${dia}`, nuevo));
+            }
+        }
+
+        write(K.conta, guardada);
+        const hechas = await Promise.all(salidas);
+        return hechas.every(Boolean);
+    }
+
+    /* ============================================================
        PEDIDOS QUE MANDA EL COMENSAL DESDE SU CELULAR
 
        No entran directo a la cocina. Caen en una bandeja y el mesero
@@ -2061,6 +2280,12 @@ const Servicio = (() => {
      * No borra el menú, los precios ni las bebidas aprendidas.
      */
     async function vaciarTodo() {
+        /* PRIMERO SE APUNTA, DESPUÉS SE BORRA. Y si no se pudo apuntar,
+           NO SE BORRA NADA: perder la contabilidad de una noche por un
+           wifi flojo no tiene arreglo después. Es la única función del
+           sistema que se niega a hacer su trabajo, y con razón. */
+        if (!(await cerrarElDia())) return false;
+
         write(K.comandas, {});
         write(K.sesiones, {});
         write(K.pagos, {});
@@ -2130,6 +2355,10 @@ const Servicio = (() => {
         // mover una cuenta: de mesa, o entre servirse y llevar
         moverMesa, moverCuenta, puedeCambiarServicio, efectoDeCambiarServicio,
         getExtras, guardarExtra,
+        // fiar: se lo lleva ahora y paga después
+        fiar, getFiados, pagarFiado, fiadosPendientes, totalFiado,
+        // la cuenta que no se borra nunca
+        cerrarElDia, getContabilidad, resumirPorDia, fechaDe, cargarDelGerente,
         // lo que manda el comensal
         enviarEntrante, getEntrantes, confirmarEntrante, descartarEntrante,
         // para el panel del gerente

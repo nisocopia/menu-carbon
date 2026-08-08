@@ -629,6 +629,25 @@
     cursor: not-allowed;
 }
 
+/* Fiar. Va debajo de las dos formas de cobro y con la mitad de peso:
+   es lo raro, y un botón de dinero grande al lado de los otros dos se
+   toca sin querer. Con borde punteado, que es como se ve lo que queda
+   pendiente en el resto del sistema. */
+.btn-fiar {
+    width: 100%;
+    margin-top: 8px;
+    background: none;
+    border: 1px dashed #4a4a4a;
+    border-radius: 10px;
+    color: #999;
+    font-family: inherit;
+    font-size: 0.82rem;
+    padding: 11px;
+    cursor: pointer;
+}
+.btn-fiar i { color: #c8a94a; margin-right: 4px; }
+.btn-fiar:active { background: #1f1f1f; }
+
 .poco { color: #FFC107; font-weight: 700; }
 .poco.agotado-ya { color: #ff5252; }
 

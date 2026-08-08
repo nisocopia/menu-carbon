@@ -1287,6 +1287,40 @@ function cobrar(forma) {
     else { seleccion = new Map(); pintarCobrar(); toast('Cobrado · faltan ' + money(cuenta.saldo)); }
 }
 
+/**
+ * Se lo lleva ahora y paga después.
+ *
+ * SIN NOMBRE NO HAY FIADO. Un "debe $12" sin dueño no se puede cobrar
+ * nunca, y dentro de tres semanas nadie se acuerda. Por eso se pregunta
+ * antes de cerrar nada, y si no lo escriben no pasa.
+ *
+ * La mesa se libera igual que con cualquier cobro: la gente se fue y la
+ * mesa está vacía. Lo que queda pendiente es la plata, no el sitio.
+ */
+function fiar() {
+    const lineas = [];
+    seleccion.forEach((cantidad, clave) => {
+        if (cantidad > 0) lineas.push({ platoId: clave.split('|')[0], precio: parseFloat(clave.split('|')[1]), cantidad });
+    });
+
+    if (!lineas.length) { toast('Toca primero lo que se lleva fiado.'); return; }
+
+    const monto = lineas.reduce((s, l) => s + l.precio * l.cantidad, 0);
+    const nombre = (prompt(
+        `Va fiado ${money(monto)}.\n\n` +
+        '¿A nombre de quién? Sin nombre no se puede cobrar después.'
+    ) || '').trim();
+
+    if (!nombre) { toast('Sin nombre no se puede fiar.'); return; }
+
+    const deuda = Servicio.fiar(Object.assign({ lineas, nombre }, refCobrando));
+    if (!deuda) { toast('No se pudo anotar el fiado.'); return; }
+
+    const cuenta = Servicio.cuentaDe(refCobrando);
+    if (cuenta.saldo <= 0.001) { toast(`Fiado a ${nombre} · ${money(monto)}`); verMesas(); }
+    else { seleccion = new Map(); pintarCobrar(); toast(`Fiado ${money(monto)} · faltan ` + money(cuenta.saldo)); }
+}
+
 /* ============================================================
    CAMBIAR DE MESA
 
@@ -1668,6 +1702,8 @@ function conectarEventos() {
 
         const forma = t.closest('[data-forma]');
         if (forma) return cobrar(forma.dataset.forma);
+
+        if (t.closest('#btn-fiar')) return fiar();
     });
 
     // Cerrar las hojas tocando el fondo

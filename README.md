@@ -261,6 +261,48 @@ nombre se guarda tal como estaba el día del pedido, y si el gerente lo cambia,
 lo viejo seguiría diciendo lo de antes. El de repuesto es ese texto guardado,
 para lo que ya no está en el menú — las bebidas de la tienda, por ejemplo.
 
+### Fiar
+
+Muy poca gente, pero la hay: se lleva el plato y paga después. En la pantalla
+de cobrar, debajo de Efectivo y Transferencia, un botón chico y punteado —
+**Fiar, paga después**. Pide el nombre y **sin nombre no pasa**: un "debe
+$7.50" sin dueño no se puede cobrar nunca.
+
+**Fiar es un cobro con otra forma de pago.** La mesa se cierra y queda libre
+—la gente se fue, negarlo sería mentirle a la pantalla— y la venta se anota el
+día que pasó, que es cuando salió la comida de la cocina. Lo que queda aparte
+es la deuda, con nombre, con lo que se comió y con **quién la autorizó**: en
+tres semanas nadie se acuerda, y sin eso la única salida es preguntar a todos.
+
+El mesero puede fiar; **la lista de quién debe la lee solo el gerente**. Cuando
+pagan, la deuda desaparece — la venta ya estaba contada, así que no se suma
+otra vez.
+
+La deuda **no se borra al vaciar el servicio**: `servicio/fiados` no está entre
+las ramas que se limpian.
+
+### La contabilidad no se borra
+
+Los pedidos son pesados y temporales; la cuenta es diminuta y para siempre:
+
+```
+   una mesa completa, con notas y horas ...... 1 200 bytes
+   lo que aporta a la contabilidad ..........     ~30 bytes
+```
+
+Un día resumido pesa unos 2 KB; diez años son 7 MB. Por eso `/contabilidad`
+guarda **un resumen por día** que no se borra nunca, aunque el servicio se
+vacíe cada noche.
+
+**La regla que lo hace correcto:** una comanda está *viva* o está *contada*,
+nunca las dos cosas. Vaciar el servicio es el momento exacto en que pasa de una
+a otra, así que no se puede contar dos veces ni aunque se vacíe tres veces en
+un día.
+
+Y un candado: **si no se pudo apuntar, no se borra nada.** Es la única función
+del sistema que se niega a hacer su trabajo. Perder la contabilidad de una
+noche por un wifi flojo no tiene arreglo después.
+
 ### Contabilidad de platos
 
 Pestaña del panel con **lo que salió de la cocina y de la parrilla**, contado
@@ -270,6 +312,11 @@ plato por plato y agrupado por categoría. Hoy, dos días o la semana.
 patacones, plátano—. No es un descuido: meter cuarenta colas en la misma tabla
 esconde justo lo que se quiere mirar. Las porciones de **proteína** sí entran,
 y los juniors también.
+
+**Día por día.** Los totales dicen cuánto se vendió; la lista de días dice
+*cuándo*. Es la que contesta "¿por qué el martes fue flojo?", y esa pregunta
+solo se puede hacer con los días separados. Tocar un día deja la pantalla
+mirando solo ese, con un cartel que lo avisa y la salida al lado.
 
 Debajo, las **proteínas desarmadas**: un mixto es un plato pero son dos o tres
 proteínas, y de la nevera salieron dos o tres. Las dos cuentas son verdad y
