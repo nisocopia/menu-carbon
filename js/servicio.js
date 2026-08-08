@@ -1725,6 +1725,40 @@ const Servicio = (() => {
         if (conta  !== undefined) write(K.conta,  conta  || {});
     }
 
+    /**
+     * Todo lo que el panel necesita, de una vez.
+     *
+     * El panel NO abre canal en vivo —no está tomando pedidos, está
+     * mirando números— así que se traía solo lo que ese teléfono tuviera
+     * guardado. En el del dueño coincide, porque es el mismo donde toma
+     * pedidos; abierto en cualquier otro, la contabilidad salía en
+     * blanco sin decir por qué.
+     *
+     * Se PIDE una vez al abrir. Son cinco lecturas cortas y ninguna
+     * conexión permanente, que es lo que hay que cuidar.
+     */
+    async function traerParaElPanel() {
+        if (!Red.activo || !Red.haySesion()) return false;
+
+        const [com, ses, pag, fia, con] = await Promise.all([
+            Red.leer('servicio/comandas', true),
+            Red.leer('servicio/sesiones', true),
+            Red.leer('servicio/pagos',    true),
+            Red.leer('servicio/fiados',   true),
+            Red.leer('contabilidad',      true)
+        ]);
+
+        /* `undefined` es "no se pudo leer" y se deja lo que había;
+           `null` es "está vacío" y hay que obedecerlo. */
+        if (com !== undefined) mezclar(K.comandas, com);
+        if (ses !== undefined) mezclar(K.sesiones, ses);
+        if (pag !== undefined) mezclar(K.pagos,    pag);
+        cargarDelGerente(fia, con);
+
+        alCambiar();
+        return true;
+    }
+
     /** Pagó lo que debía: la deuda desaparece. La venta ya estaba contada. */
     function pagarFiado(id) {
         const todos = getFiados();
@@ -2358,7 +2392,7 @@ const Servicio = (() => {
         // fiar: se lo lleva ahora y paga después
         fiar, getFiados, pagarFiado, fiadosPendientes, totalFiado,
         // la cuenta que no se borra nunca
-        cerrarElDia, getContabilidad, resumirPorDia, fechaDe, cargarDelGerente,
+        cerrarElDia, getContabilidad, resumirPorDia, fechaDe, cargarDelGerente, traerParaElPanel,
         // lo que manda el comensal
         enviarEntrante, getEntrantes, confirmarEntrante, descartarEntrante,
         // para el panel del gerente
