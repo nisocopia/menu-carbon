@@ -2077,6 +2077,95 @@ body.hay-nuevo::after {
 .servir-grid .smesa.ocupada:active { background: #2a2210; }
 
 /* ============================================================
+   LO QUE YA ENTREGÓ
+
+   Medio segundo apretando y la mesa cambia de color. Amarillo es "no le
+   he llevado nada", azul "ya tiene los cubiertos", verde "ya tiene los
+   platos". Es una libreta que vive en el celular del que sirve.
+
+   El color solo no basta: en una cocina con luz de tubo y una pantalla
+   con grasa, el azul y el verde se parecen más de lo que uno cree. Por
+   eso cada estado lleva además su icono en la esquina — tenedor o
+   visto— y así también lo lee quien no distingue bien los colores.
+   ============================================================ */
+
+/* El menú de copiar y compartir del navegador aparecía justo al medio
+   segundo, tapando la mesa. Y sin esto, mantener apretado seleccionaba
+   el número de la mesa y lo dejaba resaltado en azul de sistema. */
+.smesa {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* AZUL: los cubiertos y los aderezos ya están puestos */
+.servir-grid .smesa.ocupada.puesta {
+    background: #0d1f2d;
+    border-color: #2196f3;
+}
+.servir-grid .smesa.ocupada.puesta .smesa-num   { color: #64b5f6; }
+.servir-grid .smesa.ocupada.puesta .smesa-turno { background: #2196f3; color: #fff; }
+.servir-grid .smesa.ocupada.puesta:active       { background: #14293a; }
+
+/* VERDE: ya tiene también los platos. Con esa mesa terminó. */
+.servir-grid .smesa.ocupada.servida {
+    background: #0f2318;
+    border-color: #4caf50;
+}
+.servir-grid .smesa.ocupada.servida .smesa-num   { color: #81c784; }
+.servir-grid .smesa.ocupada.servida .smesa-turno { background: #4caf50; color: #06210f; }
+.servir-grid .smesa.ocupada.servida .smesa-cub   { color: #a5d6a7; }
+.servir-grid .smesa.ocupada.servida:active       { background: #16301f; }
+
+.smesa-marca {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+.smesa.puesta  .smesa-marca { color: #2196f3; }
+.smesa.servida .smesa-marca { color: #4caf50; }
+
+/* ---------- Por dónde va la noche ---------- */
+
+.srv-avance {
+    margin: 0 12px;
+    padding: 10px 14px;
+    background: #141414;
+    border: 1px solid #232323;
+    border-radius: 12px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #ddd;
+    text-align: center;
+}
+
+.srv-avance[hidden] { display: none; }
+
+.srv-avance b { color: #4caf50; font-size: 1.3rem; }
+
+.srv-avance.listo {
+    background: #0f2318;
+    border-color: #4caf50;
+    color: #81c784;
+}
+
+/* La única instrucción que hace falta, y se quita sola en cuanto marca
+   la primera mesa. Un cartel que no se va se vuelve parte del fondo. */
+.srv-avance.pista {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #888;
+    line-height: 1.4;
+}
+
+@media (min-width: 620px) {
+    .srv-avance { max-width: 900px; margin: 0 auto; }
+    .smesa-marca { font-size: 1.3rem; }
+}
+
+/* ============================================================
    PARA LLEVAR, EN LA PANTALLA DEL QUE SIRVE
 
    No tienen mesa, asi que no caben en la rejilla — pero tambien llevan

@@ -2,13 +2,19 @@
    SERVIR.JS  —  La pantalla del que pone los cubiertos y lleva
                  los platos a la mesa
 
-   Es la única pantalla del sistema que NO TIENE UN SOLO BOTÓN QUE
-   CAMBIE ALGO. Dos razones:
+   ESTA PANTALLA NO TOCA EL PEDIDO. Ni uno solo de sus gestos cambia
+   una comanda, una mesa o una cuenta. Dos razones:
 
    1. Lleva las manos ocupadas. Todo lo que le pidas tocar es tiempo
       que no está sirviendo.
    2. El pedido no es suyo. Que pueda mirarlo entero está bien; que
       pueda tocarlo, no.
+
+   Lo único que sí puede marcar son SUS COLORES —azul cuando puso los
+   cubiertos, verde cuando llevó los platos— y eso es su libreta: vive
+   en este celular, no viaja a la nube y nadie más lo ve. Por eso no
+   contradice lo de arriba: apuntar en tu libreta no es tocar el pedido
+   de nadie.
 
    Lo que sí necesita es leerse de lejos: la pantalla de la cocina le
    quedaba a tres metros y es un celular. Por eso las once mesas caben
@@ -123,9 +129,14 @@ function pintar() {
     // ¿La cocina o el asador están llamando por los cubiertos?
     if (typeof Llamada !== 'undefined') Llamada.revisar('servir');
 
+    // Las mesas que ya cobró el mesero se llevan su color con ellas
+    limpiarMarcas();
+
     const total  = Number(CFG.mesas) || 11;
     const turnos = Servicio.turnosDeSesion();
     const html   = [];
+    let ocupadas = 0;
+    let servidas = 0;
 
     for (let n = 1; n <= total; n++) {
         const sesion = Servicio.sesionDeMesa(n);
@@ -141,16 +152,25 @@ function pintar() {
 
         const cubiertos = Servicio.cubiertosDeSesion(sesion.id);
         const turno     = turnos[sesion.id];
+        /* El color es de la libreta del que sirve. Quien entre a mirar
+           esta pantalla ve las mesas como siempre. */
+        const paso      = puedeMarcar() ? estadoDe(sesion.id) : 0;
+
+        ocupadas++;
+        if (paso === 2) servidas++;
 
         html.push(`
-            <button class="smesa ocupada" data-mesa="${n}">
+            <button class="smesa ocupada ${CLASE_MARCA[paso] || ''}" data-mesa="${n}">
                 <span class="smesa-turno">${turno || '·'}</span>
                 <span class="smesa-num">${n}</span>
                 <span class="smesa-cub">${cubiertos} ${cubiertos === 1 ? 'cubierto' : 'cubiertos'}</span>
+                ${paso ? `<span class="smesa-marca"><i class="fas fa-${
+                    paso === 2 ? 'check' : 'utensils'}"></i></span>` : ''}
             </button>`);
     }
 
     $('mesas').innerHTML = html.join('');
+    pintarAvance(ocupadas, servidas);
     pintarLlevar(turnos);
 }
 
@@ -204,6 +224,176 @@ function platosDe(sesionId) {
             const cat = Servicio.categoriaDe(it.platoId);
             return cat && cat.cubierto ? m + it.cantidad : m;
         }, 0), 0);
+}
+
+/* ============================================================
+   LO QUE YA ENTREGÓ  —  solo para la cuenta del que sirve
+
+   Esta pantalla no manda nada a la nube y sigue sin mandarlo. Esto es
+   una libreta: se guarda en ESTE celular y no lo ve nadie más. No es
+   por descuido — es lo correcto. Que el mesero vea "servida" en su
+   pantalla lo pondría a cobrar por lo que dice un color, y el color lo
+   pone el que tiene las manos llenas de platos.
+
+   Tres estados y se da la vuelta, porque marcar de más pasa:
+
+       gris   todavía no le he llevado nada
+       AZUL   ya tiene los cubiertos y los aderezos puestos
+       VERDE  ya tiene además los platos: con esa mesa terminé
+
+   Medio segundo apretando, no un toque: el toque corto ya servía para
+   abrir el pedido y no se le puede quitar. Además una mesa no se marca
+   sin querer con el dedo de paso.
+
+   El único borrado de verdad lo hace el mesero al cobrar: la sesión se
+   cierra, la mesa queda libre y su marca se va con ella. Por eso esto
+   se guarda por sesión y no por número de mesa — la mesa 3 de la noche
+   siguiente no hereda el verde de la de hoy.
+   ============================================================ */
+
+const LLAVE_MARCAS = 'srv_entregado';
+const ESPERA_MARCA = 500;              // medio segundo, lo que pidió el salón
+
+/* gris → azul → verde → gris */
+const CLASE_MARCA = { 1: 'puesta', 2: 'servida' };
+
+let MARCAS = {};
+
+/** Solo la cuenta del que sirve. El gerente entra a mirar, no a marcar. */
+const puedeMarcar = () => Servicio.rol() === 'servir';
+
+function leerMarcas() {
+    try { return JSON.parse(localStorage.getItem(LLAVE_MARCAS)) || {}; }
+    catch (e) { return {}; }
+}
+
+function guardarMarcas() {
+    try { localStorage.setItem(LLAVE_MARCAS, JSON.stringify(MARCAS)); }
+    catch (e) { /* sin sitio para guardar: se pierde al recargar, no se rompe */ }
+}
+
+/**
+ * En qué va esa mesa AHORA MISMO.
+ *
+ * El verde no es para siempre: si a una mesa ya servida le llega otra
+ * tanda, baja sola a azul. Los cubiertos ya están puestos —eso no se
+ * repite— pero los platos nuevos siguen en la cocina, y una mesa en
+ * verde con comida esperando es justo la que se queda olvidada.
+ *
+ * Se calcula al pintar en vez de guardarse: así, cuando la vuelva a
+ * marcar verde, se apunta la cuenta nueva de platos y no hay dos
+ * verdades que puedan separarse.
+ */
+function estadoDe(sesionId) {
+    const m = MARCAS[sesionId];
+    if (!m) return 0;
+    if (m.paso === 2 && platosDe(sesionId) > m.platos) return 1;
+    return m.paso;
+}
+
+function avanzarMarca(sesionId) {
+    const paso = (estadoDe(sesionId) + 1) % 3;
+
+    if (!paso) delete MARCAS[sesionId];
+    else MARCAS[sesionId] = { paso, platos: platosDe(sesionId), cuando: Date.now() };
+
+    guardarMarcas();
+}
+
+/**
+ * Las marcas de las mesas que ya se fueron no se quedan ocupando sitio.
+ *
+ * Aquí es donde ocurre el reseteo: el mesero cobra, la sesión de esa
+ * mesa deja de estar abierta, y en el siguiente pintado su color
+ * desaparece sin que nadie tenga que apagarlo.
+ */
+function limpiarMarcas() {
+    const sesiones = Servicio.getSesiones();
+    let sobra = false;
+
+    Object.keys(MARCAS).forEach(id => {
+        const s = sesiones[id];
+        if (!s || !s.abierta) { delete MARCAS[id]; sobra = true; }
+    });
+
+    if (sobra) guardarMarcas();
+}
+
+/* ---------- Medio segundo apretando ---------- */
+
+let pulsacion = null;
+/* Al soltar después de marcar, el navegador manda además un click. Sin
+   este freno, marcar la mesa abriría el pedido encima. */
+let acaboDeMarcar = false;
+
+const soltar = () => {
+    if (pulsacion) clearTimeout(pulsacion.reloj);
+    pulsacion = null;
+};
+
+function empezarPulsacion(e) {
+    acaboDeMarcar = false;
+    soltar();
+    if (!puedeMarcar()) return;
+
+    const caja = e.target.closest('.smesa.ocupada');
+    if (!caja) return;
+
+    const sesion = Servicio.sesionDeMesa(Number(caja.dataset.mesa));
+    if (!sesion) return;
+
+    pulsacion = {
+        x: e.clientX, y: e.clientY,
+        reloj: setTimeout(() => {
+            pulsacion = null;
+            acaboDeMarcar = true;
+            avanzarMarca(sesion.id);
+            /* Vibra para no tener que mirar: sabe que agarró mientras
+               sigue caminando con la bandeja. */
+            if (navigator.vibrate) navigator.vibrate(35);
+            pintar();
+        }, ESPERA_MARCA)
+    };
+}
+
+/** Si el dedo se fue a desplazar la pantalla, no estaba marcando. */
+function moverPulsacion(e) {
+    if (!pulsacion) return;
+    if (Math.abs(e.clientX - pulsacion.x) > 12 ||
+        Math.abs(e.clientY - pulsacion.y) > 12) soltar();
+}
+
+/* ---------- Por dónde va la noche ---------- */
+
+/**
+ * "4 de 9 mesas servidas", arriba y de una línea.
+ *
+ * Con once cuadros en pantalla, contar los verdes de un vistazo no sale
+ * bien: se cuentan dos veces los de la esquina. Y mientras no haya
+ * marcado nada, en vez del contador va la única instrucción que hace
+ * falta, que después se quita sola.
+ */
+function pintarAvance(ocupadas, servidas) {
+    const caja = $('avance');
+    if (!caja) return;
+
+    if (!puedeMarcar() || !ocupadas) { caja.hidden = true; return; }
+
+    caja.hidden = false;
+
+    if (!Object.keys(MARCAS).length) {
+        caja.className = 'srv-avance pista';
+        caja.innerHTML = '<i class="fas fa-hand"></i> ' +
+            'Mantén presionada una mesa medio segundo: azul cuando pongas los ' +
+            'cubiertos, verde cuando lleves los platos.';
+        return;
+    }
+
+    const listo = servidas === ocupadas;
+    caja.className = 'srv-avance' + (listo ? ' listo' : '');
+    caja.innerHTML = listo
+        ? `<i class="fas fa-check-circle"></i> Las ${ocupadas} mesas ya tienen sus platos`
+        : `<b>${servidas}</b> de ${ocupadas} ${ocupadas === 1 ? 'mesa servida' : 'mesas servidas'}`;
 }
 
 /* ============================================================
@@ -264,6 +454,7 @@ const cerrarMesa = () => $('hoja-mesa').classList.remove('open');
 
 document.addEventListener('DOMContentLoaded', () => {
     CFG = Store.getConfig();
+    MARCAS = leerMarcas();
 
     $('lock-entrar').addEventListener('click', entrar);
     $('lock-clave').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
@@ -275,7 +466,26 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirm('¿Cerrar sesión en este celular?')) { Sync.salir(); location.reload(); }
     });
 
+    /* MEDIO SEGUNDO APRETANDO MARCA LA MESA.
+
+       Se escucha en el documento y no en la rejilla por dos razones.
+       Una: los cuadros se vuelven a dibujar enteros con cada cambio, y
+       un listener puesto en uno se perdería en el siguiente pintado.
+       Dos: el freno del click hay que soltarlo apriete donde apriete.
+       Escuchando solo la rejilla, marcar una mesa y después tocar una
+       funda se comía ese toque. */
+    document.addEventListener('pointerdown', empezarPulsacion);
+    document.addEventListener('pointermove', moverPulsacion);
+    ['pointerup', 'pointercancel', 'pointerleave']
+        .forEach(ev => document.addEventListener(ev, soltar));
+    /* Sin esto, al medio segundo el navegador saca su propio menú de
+       copiar y compartir justo encima de la mesa que se está marcando. */
+    $('mesas').addEventListener('contextmenu', e => { if (puedeMarcar()) e.preventDefault(); });
+
     document.addEventListener('click', e => {
+        // Acaba de marcar: ese click cierra la pulsación, no es un toque
+        if (acaboDeMarcar) { acaboDeMarcar = false; return; }
+
         const mesa = e.target.closest('[data-mesa]');
         if (mesa) return verMesa(Number(mesa.dataset.mesa));
 
