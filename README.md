@@ -535,14 +535,14 @@ vuelva a crecer sin que nadie se dé cuenta.
 | **Parrilla** | Solo proteínas. El término y el "para llevar". Nada de guarniciones: no cambian nada en la parrilla. |
 | **Cocina** | El pedido entero, los cubiertos en grande, cómo se sirve el plato y lo que se le quitó. Esta pantalla también la lee el que sirve. |
 | **Comanda** | Todo, más la cuenta. |
-| **Servir** | Las once mesas, los cubiertos de cada una y el turno. Solo lectura. |
+| **Servir** | Las once mesas, los cubiertos de cada una y el turno. No escribe en la nube; marca en azul y verde lo que ya entregó, y esa marca no sale de su celular. |
 
 ### La pantalla del que sirve
 
 El que pone los cubiertos y lleva los platos se había quedado fuera: la
 pantalla de la cocina le queda a tres metros y es un celular, no se lee.
 
-Su pantalla es la única **sin un solo botón que cambie nada** — lleva las
+Su pantalla es la única que **no manda un solo dato a la nube** — lleva las
 manos ocupadas y el pedido no es suyo. Ve las once mesas, los cubiertos de
 cada una, y un **turno** en la esquina: el orden en que se fueron ocupando.
 
@@ -566,6 +566,48 @@ marcado para llevar, y los cubiertos por definición dejan fuera lo que no
 se sienta a comer, así que siempre dirían cero.
 
 Las bebidas no le llegan a ninguna estación: las sirve el mesero directo.
+
+#### Lo que ya entregó: azul y verde
+
+El turno dice por dónde va, pero no aguanta una interrupción. Con seis
+mesas seguidas se acuerda; con una llamada a la cocina en medio, no.
+
+**Manteniendo una mesa apretada medio segundo** cambia de color:
+
+| Color | Quiere decir |
+|---|---|
+| amarillo | todavía no le ha llevado nada |
+| **azul** | ya tiene los cubiertos y los aderezos puestos |
+| **verde** | ya tiene además los platos: con esa mesa terminó |
+
+Otro medio segundo la deshace y vuelve a amarillo, porque marcar la mesa
+de al lado pasa. Arriba va una línea con **cuántas van servidas**: con once
+cuadros en pantalla, contar los verdes de un vistazo sale mal.
+
+Medio segundo y no un toque: el toque corto ya abría el pedido de la mesa
+y no se le podía quitar. El celular **vibra** al agarrar, para saberlo sin
+mirar mientras camina con la bandeja.
+
+**Una mesa verde a la que le llega otra tanda baja sola a azul.** Los
+cubiertos ya están puestos y eso no se repite, pero los platos nuevos
+siguen en la cocina, y una mesa que dice "servida" con comida esperando es
+justo la que se queda olvidada. Una bebida no la baja: el que sirve no
+lleva bebidas, y estaría dando falsas alarmas toda la noche.
+
+**El color no sale de ese celular.** Es una libreta suya, no un estado del
+pedido: no viaja a la nube, no lo ve el mesero y no lo ve el panel. Y está
+bien que sea así — cobrar porque otra pantalla dice "verde" es cobrar de
+oído, y el único que sabe si esos platos están en la mesa es el que los
+llevó. Por lo mismo, la cuenta del que sirve sigue sin permiso para
+escribir nada en Firebase.
+
+Se borra solo: **cuando el mesero cobra**, esa sesión se cierra, la mesa
+queda libre y su color se va con ella. La marca se guarda por sesión y no
+por número de mesa, así que la gente que se siente después en la 7 no
+hereda el verde de los anteriores.
+
+Solo aparece en la cuenta `servir@gmail.com`. Quien entre a mirar esta
+pantalla ve las mesas como siempre.
 
 ### Quién puede tocar qué
 

@@ -246,7 +246,7 @@ function celular(rol) {
         if (f) f(dato, ruta, esRetoque);
     };
 
-    return { propio, corre, eco };
+    return { propio, corre, eco, ctx };
 }
 
 const respirar = () => new Promise(r => setTimeout(r, 20));
@@ -2184,6 +2184,19 @@ function probarLlevarEnServir() {
     })()`), 2);
 
     const js = fuente('js/servir.js');
+
+    /* LOS COLORES DEL QUE SIRVE SON SU LIBRETA, NO EL PEDIDO.
+       Azul cuando puso los cubiertos, verde cuando llevo los platos:
+       vive en ese celular y NO viaja a la nube. Si algun dia empezara a
+       subirse, dos personas marcando se pisarian los colores — y sobre
+       todo dejaria de ser cierto que esta pantalla no toca el pedido. */
+    comprobar('los colores se guardan en el propio celular',
+        /localStorage\.setItem\(LLAVE_MARCAS/.test(js), true);
+    comprobar('y no se mandan a la nube',
+        /Sync\.(guardar|parchear|enviar|agregar)|encolar\(/.test(js), false);
+    comprobar('solo marca la cuenta del que sirve',
+        /Servicio\.rol\(\) === 'servir'/.test(js), true);
+
     comprobar('por eso la pantalla cuenta platos, no cubiertos',
         /function platosDe/.test(js), true);
     comprobar('y las pinta desde lo que esta abierto',
@@ -3125,6 +3138,175 @@ async function probarFiadoSobreviveAlVaciado() {
         /YHeMmcUbMFdsPQrIcvT561FDunt1/.test(reglas.contabilidad['.read']), false);
 }
 
+/* ============================================================
+   LO QUE EL QUE SIRVE YA ENTREGO
+
+   Medio segundo apretando una mesa la pone azul (cubiertos puestos) y
+   otro medio segundo la pone verde (platos llevados). Es una libreta
+   que vive SOLO en ese celular: la pantalla de servir sigue sin mandar
+   nada a la nube, y eso es lo primero que se comprueba aqui.
+
+   Lo demas que se prueba son las dos formas de perder una marca sin
+   darse cuenta:
+
+     - la mesa verde a la que le llega otra tanda y se queda en verde
+       con comida esperando en la cocina
+     - la mesa que se cobra y se libera, cuyo verde no puede heredarlo
+       la proxima gente que se siente en esa misma mesa
+   ============================================================ */
+
+/**
+ * Un celular con la pantalla de servir cargada, no solo el servicio.
+ *
+ * servir.js habla con el DOM, asi que hace falta un document de mentira.
+ * Solo se usa lo que el archivo toca al cargarse: dejar apuntado el
+ * DOMContentLoaded, que aqui no se dispara — las pruebas llaman a las
+ * funciones directamente y asi no dependen del dibujo.
+ */
+function celularQueSirve(rol) {
+    const c = celular(rol || 'servir');
+
+    vm.runInContext(`
+        var document = {
+            addEventListener: () => {},
+            getElementById: () => null,
+            querySelectorAll: () => []
+        };
+        var navigator = {};
+    `, c.ctx);
+
+    vm.runInContext(fuente('js/servir.js'), c.ctx);
+    c.corre('MARCAS = leerMarcas()');
+    return c;
+}
+
+function probarLoQueYaEntrego() {
+    console.log('\n--- El que sirve marca lo que ya entrego ---');
+    nubeLimpia();
+
+    /* El mesero abre dos mesas. El que sirve solo mira: las marcas que
+       ponga tienen que salir de su propia libreta. */
+    const mesero = celular('mesero');
+    mesero.corre(`Servicio.enviarComanda({ mesa: 3, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 }] })`);
+    mesero.corre(`Servicio.enviarComanda({ mesa: 7, items: [
+        { platoId: 'p1', nombre: 'Carne Asada', precio: 3.5, cantidad: 1 }] })`);
+
+    const srv = celularQueSirve('servir');
+
+    /** Lo que el celular del que sirve recibe de la nube. */
+    const recibir = () => ['srv_sesiones', 'srv_comandas'].forEach(k =>
+        srv.corre(`localStorage.setItem(${JSON.stringify(k)}, ${
+            JSON.stringify(mesero.corre(`localStorage.getItem(${JSON.stringify(k)})`))})`));
+
+    recibir();
+    const m3 = srv.corre('Servicio.sesionDeMesa(3).id');
+
+    /* Solo la cuenta del que sirve. El gerente entra a esta pantalla a
+       ver como va el salon, no a decir que ya entrego los platos. */
+    comprobar('la cuenta del que sirve puede marcar', srv.corre('puedeMarcar()'), true);
+    comprobar('el gerente entra a mirar, pero no marca',
+        celularQueSirve('gerente').corre('puedeMarcar()'), false);
+
+    // gris -> azul -> verde -> gris, y se da la vuelta porque marcar de mas pasa
+    comprobar('una mesa recien ocupada no tiene marca', srv.corre(`estadoDe('${m3}')`), 0);
+    srv.corre(`avanzarMarca('${m3}')`);
+    comprobar('medio segundo apretando: cubiertos puestos', srv.corre(`estadoDe('${m3}')`), 1);
+    srv.corre(`avanzarMarca('${m3}')`);
+    comprobar('otra vez: platos llevados', srv.corre(`estadoDe('${m3}')`), 2);
+    srv.corre(`avanzarMarca('${m3}')`);
+    comprobar('y una tercera la deshace, por si marco la mesa de al lado',
+        srv.corre(`estadoDe('${m3}')`), 0);
+
+    /* Sin esto, cualquier tropiezo —que se duerma el celular, que se
+       recargue la pagina, que se caiga la señal— le borraria media
+       noche de trabajo. */
+    srv.corre(`avanzarMarca('${m3}'); avanzarMarca('${m3}')`);
+    comprobar('la marca aguanta que se recargue la pantalla',
+        srv.corre(`(() => { MARCAS = {}; MARCAS = leerMarcas(); return estadoDe('${m3}'); })()`), 2);
+
+    /* LO IMPORTANTE: esto no sale del celular. Ni el mesero ni el
+       gerente ven ese verde, y esta bien que sea asi: el color lo pone
+       el que lleva los platos, y cobrar por lo que dice un color de
+       otra pantalla es cobrar de oido. */
+    comprobar('no manda nada a la nube al marcar',
+        srv.propio.enviado.filter(e => /servicio/.test(e.rama)).length, 0);
+
+    const js = fuente('js/servir.js');
+    comprobar('la libreta se guarda en el propio celular',
+        /localStorage\.setItem\(LLAVE_MARCAS/.test(js), true);
+
+    /* UNA MESA VERDE A LA QUE LE LLEGA OTRA TANDA.
+       Los cubiertos ya estan puestos y eso no se repite, pero los
+       platos nuevos siguen en la cocina. Si se quedara en verde seria
+       justo la mesa que se queda esperando sin que nadie lo note. */
+    mesero.corre(`Servicio.enviarComanda({ mesa: 3, items: [
+        { platoId: 'p2', nombre: 'Chuleta', precio: 4, cantidad: 1 }] })`);
+    recibir();
+
+    comprobar('piden mas comida y la mesa servida vuelve a azul',
+        srv.corre(`estadoDe('${m3}')`), 1);
+    srv.corre(`avanzarMarca('${m3}')`);
+    comprobar('lleva los platos nuevos y vuelve a verde',
+        srv.corre(`estadoDe('${m3}')`), 2);
+    comprobar('y ya no baja sola otra vez',
+        srv.corre(`estadoDe('${m3}')`), 2);
+
+    /* Una bebida no la sirve el que sirve: si bajara el verde por una
+       cola, la pantalla daria falsas alarmas toda la noche. */
+    mesero.corre(`Servicio.enviarComanda({ mesa: 3, items: [
+        { platoId: 'b3', nombre: 'Cola personal', precio: 0.5, cantidad: 2 }] })`);
+    recibir();
+    comprobar('pero una bebida no le quita el verde',
+        srv.corre(`estadoDe('${m3}')`), 2);
+
+    /* EL RESETEO: lo hace el mesero al cobrar, sin que nadie apague nada. */
+    const m7 = srv.corre('Servicio.sesionDeMesa(7).id');
+    srv.corre(`avanzarMarca('${m7}'); avanzarMarca('${m7}')`);
+    comprobar('la mesa 7 tambien queda servida', srv.corre(`estadoDe('${m7}')`), 2);
+
+    mesero.corre('Servicio.cerrarMesa(7)');
+    recibir();
+    srv.corre('limpiarMarcas()');
+    comprobar('el mesero cobra y el color se va con la mesa',
+        srv.corre(`estadoDe('${m7}')`), 0);
+    comprobar('y esa mesa no se queda ocupando sitio en la libreta',
+        srv.corre('Object.keys(MARCAS).length'), 1);
+
+    /* La marca es de la SESION y no del numero de mesa. Si fuera del
+       numero, la gente que se sentara despues en la 7 heredaria el
+       verde de los anteriores y se quedaria sin comer. */
+    mesero.corre(`Servicio.enviarComanda({ mesa: 7, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1 }] })`);
+    recibir();
+
+    comprobar('la gente que llega despues a esa mesa empieza en gris',
+        srv.corre('estadoDe(Servicio.sesionDeMesa(7).id)'), 0);
+
+    /* Medio segundo, ni un toque ni dos: el toque corto ya abria el
+       pedido de la mesa y no se le puede quitar. */
+    comprobar('se marca manteniendo apretado medio segundo',
+        /ESPERA_MARCA\s*=\s*500/.test(js), true);
+    comprobar('y el click de despedida no abre el pedido encima',
+        /acaboDeMarcar/.test(js), true);
+
+    /* El color solo no basta: con luz de tubo y la pantalla con grasa,
+       el azul y el verde se parecen mas de lo que uno cree, y hay quien
+       no los distingue. Por eso cada estado lleva su icono — y un icono
+       que no esta en la fuente no dibuja nada, sin avisar. La primera
+       version pedia `fa-circle-check`, que no existe, y las mesas
+       servidas salian sin visto. */
+    const iconos = fuente('css/iconos.css');
+    ['fa-utensils', 'fa-check'].forEach(i =>
+        comprobar(`el icono ${i} existe en la fuente`,
+            new RegExp('\.' + i + ':before').test(iconos), true));
+
+    const css = fuente('css/servicio.css');
+    comprobar('el azul y el verde estan escritos para la rejilla',
+        [/\.smesa\.ocupada\.puesta/.test(css), /\.smesa\.ocupada\.servida/.test(css)],
+        [true, true]);
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -3152,6 +3334,7 @@ async function main() {
     probarCuentaDeServir();
     probarPorQueNoEntro();
     probarLlevarEnServir();
+    probarLoQueYaEntrego();
     probarFormaDeServir();
     probarStock();
     await probarBebidaDeLaTienda();

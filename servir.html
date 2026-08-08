@@ -19,9 +19,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Servir">
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608081322">
-    <link rel="stylesheet" href="css/iconos.css?v=202608081322">
-    <link rel="stylesheet" href="css/servicio.css?v=202608081322">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608081405">
+    <link rel="stylesheet" href="css/iconos.css?v=202608081405">
+    <link rel="stylesheet" href="css/servicio.css?v=202608081405">
 </head>
 
 <body class="srv-body estacion">
@@ -46,9 +46,18 @@
 
     <div class="srv-alarma" id="alarma" hidden></div>
 
+    <!-- Por dónde va: cuántas mesas ya tienen sus platos. Con once
+         cuadros, contar los verdes de un vistazo sale mal. Solo sale en
+         la cuenta del que sirve, que es la que marca. -->
+    <div class="srv-avance" id="avance" hidden></div>
+
     <!-- Las 11 mesas de un vistazo. El número pequeño de la esquina es el
          turno: en qué orden se fueron ocupando, que es el mismo orden en
-         que van los cubiertos. -->
+         que van los cubiertos.
+
+         Manteniendo una presionada medio segundo se marca: azul cuando
+         le puso los cubiertos, verde cuando le llevó los platos. Eso no
+         sale de este celular. -->
     <main class="servir-grid" id="mesas"></main>
 
     <!-- Los pedidos hechos con "Pedido para llevar" no tienen mesa y no
@@ -83,13 +92,13 @@
 
     <div class="srv-toast" id="toast"></div>
 
-    <script src="js/menu-data.js?v=202608081322"></script>
-    <script src="js/sync.js?v=202608081322"></script>
-    <script src="js/store.js?v=202608081322"></script>
-    <script src="js/servicio.js?v=202608081322"></script>
-    <script src="js/llamada.js?v=202608081322"></script>
-    <script src="js/servir.js?v=202608081322"></script>
-    <script src="js/pwa.js?v=202608081322"></script>
+    <script src="js/menu-data.js?v=202608081405"></script>
+    <script src="js/sync.js?v=202608081405"></script>
+    <script src="js/store.js?v=202608081405"></script>
+    <script src="js/servicio.js?v=202608081405"></script>
+    <script src="js/llamada.js?v=202608081405"></script>
+    <script src="js/servir.js?v=202608081405"></script>
+    <script src="js/pwa.js?v=202608081405"></script>
 
 </body>
 
