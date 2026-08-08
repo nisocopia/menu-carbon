@@ -2647,6 +2647,22 @@ async function probarLlamarAlSalon() {
     comprobar('al minuto y medio se apaga sola',
         mesero.corre(`Servicio.llamadaPara('mesero')`), null);
 
+    /* PERO EL QUE LA RECIBE TODAVIA SE ENTERA. Un pedido no se muere
+       solo; una llamada si, y eso la dejaba muda con el celular dormido:
+       Android puede tardar minutos en entregar el aviso, y llegaba a una
+       llamada que ya no existia. */
+    comprobar('el que la recibe sigue teniendo derecho a oirla',
+        !!mesero.corre(`Servicio.llamadaSinOir('mesero')`), true);
+
+    // Pero no para siempre: a los diez minutos ya no
+    mesero.corre(`(() => {
+        const t = Servicio.getLlamadas();
+        t.mesero.cuando = Date.now() - 11 * 60 * 1000;
+        localStorage.setItem('srv_llamadas', JSON.stringify(t));
+    })()`);
+    comprobar('a los diez minutos ya no vale',
+        mesero.corre(`Servicio.llamadaSinOir('mesero')`), null);
+
     // Y la cocina ve encendido su propio botón mientras dure
     nubeLimpia();
     const c2 = celular('parrilla');

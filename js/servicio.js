@@ -1225,10 +1225,37 @@ const Servicio = (() => {
         return salio;
     }
 
+    /* Dos ventanas distintas, y la diferencia importa:
+
+       DURA_LLAMADA (90 s) es lo que el que LLAMA ve encendido su botón.
+       Pasado eso, para la cocina la llamada ya es vieja.
+
+       SIN_OIR (10 min) es hasta cuándo el que la RECIBE sigue teniendo
+       derecho a enterarse. Un pedido no se muere solo; una llamada sí, y
+       eso la dejaba muda justo en el caso que importa: el celular del
+       mesero dormido en el bolsillo. Android puede tardar un par de
+       minutos en entregar el aviso, y con la ventana corta llegaba a un
+       aviso que ya no existía.
+
+       No es lo mismo que llegue tarde a que no llegue: si nunca lo oyó,
+       tiene que sonar — diciendo de cuándo era, para que sepa si vale la
+       pena ir. */
+    const SIN_OIR = 10 * 60 * 1000;
+
     /** ¿Me están llamando a mí ahora mismo? Devuelve quién, o null. */
     function llamadaPara(quien) {
         const l = getLlamadas()[quien];
         if (!l || Date.now() - (l.cuando || 0) >= DURA_LLAMADA) return null;
+        return l;
+    }
+
+    /**
+     * Lo mismo, pero con la ventana larga: para el que la recibe y
+     * todavía no se ha enterado.
+     */
+    function llamadaSinOir(quien) {
+        const l = getLlamadas()[quien];
+        if (!l || Date.now() - (l.cuando || 0) >= SIN_OIR) return null;
         return l;
     }
 
@@ -2456,7 +2483,7 @@ const Servicio = (() => {
         // hacer
         enviarComanda, editarComanda, marcarEntregado, devolverANuevo, marcarSacado, anularComanda,
         // llamar al salón desde la cocina o la parrilla
-        llamar, llamadaPara, llamadaViva, getLlamadas, puedeLlamar,
+        llamar, llamadaPara, llamadaSinOir, llamadaViva, getLlamadas, puedeLlamar,
         abrirSesion, cerrarSesion, cerrarMesa, cerrarCuenta, registrarPago,
         // mover una cuenta: de mesa, o entre servirse y llevar
         moverMesa, moverCuenta, puedeCambiarServicio, efectoDeCambiarServicio,
