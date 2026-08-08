@@ -1866,6 +1866,78 @@ const Servicio = (() => {
     }
 
     /**
+     * Quitar platos de un día ya cerrado.
+     *
+     * "Sellado" no puede querer decir "mal para siempre". Una venta de
+     * prueba, un plato apuntado dos veces, una devolución del día
+     * anterior: si no hay forma de corregirlo, el gerente deja de
+     * creerle a la cuenta — y una cuenta en la que no se cree no sirve
+     * para nada.
+     *
+     * PERO NO ES UN BORRÓN: se resta y SE ANOTA que se restó, con el
+     * motivo y la hora. El resumen sigue siendo permanente; lo que se
+     * permite es dejar constancia de una corrección, no reescribir la
+     * historia sin dejar huella.
+     *
+     * Las proteínas se restan con la misma regla del resto del sistema.
+     * En un mixto no se puede: el resumen no guarda qué carnes se
+     * escogieron, así que el plato se quita y las proteínas se quedan.
+     * Es poco, es raro, y mentir sería peor.
+     */
+    async function corregirDia(fecha, platoId, cuantos, motivo) {
+        const n = Math.max(1, Math.floor(Number(cuantos) || 1));
+        const guardada = getContabilidad();
+
+        let dia = guardada[fecha];
+        if (Red.activo && Red.haySesion()) {
+            const enNube = await Red.leer(`contabilidad/${fecha}`, true);
+            if (enNube === undefined) return { ok: false, motivo: 'No se pudo leer la contabilidad.' };
+            if (enNube) dia = enNube;
+        }
+        if (!dia || !dia.platos || !dia.platos[platoId]) {
+            return { ok: false, motivo: 'Ese plato no está en la cuenta de ese día.' };
+        }
+
+        const p = dia.platos[platoId];
+        if (n > p.c) return { ok: false, motivo: `Ese día solo hay ${p.c}. No se puede quitar ${n}.` };
+
+        const precio = p.c ? p.i / p.c : 0;
+        const resta  = Math.round(precio * n * 100) / 100;
+
+        p.c -= n;
+        p.i = Math.round((p.i - resta) * 100) / 100;
+        if (p.c <= 0) delete dia.platos[platoId];
+
+        dia.total = Math.round(((dia.total || 0) - resta) * 100) / 100;
+
+        const consumo = consumoDe({ platoId, cantidad: n });
+        Object.keys(consumo).forEach(prod => {
+            dia.proteinas = dia.proteinas || {};
+            dia.proteinas[prod] = Math.max(0, (dia.proteinas[prod] || 0) - consumo[prod]);
+            if (!dia.proteinas[prod]) delete dia.proteinas[prod];
+        });
+
+        // La huella de la corrección: sin esto sería reescribir la historia
+        dia.correcciones = (dia.correcciones || []).concat({
+            cuando: Date.now(),
+            plato: platoId,
+            cuantos: n,
+            monto: resta,
+            motivo: String(motivo || '').slice(0, 120),
+            quien: (Red.correoSesion && Red.correoSesion()) || ''
+        });
+
+        guardada[fecha] = dia;
+        write(K.conta, guardada);
+
+        if (Red.activo && Red.haySesion()) {
+            const salio = await Red.guardar(`contabilidad/${fecha}`, dia);
+            if (!salio) return { ok: false, motivo: 'Se corrigió aquí, pero la nube no lo aceptó.' };
+        }
+        return { ok: true, motivo: '' };
+    }
+
+    /**
      * Apunta lo que hubo ANTES de borrarlo.
      *
      * Se leen las comandas de la NUBE y no de este celular: el que vacía
@@ -2393,6 +2465,7 @@ const Servicio = (() => {
         fiar, getFiados, pagarFiado, fiadosPendientes, totalFiado,
         // la cuenta que no se borra nunca
         cerrarElDia, getContabilidad, resumirPorDia, fechaDe, cargarDelGerente, traerParaElPanel,
+        corregirDia,
         // lo que manda el comensal
         enviarEntrante, getEntrantes, confirmarEntrante, descartarEntrante,
         // para el panel del gerente
