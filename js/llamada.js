@@ -246,16 +246,24 @@ const Llamada = (() => {
      * llamando, lo enseña, y lo anuncia UNA vez.
      */
     function revisar(quienSoy) {
-        const l = Servicio.llamadaPara(quienSoy);
+        /* La ventana LARGA: si nunca la oyó, tiene derecho a enterarse
+           aunque hayan pasado los 90 segundos. Con el celular dormido,
+           Android puede tardar minutos en entregar el aviso — y llegar a
+           una llamada ya vencida era quedarse mudo justo en el único
+           caso donde el sonido hacía falta de verdad. */
+        const l = Servicio.llamadaSinOir(quienSoy);
         const cont = cajaHtml();
 
         if (!l) { cont.hidden = true; return; }
 
         const quien = l.de === 'parrilla' ? 'La parrilla' : 'La cocina';
+        const hace = Math.floor((Date.now() - l.cuando) / 60000);
+
         cont.hidden = false;
         cont.innerHTML = `
             <i class="fas fa-bell fa-shake"></i>
-            <span class="llamada-quien">${quien} te llama</span>
+            <span class="llamada-quien">${quien} te ${hace < 2
+                ? 'llama' : `llamó hace ${hace} min`}</span>
             <span class="llamada-toca">toca para quitarlo</span>`;
 
         /* Una llamada suena una sola vez. Se reconoce por su hora, así
