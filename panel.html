@@ -9,10 +9,10 @@
     <meta name="referrer" content="no-referrer">
     <title>Panel del Gerente</title>
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608071555">
-    <link rel="stylesheet" href="css/iconos.css?v=202608071555">
-    <link rel="stylesheet" href="css/style.css?v=202608071555">
-    <link rel="stylesheet" href="css/panel.css?v=202608071555">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608081224">
+    <link rel="stylesheet" href="css/iconos.css?v=202608081224">
+    <link rel="stylesheet" href="css/style.css?v=202608081224">
+    <link rel="stylesheet" href="css/panel.css?v=202608081224">
 </head>
 
 <body class="panel-body">
@@ -122,6 +122,17 @@
              juniors. Las bebidas y las porciones de guarnición quedan
              fuera a propósito — no es lo que se quiere contar aquí. -->
         <section class="panel-vista" id="vista-platos">
+
+            <!-- QUIÉN DEBE. Va arriba del todo porque es lo único de esta
+                 pantalla que exige hacer algo: ir a cobrarle. -->
+            <div class="bloque" id="bloque-fiados" hidden>
+                <div class="bloque-head">
+                    <h2><i class="fas fa-hand-holding-dollar"></i> Fiado sin cobrar</h2>
+                    <strong class="fiado-suma" id="fiado-suma"></strong>
+                </div>
+                <div id="lista-fiados"></div>
+            </div>
+
             <div class="bloque">
                 <div class="bloque-head">
                     <h2>Contabilidad de platos</h2>
@@ -132,8 +143,14 @@
                     bebidas ni las porciones de arroz, menestra, patacones o plátano</b>
                     — aquí solo va lo que se cocina.
                 </p>
+                <!-- Cuando se está mirando un día suelto -->
+                <div class="cont-viendo" id="cont-viendo" hidden></div>
+
                 <div id="cont-platos"></div>
             </div>
+
+            <!-- Día por día: los totales dicen cuánto, esta lista dice cuándo -->
+            <div id="cont-diario"></div>
 
             <div class="bloque">
                 <h2>Proteínas que salieron</h2>
@@ -157,12 +174,12 @@
 
     </div>
 
-    <script src="js/menu-data.js?v=202608071555"></script>
-    <script src="js/sync.js?v=202608071555"></script>
-    <script src="js/store.js?v=202608071555"></script>
-    <script src="js/servicio.js?v=202608071555"></script>
-    <script src="js/panel.js?v=202608071555"></script>
-    <script src="js/pwa.js?v=202608071555"></script>
+    <script src="js/menu-data.js?v=202608081224"></script>
+    <script src="js/sync.js?v=202608081224"></script>
+    <script src="js/store.js?v=202608081224"></script>
+    <script src="js/servicio.js?v=202608081224"></script>
+    <script src="js/panel.js?v=202608081224"></script>
+    <script src="js/pwa.js?v=202608081224"></script>
 
 </body>
 

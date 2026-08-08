@@ -193,6 +193,7 @@ function abrirPanel() {
     // igual: es lo que hace que los agotados y los pedidos funcionen.
     try { renderTodo(); } catch (e) { console.error('Error al dibujar el panel:', e); }
     try { escucharNube(); } catch (e) { console.error('Error al conectar con la nube:', e); }
+    try { traerLoDelGerente(); } catch (e) { console.error('Error al traer la contabilidad:', e); }
 }
 
 function cerrarSesion() {
@@ -437,6 +438,161 @@ function renderPedidos() {
 const FUERA_DE_CUENTA = ['bebidas', 'porciones', 'extras'];
 
 let contDias = 1;          // 1 = hoy; el gerente puede pedir más atrás
+let contDia  = null;       // un día suelto, cuando se toca en la lista
+
+/** "jue 7 ago" — corto, que va en una fila de celular. */
+function diaEnLetras(fecha) {
+    const d = new Date(fecha + 'T00:00:00');
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const dias = Math.round((hoy - d) / 86400000);
+    if (dias === 0) return 'Hoy';
+    if (dias === 1) return 'Ayer';
+    return d.toLocaleDateString('es-EC', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+/**
+ * Día por día.
+ *
+ * Los totales del mes dicen cuánto se vendió; esta lista dice CUÁNDO.
+ * Es la que contesta "¿por qué el martes fue flojo?" — y esa pregunta
+ * solo se puede hacer con los días separados, no sumados.
+ *
+ * Se arma con las mismas dos mitades que todo lo demás: los días ya
+ * cerrados y guardados, más lo de hoy que todavía está vivo.
+ */
+function renderDiaADia() {
+    const caja = document.getElementById('cont-diario');
+    if (!caja || !hayServicio()) return;
+
+    const desde = contDias === 0 ? 0 : arrancaDelDia(contDias);
+    const dias = {};
+
+    const guardada = Servicio.getContabilidad();
+    Object.keys(guardada).forEach(f => {
+        if (new Date(f + 'T00:00:00').getTime() >= desde) dias[f] = { ...guardada[f] };
+    });
+
+    const vivas = {};
+    Object.values(Servicio.getComandas()).forEach(c => {
+        if (c.estado !== 'anulado' && (c.creado || 0) >= desde) vivas[c.id] = c;
+    });
+    Object.entries(Servicio.resumirPorDia(vivas)).forEach(([f, d]) => {
+        const y = dias[f];
+        dias[f] = y
+            ? { total: (y.total || 0) + d.total, mesas: (y.mesas || 0) + d.mesas,
+                platos: sumaPlatos(y.platos, d.platos) }
+            : d;
+    });
+
+    const fechas = Object.keys(dias).sort().reverse();
+    if (fechas.length < 2 && !contDia) { caja.innerHTML = ''; return; }
+
+    caja.innerHTML = `
+        <div class="bloque">
+            <h2>Día por día</h2>
+            <p class="ayuda">Toca un día para ver solo ese.</p>
+            <table class="tabla cont-tabla">
+                <tbody>
+                    ${fechas.map(f => {
+                        const d = dias[f];
+                        const platos = Object.values(d.platos || {}).reduce((s, p) => s + p.c, 0);
+                        return `
+                        <tr class="dia-fila ${contDia === f ? 'on' : ''}" data-dia="${f}">
+                            <td>${diaEnLetras(f)}</td>
+                            <td class="cont-num">${platos} ${platos === 1 ? 'plato' : 'platos'}</td>
+                            <td class="cont-num">${d.mesas || 0} ${d.mesas === 1 ? 'mesa' : 'mesas'}</td>
+                            <td class="cont-num">${dinero(d.total || 0)}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
+}
+
+/** Suma dos mapas de platos sin tocar los originales. */
+function sumaPlatos(a, b) {
+    const r = {};
+    [a || {}, b || {}].forEach(m => Object.keys(m).forEach(id => {
+        const p = r[id] || (r[id] = { c: 0, i: 0 });
+        p.c += m[id].c; p.i += m[id].i;
+    }));
+    return r;
+}
+
+/* ------------------------------------------------------------
+   QUIÉN DEBE
+
+   Muy poca gente, pero la hay. La lista es solo del gerente: el mesero
+   puede fiar —está en la mesa y tiene que resolverlo— pero quién debe
+   y cuánto no es conversación de salón.
+   ------------------------------------------------------------ */
+
+function renderFiados() {
+    const bloque = document.getElementById('bloque-fiados');
+    const lista  = document.getElementById('lista-fiados');
+    if (!bloque || !hayServicio()) return;
+
+    const deudas = Servicio.fiadosPendientes();
+    if (!deudas.length) { bloque.hidden = true; return; }
+
+    bloque.hidden = false;
+    document.getElementById('fiado-suma').textContent = dinero(Servicio.totalFiado());
+
+    lista.innerHTML = deudas.map(f => {
+        const dias = Math.floor((Date.now() - f.cuando) / 86400000);
+        const cuando = dias === 0 ? 'hoy' : dias === 1 ? 'ayer' : `hace ${dias} días`;
+        const platos = (f.lineas || [])
+            .map(l => `${l.cantidad} ${Servicio.nombreInterno(l.platoId, l.platoId)}`).join(' · ');
+
+        return `
+            <div class="fiado">
+                <div class="fiado-top">
+                    <strong>${f.nombre}</strong>
+                    <span class="fiado-monto">${dinero(f.monto)}</span>
+                </div>
+                <div class="fiado-que">${platos || 'sin detalle'}</div>
+                <div class="fiado-pie">
+                    <span>${cuando}${f.mesa ? ' · mesa ' + f.mesa : ''}${f.autorizo ? ' · lo fió ' + f.autorizo : ''}</span>
+                    <button class="fiado-pago" data-pago="${f.id}">Ya pagó</button>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+/**
+ * Trae de la nube lo que solo el gerente puede leer: quién debe y la
+ * contabilidad de siempre. Se PIDE, no se escucha: son datos que no
+ * cambian solos mientras el panel está abierto, y una conexión
+ * permanente por cada uno saldría cara en un navegador que solo
+ * permite unas seis.
+ */
+async function traerLoDelGerente() {
+    if (!hayServicio() || !Nube.haySesion()) return;
+    const [fiados, conta] = await Promise.all([
+        Nube.leer('servicio/fiados', true),
+        Nube.leer('contabilidad', true)
+    ]);
+    Servicio.cargarDelGerente(fiados, conta);
+    renderFiados();
+    renderContabilidad();
+}
+
+function conectarFiados() {
+    const lista = document.getElementById('lista-fiados');
+    if (!lista) return;
+    lista.addEventListener('click', e => {
+        const b = e.target.closest('[data-pago]');
+        if (!b) return;
+        const f = Servicio.getFiados()[b.dataset.pago];
+        if (!f) return;
+        /* Se pregunta porque no hay vuelta atrás: la deuda se borra y no
+           queda dónde mirarla. La venta ya estaba contada el día que se
+           la llevó, así que esto solo salda lo que faltaba. */
+        if (!confirm(`¿${f.nombre} pagó los ${dinero(f.monto)}?\n\nLa deuda desaparece de la lista.`)) return;
+        Servicio.pagarFiado(b.dataset.pago);
+        renderFiados();
+    });
+}
 
 function arrancaDelDia(hace) {
     const d = new Date();
@@ -453,35 +609,66 @@ function arrancaDelDia(hace) {
  * uno— y desarmado en la de abajo, porque de la nevera salieron dos
  * proteínas. Las dos cuentas son verdad; responden preguntas distintas.
  */
+/**
+ * Lo vendido en el periodo, juntando las dos mitades.
+ *
+ * LO CERRADO viene del resumen por día, que no se borra nunca aunque se
+ * vacíe el servicio todas las noches. LO VIVO son las comandas que
+ * todavía están en pie — lo de hoy, antes de cerrarlo.
+ *
+ * No se pueden contar dos veces: una comanda está viva O está resumida,
+ * y vaciar el servicio es el momento exacto en que pasa de una a otra.
+ */
 function contarPlatos() {
-    const desde = arrancaDelDia(contDias);
-    const comandas = Object.values(Servicio.getComandas())
-        .filter(c => c.estado !== 'anulado' && (c.creado || 0) >= desde);
+    const desde = contDias === 0 ? 0 : arrancaDelDia(contDias);
 
-    const platos = {};       // platoId -> { nombre, catId, cantidad, importe }
-    const proteinas = {};    // producto -> cantidad
+    /* Un día suelto manda sobre el periodo: si se está mirando el
+       jueves, el botón de "Mes" no pinta nada. */
+    const soloEste = f => contDia ? f === contDia : true;
 
-    comandas.forEach(c => (c.items || []).forEach(it => {
-        if (it.automatico) return;                       // la tarrina se pone sola
-        const cat = Servicio.categoriaDe(it.platoId);
-        if (!cat || FUERA_DE_CUENTA.includes(cat.id)) return;
+    // --- lo que ya está cerrado y guardado ---
+    const dias = {};
+    const guardada = Servicio.getContabilidad();
+    Object.keys(guardada).forEach(f => {
+        if (soloEste(f) && new Date(f + 'T00:00:00').getTime() >= desde) dias[f] = guardada[f];
+    });
 
-        const p = platos[it.platoId] || (platos[it.platoId] = {
-            nombre: Servicio.nombreDeItem(it),
-            catId: cat.id, catNombre: cat.nombre,
-            cantidad: 0, importe: 0
+    // --- y lo que todavía está vivo ---
+    const vivas = {};
+    Object.values(Servicio.getComandas()).forEach(c => {
+        if (c.estado !== 'anulado' && (c.creado || 0) >= desde &&
+            soloEste(Servicio.fechaDe(c.creado))) vivas[c.id] = c;
+    });
+    const enVivo = Servicio.resumirPorDia(vivas);
+
+    // --- todo junto ---
+    const platos = {};
+    const proteinas = {};
+    let total = 0, mesas = 0;
+
+    const sumar = d => {
+        Object.keys(d.platos || {}).forEach(id => {
+            const cat = Servicio.categoriaDe(id);
+            const p = platos[id] || (platos[id] = {
+                nombre: Servicio.nombreInterno(id, id),
+                catId: cat ? cat.id : 'otros',
+                catNombre: cat ? cat.nombre : 'Otros',
+                cantidad: 0, importe: 0
+            });
+            p.cantidad += d.platos[id].c;
+            p.importe  += d.platos[id].i;
         });
-        p.cantidad += it.cantidad;
-        p.importe  += it.precio * it.cantidad;
-
-        // Y desarmado: un mixto gasta las carnes que se escogieron
-        const consumo = Servicio.consumoDe(it);
-        Object.keys(consumo).forEach(prod => {
-            proteinas[prod] = (proteinas[prod] || 0) + consumo[prod];
+        Object.keys(d.proteinas || {}).forEach(k => {
+            proteinas[k] = (proteinas[k] || 0) + d.proteinas[k];
         });
-    }));
+        total += d.total || 0;
+        mesas += d.mesas || 0;
+    };
 
-    return { platos, proteinas, desde };
+    Object.values(dias).forEach(sumar);
+    Object.values(enVivo).forEach(sumar);
+
+    return { platos, proteinas, total, mesas, desde };
 }
 
 function renderContabilidad() {
@@ -493,13 +680,27 @@ function renderContabilidad() {
 
     const botones = document.getElementById('cont-dias');
     if (botones) {
-        botones.innerHTML = [[1, 'Hoy'], [2, '2 días'], [7, 'La semana']]
+        /* Los periodos son largos porque la contabilidad ya no se borra:
+           antes no tenía sentido ofrecer "el mes" si los datos vivían
+           dos días. */
+        botones.innerHTML = [[1, 'Hoy'], [7, 'Semana'], [30, 'Mes'], [0, 'Todo']]
             .map(([n, t]) => `<button class="cont-dia ${contDias === n ? 'on' : ''}" data-dias="${n}">${t}</button>`)
             .join('');
     }
 
-    const { platos, proteinas } = contarPlatos();
+    const { platos, proteinas, total, mesas } = contarPlatos();
     const lista = Object.values(platos);
+
+    /* Si se está mirando un día suelto hay que decirlo Y dar la salida.
+       Sin el cartel, se vuelve mañana, se ven números raros y no se
+       entiende que quedó puesto un filtro. */
+    const marca = document.getElementById('cont-viendo');
+    if (marca) {
+        marca.hidden = !contDia;
+        if (contDia) marca.innerHTML =
+            `<span>Viendo solo el <b>${diaEnLetras(contDia).toLowerCase()}</b></span>
+             <button id="cont-todos">Ver todo</button>`;
+    }
 
     if (!lista.length) {
         caja.innerHTML = `<p class="vacio">Todavía no se ha vendido nada en este periodo.</p>`;
@@ -512,13 +713,16 @@ function renderContabilidad() {
     lista.forEach(p => (porCat[p.catId] = porCat[p.catId] || { nombre: p.catNombre, filas: [] }).filas.push(p));
 
     const totalUnidades = lista.reduce((s, p) => s + p.cantidad, 0);
-    const totalDinero   = lista.reduce((s, p) => s + p.importe, 0);
 
     caja.innerHTML = `
         <div class="cont-total">
             <div><span class="cont-cifra">${totalUnidades}</span><span class="cont-pie">platos</span></div>
-            <div><span class="cont-cifra">${dinero(totalDinero)}</span><span class="cont-pie">vendido</span></div>
+            <div><span class="cont-cifra">${mesas}</span><span class="cont-pie">mesas</span></div>
+            <div><span class="cont-cifra">${dinero(total)}</span><span class="cont-pie">vendido</span></div>
         </div>
+
+        <!-- El total incluye bebidas y porciones, que no salen en la
+             tabla: el dinero entra igual aunque no sea un plato. -->
 
         ${Object.values(porCat).map(g => `
             <div class="cont-grupo">
@@ -542,6 +746,8 @@ function renderContabilidad() {
         .map(k => ({ nombre: Servicio.nombreProducto(k), cantidad: proteinas[k] }))
         .sort((a, b) => b.cantidad - a.cantidad);
 
+    renderDiaADia();
+
     prot.innerHTML = `
         <table class="tabla cont-tabla">
             <tbody>
@@ -558,6 +764,23 @@ function conectarContabilidad() {
         const b = e.target.closest('[data-dias]');
         if (!b) return;
         contDias = Number(b.dataset.dias);
+        contDia = null;              // cambiar de periodo suelta el día
+        renderContabilidad();
+    });
+
+    const diario = document.getElementById('cont-diario');
+    if (diario) diario.addEventListener('click', e => {
+        const f = e.target.closest('[data-dia]');
+        if (!f) return;
+        // Volver a tocar el mismo día lo suelta: es el mismo dedo
+        contDia = (contDia === f.dataset.dia) ? null : f.dataset.dia;
+        renderContabilidad();
+    });
+
+    const viendo = document.getElementById('cont-viendo');
+    if (viendo) viendo.addEventListener('click', e => {
+        if (!e.target.closest('#cont-todos')) return;
+        contDia = null;
         renderContabilidad();
     });
 }
@@ -940,6 +1163,7 @@ function renderTodo() {
     renderEditorMenu();
     renderNumeros();
     renderContabilidad();
+    renderFiados();
     renderFormLocal();
 }
 
@@ -952,6 +1176,7 @@ document.addEventListener('DOMContentLoaded', () => {
     conectarEditor();
     conectarStock();
     conectarContabilidad();
+    conectarFiados();
 
     // Con nube se entra con correo y clave; sin nube, solo con la clave
     if (Nube.activo) {

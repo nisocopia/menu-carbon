@@ -111,13 +111,46 @@ function probarExportacion() {
    ============================================================ */
 
 let nube;
+let generacion = 0;
+
+/* Cada nube es una nube NUEVA, con su numero.
+   Los celulares de una prueba anterior siguen vivos, con sus colas
+   vaciandose por temporizador — y escribian en la nube de la prueba
+   siguiente. Salian tres pedidos donde se habia mandado uno, y la
+   contabilidad parecia contar tres veces algo que contaba bien. */
 const nubeLimpia = () => {
-    nube = { entrantes: {}, reclamados: new Set(), prohibido: null, caida: false };
+    nube = { entrantes: {}, reclamados: new Set(), prohibido: null, caida: false,
+             datos: {}, gen: ++generacion };
 };
+
+/* La nube de mentira ahora GUARDA de verdad.
+   Antes su `leer` devolvia "no se pudo" para todo, asi que cualquier
+   codigo que primero pregunta y despues escribe —cerrar el dia antes de
+   vaciar, por ejemplo— se comportaba como si no hubiera internet. Las
+   pruebas pasaban sin probar nada. */
+function ponerEnNube(rama, valor) {
+    const partes = String(rama).split('/').filter(Boolean);
+    const hoja = partes.pop();
+    let nodo = nube.datos;
+    partes.forEach(p => { if (!nodo[p] || typeof nodo[p] !== 'object') nodo[p] = {}; nodo = nodo[p]; });
+    if (valor === null) delete nodo[hoja];
+    else nodo[hoja] = JSON.parse(JSON.stringify(valor));
+}
+
+function sacarDeNube(rama) {
+    let nodo = nube.datos;
+    for (const p of String(rama).split('/').filter(Boolean)) {
+        if (!nodo || typeof nodo !== 'object' || !(p in nodo)) return null;
+        nodo = nodo[p];
+    }
+    return JSON.parse(JSON.stringify(nodo));
+}
 
 function celular(rol) {
     const guardado = {};
     const propio = { enviado: [] };
+    const miNube = nube.gen;          // el celular pertenece a ESTA nube
+    const esMia = () => nube.gen === miNube;
 
     const SyncFalso = {
         activo: true,
@@ -146,8 +179,9 @@ function celular(rol) {
            hacerlo, o las pruebas de vaciado no prueban nada. */
         leer: async rama => {
             if (rama === 'servicio/entrantes') return JSON.parse(JSON.stringify(nube.entrantes));
-            if (nube.vacio) return null;
-            return undefined;
+            if (nube.caida) return undefined;      // no se pudo leer
+            if (nube.vacio) return null;           // esta vacio, que es otra cosa
+            return sacarDeNube(rama);
         },
         /* Guardar tambien se cae con la nube. Antes devolvia true pase lo
            que pase, asi que una prueba de "sin conexion" no probaba
@@ -156,6 +190,7 @@ function celular(rol) {
             if (nube.caida) return false;
             if (nube.prohibido && nube.prohibido(rama, valor, 'PUT')) return false;
             propio.enviado.push({ metodo: 'PUT', rama, valor });
+            if (esMia()) ponerEnNube(rama, valor);
             return true;
         },
         parchear: async (rama, valor) => { propio.enviado.push({ metodo: 'PATCH', rama, valor }); return true; },
@@ -168,6 +203,7 @@ function celular(rol) {
             // Sin señal: no es que no se pueda, es que no llega. Se reintenta.
             if (nube.caida) return { ok: false, status: 0 };
             propio.enviado.push({ metodo: metodo || 'PUT', rama, valor });
+            if (esMia()) ponerEnNube(rama, valor);
             return { ok: true, status: 200 };
         },
         /* Lo que de verdad decide quién se queda con un pedido: las
@@ -2909,6 +2945,148 @@ function probarContabilidad() {
         /FUERA_DE_CUENTA = \['bebidas', 'porciones', 'extras'\]/.test(fuente('js/panel.js')), true);
 }
 
+/* ============================================================
+   FIAR, Y LA CUENTA QUE NO SE BORRA
+
+   Dos cosas que el dueño pidio juntas y que van de la mano: los pedidos
+   se pueden borrar cada noche, la contabilidad no se borra nunca, y lo
+   fiado no se borra hasta que paguen.
+   ============================================================ */
+
+async function probarFiar() {
+    console.log('\n--- Fiar: se lo lleva ahora y paga despues ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    corre(`Servicio.enviarComanda({ mesa: 5, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 },
+        { platoId: 'b3', nombre: 'Cola personal', precio: 0.5, cantidad: 1 }] })`);
+
+    const lineas = corre(`Servicio.cuentaDe({ mesa: 5 }).items
+        .map(l => ({ platoId: l.platoId, precio: l.precio, cantidad: l.pendiente }))`);
+
+    /* SIN NOMBRE NO HAY FIADO. Un "debe $7.50" sin dueño no se puede
+       cobrar nunca, y a las tres semanas nadie se acuerda. */
+    comprobar('sin nombre no se fia',
+        corre(`Servicio.fiar({ mesa: 5, lineas: ${JSON.stringify(lineas)}, nombre: '  ' })`), null);
+    comprobar('y la mesa sigue abierta', corre(`!!Servicio.sesionDeMesa(5)`), true);
+
+    const deuda = corre(`Servicio.fiar({ mesa: 5, lineas: ${JSON.stringify(lineas)}, nombre: 'Don Luis' })`);
+    comprobar('con nombre si', deuda.nombre, 'Don Luis');
+    comprobar('y guarda cuanto debe', deuda.monto, 7.5);
+    comprobar('y quien lo autorizo', deuda.autorizo, 'mesero@gmail.com');
+    comprobar('y qué se llevó', deuda.lineas.length, 2);
+
+    /* La mesa SE LIBERA: la gente se fue y la mesa esta vacia. Lo que
+       queda pendiente es la plata, no el sitio. */
+    comprobar('la mesa queda libre', corre(`!!Servicio.sesionDeMesa(5)`), false);
+
+    // Y la venta quedo anotada como cualquier cobro, con su forma
+    comprobar('la venta se anota el dia que paso',
+        corre(`Object.values(Servicio.getPagos())[0].forma`), 'fiado');
+
+    comprobar('sale en la lista de lo que se debe',
+        corre(`Servicio.fiadosPendientes().map(f => f.nombre)`), ['Don Luis']);
+    comprobar('y suma el total', corre(`Servicio.totalFiado()`), 7.5);
+
+    // Cuando paga, desaparece
+    comprobar('pagó y se va de la lista', corre(`Servicio.pagarFiado('${deuda.id}')`), true);
+    comprobar('ya no debe nada', corre(`Servicio.totalFiado()`), 0);
+}
+
+async function probarContabilidadQueNoSeBorra() {
+    console.log('\n--- La contabilidad no se borra al vaciar el servicio ---');
+    nubeLimpia();
+    const { corre } = celular('gerente');
+
+    corre(`Servicio.enviarComanda({ mesa: 3, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 },
+        { platoId: 'm1', nombre: 'Mixto 2 Carnes', precio: 6, cantidad: 1, elegidas: ['p5','p1'] },
+        { platoId: 'b3', nombre: 'Cola personal', precio: 0.5, cantidad: 4 }] })`);
+    await respirar();
+
+    const hoy = corre(`Servicio.fechaDe(Date.now())`);
+
+    // Se vacia el servicio, como cada noche
+    comprobar('se vacía sin problema', await corre(`Servicio.vaciarTodo()`), true);
+    comprobar('las comandas se fueron',
+        corre(`Object.keys(Servicio.getComandas()).length`), 0);
+
+    /* PERO LA CUENTA SE QUEDA. Esto es lo que pidio el dueño con todas
+       sus letras: los pedidos si, la contabilidad nunca. */
+    const dia = corre(`Servicio.getContabilidad()['${hoy}']`);
+    comprobar('el resumen del día quedó guardado', !!dia, true);
+    comprobar('con los 2 pollos', dia.platos.p5.c, 2);
+    comprobar('y el mixto', dia.platos.m1.c, 1);
+    comprobar('las 4 colas NO están en los platos', dia.platos.b3, undefined);
+    comprobar('pero su plata SÍ está en el total', dia.total, 15);
+    comprobar('y el mixto quedó desarmado en proteínas',
+        [dia.proteinas.pollo, dia.proteinas.carne], [3, 1]);
+    comprobar('y una mesa atendida', dia.mesas, 1);
+
+    /* Y NO SE CUENTA DOS VECES. Vaciar otra vez sin pedidos nuevos no
+       puede inflar la cuenta de ayer. */
+    await corre(`Servicio.vaciarTodo()`);
+    comprobar('vaciar dos veces no duplica nada',
+        corre(`Servicio.getContabilidad()['${hoy}'].platos.p5.c`), 2);
+
+    // Lo de la noche siguiente se SUMA, no reemplaza
+    corre(`Servicio.enviarComanda({ mesa: 1, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 3 }] })`);
+    await respirar();
+    await corre(`Servicio.vaciarTodo()`);
+    comprobar('lo nuevo se suma a lo que ya había',
+        corre(`Servicio.getContabilidad()['${hoy}'].platos.p5.c`), 5);
+
+    /* SI NO SE PUEDE APUNTAR, NO SE BORRA. Perder la contabilidad de una
+       noche por un wifi flojo no tiene arreglo despues. */
+    nubeLimpia();
+    const g2 = celular('gerente');
+    g2.corre(`Servicio.enviarComanda({ mesa: 9, items: [
+        { platoId: 'p1', nombre: 'Carne Asada', precio: 3.5, cantidad: 1 }] })`);
+    await respirar();
+    nube.caida = true;
+    comprobar('sin nube NO se vacía', await g2.corre(`Servicio.vaciarTodo()`), false);
+    comprobar('y el pedido sigue ahí',
+        g2.corre(`Object.keys(Servicio.getComandas()).length`), 1);
+    nube.caida = false;
+}
+
+async function probarFiadoSobreviveAlVaciado() {
+    console.log('\n--- Lo fiado NO se borra al vaciar el servicio ---');
+    nubeLimpia();
+    const { corre, propio } = celular('gerente');
+
+    corre(`Servicio.enviarComanda({ mesa: 8, items: [
+        { platoId: 'p3', nombre: 'Costilla', precio: 5.5, cantidad: 1 }] })`);
+    await respirar();
+    const l = corre(`Servicio.cuentaDe({ mesa: 8 }).items
+        .map(x => ({ platoId: x.platoId, precio: x.precio, cantidad: x.pendiente }))`);
+    corre(`Servicio.fiar({ mesa: 8, lineas: ${JSON.stringify(l)}, nombre: 'Marta' })`);
+
+    await corre(`Servicio.vaciarTodo()`);
+
+    comprobar('la deuda sigue viva después de vaciar',
+        corre(`Servicio.fiadosPendientes().map(f => f.nombre)`), ['Marta']);
+    comprobar('con su monto intacto', corre(`Servicio.totalFiado()`), 5.5);
+
+    /* Y la rama de los fiados NO esta entre las que se borran de la
+       nube. Si se colara ahi, la deuda desapareceria de los otros
+       celulares aunque aqui siguiera. */
+    const srv = fuente('js/servicio.js');
+    const ramas = (srv.match(/const ramas = \[[\s\S]*?\];/) || [''])[0];
+    comprobar('ni se borra de la nube', /fiados/.test(ramas), false);
+
+    // La regla: la escriben el gerente y el mesero, la lee solo el gerente
+    const reglas = JSON.parse(fuente('firebase-rules.json')).rules;
+    comprobar('la lista de fiados solo la lee el gerente',
+        /YHeMmcUbMFdsPQrIcvT561FDunt1/.test(reglas.servicio.fiados['.read']), false);
+    comprobar('pero el mesero sí puede fiar',
+        /YHeMmcUbMFdsPQrIcvT561FDunt1/.test(reglas.servicio.fiados['.write']), true);
+    comprobar('y la contabilidad es solo del gerente',
+        /YHeMmcUbMFdsPQrIcvT561FDunt1/.test(reglas.contabilidad['.read']), false);
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -2945,6 +3123,9 @@ async function main() {
     await probarVaciarDeVerdad();
     probarNombreInterno();
     probarContabilidad();
+    await probarFiar();
+    await probarContabilidadQueNoSeBorra();
+    await probarFiadoSobreviveAlVaciado();
     await probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();

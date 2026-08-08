@@ -17,6 +17,16 @@
       }
     },
 
+    "contabilidad": {
+      ".read":  "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
+      ".write": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
+      "$dia": {
+        ".validate": "$dia.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+        "total": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "mesas": { ".validate": "newData.isNumber() && newData.val() >= 0" }
+      }
+    },
+
     "servicio": {
       "comandas": {
         ".read": "auth != null",
@@ -94,6 +104,19 @@
           "cuando": { ".validate": "newData.isNumber()" },
           "de":     { ".validate": "newData.isString() && newData.val().length < 20" },
           "$otro":  { ".validate": false }
+        }
+      },
+
+      "fiados": {
+        ".read":  "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
+        ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1')",
+        "$fiado": {
+          ".validate": "!newData.exists() || newData.hasChildren(['nombre', 'monto', 'cuando'])",
+          "nombre":   { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 40" },
+          "monto":    { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000" },
+          "cuando":   { ".validate": "newData.isNumber()" },
+          "mesa":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99" },
+          "autorizo": { ".validate": "newData.isString() && newData.val().length < 90" }
         }
       },
 

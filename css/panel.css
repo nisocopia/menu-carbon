@@ -387,6 +387,53 @@
    come ese producto: sin eso, "Pollo 12" no dice que el apanado y la
    porción salen de ahí mismo. */
 
+/* ---------- Quién debe ----------
+
+   Va arriba del todo y en rojo apagado: es lo único de esta pantalla
+   que pide hacer algo. Lo demás son números para mirar. */
+
+.fiado-suma { color: #ff8a80; font-size: 1.1rem; }
+
+.fiado {
+    background: #1a1414;
+    border: 1px solid #4a2020;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+}
+
+.fiado-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+}
+.fiado-top strong { font-size: 1.02rem; }
+.fiado-monto { color: #ff8a80; font-weight: 700; white-space: nowrap; }
+
+.fiado-que { font-size: 0.8rem; color: #999; margin: 5px 0 9px; line-height: 1.45; }
+
+.fiado-pie {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.fiado-pie > span { font-size: 0.7rem; color: #666; }
+
+.fiado-pago {
+    background: #1f3a1f;
+    border: 1px solid #2f6b2f;
+    border-radius: 8px;
+    color: #9ede9e;
+    font-family: inherit;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 7px 14px;
+    cursor: pointer;
+}
+
 /* ---------- Contabilidad de platos ---------- */
 
 .cont-dias { display: flex; gap: 6px; }
@@ -432,6 +479,39 @@
     margin-bottom: 4px;
 }
 .cont-grupo h3 span { color: #FFC107; font-weight: 700; font-size: 0.95rem; }
+
+/* Día por día. La fila entera se toca: en un celular, apuntar a un
+   texto de diez píxeles con el dedo no es razonable. */
+.dia-fila { cursor: pointer; }
+.dia-fila td:first-child { font-weight: 600; }
+.dia-fila:active td { background: #1f1f1f; }
+.dia-fila.on td {
+    background: #3a2f08;
+    color: #FFC107;
+}
+
+.cont-viendo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: #3a2f08;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    font-size: 0.82rem;
+    color: #FFC107;
+}
+.cont-viendo button {
+    background: none;
+    border: 1px solid #FFC107;
+    border-radius: 8px;
+    color: #FFC107;
+    font-family: inherit;
+    font-size: 0.74rem;
+    padding: 5px 12px;
+    cursor: pointer;
+}
 
 .cont-tabla td { padding: 9px 0; border-bottom: 1px solid #1e1e1e; }
 .cont-tabla tr:last-child td { border-bottom: none; }
