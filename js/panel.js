@@ -485,7 +485,25 @@ function renderDiaADia() {
     });
 
     const fechas = Object.keys(dias).sort().reverse();
-    if (fechas.length < 2 && !contDia) { caja.innerHTML = ''; return; }
+
+    /* Se enseña aunque haya UN SOLO día. Antes se escondía por debajo de
+       dos, con la idea de no repetir el total de arriba — y el resultado
+       fue que el gerente no la encontraba: su historial empieza vacío y
+       el primer día es siempre uno solo. Una fila de más no molesta a
+       nadie; una lista que no aparece, sí. */
+    if (!fechas.length) {
+        caja.innerHTML = `
+            <div class="bloque">
+                <h2>Día por día</h2>
+                <p class="ayuda">
+                    Aquí van a ir saliendo los días, uno por uno.
+                    <b>Un día entra en esta lista cuando cierras el servicio</b>
+                    — con el botón «Vaciar el servicio» de la pestaña Pedidos.
+                    Lo de hoy aparece en cuanto se venda algo.
+                </p>
+            </div>`;
+        return;
+    }
 
     caja.innerHTML = `
         <div class="bloque">
@@ -568,13 +586,8 @@ function renderFiados() {
  */
 async function traerLoDelGerente() {
     if (!hayServicio() || !Nube.haySesion()) return;
-    const [fiados, conta] = await Promise.all([
-        Nube.leer('servicio/fiados', true),
-        Nube.leer('contabilidad', true)
-    ]);
-    Servicio.cargarDelGerente(fiados, conta);
-    renderFiados();
-    renderContabilidad();
+    await Servicio.traerParaElPanel();
+    renderTodo();
 }
 
 function conectarFiados() {
@@ -705,6 +718,10 @@ function renderContabilidad() {
     if (!lista.length) {
         caja.innerHTML = `<p class="vacio">Todavía no se ha vendido nada en este periodo.</p>`;
         document.getElementById('cont-proteinas').innerHTML = '';
+        /* La lista de días se pinta IGUAL. Antes se salía por aquí y el
+           día por día no aparecía nunca en un periodo sin ventas — que
+           es justo cuando uno mira atrás a ver qué pasó. */
+        renderDiaADia();
         return;
     }
 
