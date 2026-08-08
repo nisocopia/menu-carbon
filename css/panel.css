@@ -387,6 +387,26 @@
    come ese producto: sin eso, "Pollo 12" no dice que el apanado y la
    porción salen de ahí mismo. */
 
+/* Anular una venta que no fue. Chico y gris: es una corrección rara,
+   no una acción de todos los días. */
+.pedido-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.btn-anular-pedido {
+    background: none;
+    border: 1px solid #4a2020;
+    border-radius: 8px;
+    color: #b06a6a;
+    font-family: inherit;
+    font-size: 0.72rem;
+    padding: 5px 12px;
+    cursor: pointer;
+}
+.btn-anular-pedido:active { background: #2a1212; }
+
 /* ---------- Quién debe ----------
 
    Va arriba del todo y en rojo apagado: es lo único de esta pantalla
