@@ -2767,6 +2767,28 @@ function probarCuantasConexiones() {
     comprobar('y un campo que no está en la lista no entra',
         reglas.$aQuien.$otro['.validate'], false);
 
+    /* LA LLAMADA TIENE QUE SONAR CON EL CELULAR DORMIDO.
+
+       Android duerme el AudioContext al bloquear la pantalla o al
+       cambiar de aplicacion. A la cocina le suenan los pedidos igual
+       porque estacion.js lleva DOS vias: el contexto y un <audio> con el
+       tono ya fabricado, que una vez soltado sigue sonando.
+
+       La primera version de llamada.js solo tenia la primera, asi que la
+       llamada se quedaba muda justo cuando mas falta hacia: con el
+       celular del mesero en el bolsillo. */
+    const lla = fuente('js/llamada.js');
+    comprobar('la llamada fabrica su propio WAV',
+        /function fabricarWav/.test(lla), true);
+    comprobar('y lo suelta por un <audio> aparte',
+        /new Audio\(URL\.createObjectURL/.test(lla), true);
+    comprobar('si la primera vía falla, prueba la segunda',
+        /const sono = await sonarRespaldo\(\)/.test(lla), true);
+    comprobar('lo que no pudo sonar se reintenta',
+        /if \(!sono\) \{ volverAIntentar/.test(lla), true);
+    comprobar('y se vuelve a probar al regresar a la pantalla',
+        /visibilitychange/.test(lla), true);
+
     /* UN CARTEL ESCONDIDO NO PUEDE SEGUIR TAPANDO.
 
        El navegador esconde lo que lleva `hidden` con display:none, pero
