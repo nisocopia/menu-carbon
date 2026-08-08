@@ -413,9 +413,63 @@ function renderPedidos() {
                     </li>`).join('')}
             </ul>
             ${p.nota ? `<div class="pedido-nota"><i class="fas fa-note-sticky"></i> ${p.nota}</div>` : ''}
-            <div class="pedido-total">${dinero(p.total)}</div>
+            <div class="pedido-total">
+                ${dinero(p.total)}
+                ${hayServicio() && p.estado !== 'anulado'
+                    ? `<button class="btn-anular-pedido" data-anular="${p.id}">Anular</button>` : ''}
+            </div>
         </div>`;
     }).join('');
+}
+
+/* ------------------------------------------------------------
+   ANULAR UNA VENTA QUE NO FUE
+
+   El mesero puede anular mientras la cocina no la haya tocado. Después
+   ya no, y con razón: si el asador sacó la carne, esa carne existe y
+   alguien tiene que pagarla.
+
+   Pero el gerente sí necesita poder. Una prueba que se coló, un pedido
+   apuntado en la mesa equivocada, una devolución — todo eso termina en
+   su contabilidad, y hasta ahora no había forma de sacarlo. Queda
+   anotado quién y por qué, que es lo que lo hace una corrección y no un
+   borrón.
+   ------------------------------------------------------------ */
+
+function conectarAnularPedidos() {
+    const lista = document.getElementById('lista-pedidos');
+    if (!lista) return;
+
+    lista.addEventListener('click', e => {
+        const b = e.target.closest('[data-anular]');
+        if (!b) return;
+
+        const c = Servicio.getComandas()[b.dataset.anular];
+        if (!c) return;
+
+        /* Si el día ya se cerró, esto NO lo va a descontar del resumen:
+           esa cuenta ya está sellada. Hay que decirlo antes, no después
+           de que el gerente crea que lo arregló. */
+        const cerrado = !!Servicio.getContabilidad()[Servicio.fechaDe(c.creado)];
+        const aviso = cerrado
+            ? '\n\nOJO: el día de este pedido YA SE CERRÓ en la contabilidad.\n' +
+              'Anularlo lo saca de los pedidos, pero el resumen de ese día\n' +
+              'no cambia. Eso ya no se puede deshacer.'
+            : '';
+
+        const motivo = (prompt(
+            `Anular ${c.codigo || 'este pedido'} — ${dinero(
+                (c.items || []).reduce((s, i) => s + i.precio * i.cantidad, 0))}` +
+            '\n\nDeja de contar en la contabilidad y en las ventas.' + aviso +
+            '\n\n¿Por qué? (queda anotado)'
+        ) || '').trim();
+
+        if (!motivo) return;
+
+        Servicio.anularComanda(b.dataset.anular, motivo);
+        renderTodo();
+        avisar('Pedido anulado');
+    });
 }
 
 /* ============================================================
@@ -1194,6 +1248,7 @@ document.addEventListener('DOMContentLoaded', () => {
     conectarStock();
     conectarContabilidad();
     conectarFiados();
+    conectarAnularPedidos();
 
     // Con nube se entra con correo y clave; sin nube, solo con la clave
     if (Nube.activo) {
