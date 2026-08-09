@@ -313,6 +313,12 @@ patacones, plátano—. No es un descuido: meter cuarenta colas en la misma tabl
 esconde justo lo que se quiere mirar. Las porciones de **proteína** sí entran,
 y los juniors también.
 
+**Y el dinero sigue la misma regla que la tabla.** Lo vendido que sale arriba
+es lo que suman las filas de abajo, ni un centavo más: el gerente saca la
+calculadora y le tiene que dar lo mismo. Antes ahí salía la caja entera —con
+bebidas y porciones— y la resta parecía plata perdida. La caja completa no se
+esconde, va debajo con su nombre y diciendo de dónde sale la diferencia.
+
 **Día por día.** Los totales dicen cuánto se vendió; la lista de días dice
 *cuándo*. Es la que contesta "¿por qué el martes fue flojo?", y esa pregunta
 solo se puede hacer con los días separados. Tocar un día deja la pantalla

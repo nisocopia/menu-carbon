@@ -486,6 +486,14 @@ function conectarAnularPedidos() {
    Se lee de las comandas y no de los pedidos del comensal: la mayoría
    de lo que se vende lo toma el mesero, y contar solo lo que llega por
    el celular del cliente dejaría fuera casi todo.
+
+   Y LA PLATA SIGUE LA MISMA REGLA QUE LA TABLA. Lo vendido que se
+   enseña aquí es lo que suman las filas, ni un centavo más. Antes
+   arriba salía la caja entera y abajo solo los platos, y el gerente
+   sumó a mano, le faltaron setenta dólares y pensó que se los estaban
+   robando. Una cifra que no se puede comprobar con lo que se ve al
+   lado no vale nada, por muy cierta que sea. La caja entera no se
+   esconde: va debajo, dicha con todas sus letras.
    ============================================================ */
 
 /** Las categorías que NO se cuentan aquí. */
@@ -573,12 +581,26 @@ function renderDiaADia() {
                             <td>${diaEnLetras(f)}</td>
                             <td class="cont-num">${platos} ${platos === 1 ? 'plato' : 'platos'}</td>
                             <td class="cont-num">${d.mesas || 0} ${d.mesas === 1 ? 'mesa' : 'mesas'}</td>
-                            <td class="cont-num">${dinero(d.total || 0)}</td>
+                            <td class="cont-num">${dinero(plataDePlatos(d.platos))}</td>
                         </tr>`;
                     }).join('')}
                 </tbody>
             </table>
         </div>`;
+}
+
+/**
+ * La plata de lo que SÍ se cuenta aquí.
+ *
+ * El resumen de cada día guarda dos cosas distintas: `total`, que es
+ * toda la caja —bebidas y porciones incluidas—, y el importe plato por
+ * plato. En esta pestaña manda el segundo. Enseñar la caja entera al
+ * lado de una tabla que no la explica hizo que el gerente pensara que
+ * faltaba plata: veía 571.50 arriba y 499 al sumar las filas.
+ */
+function plataDePlatos(platos) {
+    const s = Object.values(platos || {}).reduce((a, p) => a + (p.i || 0), 0);
+    return Math.round(s * 100) / 100;
 }
 
 /** Suma dos mapas de platos sin tocar los originales. */
@@ -711,7 +733,10 @@ function contarPlatos() {
     // --- todo junto ---
     const platos = {};
     const proteinas = {};
-    let total = 0, mesas = 0;
+    /* «cajaEntera» y no «caja» a secas: en este archivo `caja` es
+       siempre el div donde se pinta, y dos cosas con el mismo nombre en
+       la misma función no compilan. */
+    let cocina = 0, cajaEntera = 0, mesas = 0;
 
     const sumar = d => {
         Object.keys(d.platos || {}).forEach(id => {
@@ -725,18 +750,27 @@ function contarPlatos() {
             });
             p.cantidad += d.platos[id].c;
             p.importe  += d.platos[id].i;
+            cocina     += d.platos[id].i;
         });
         Object.keys(d.proteinas || {}).forEach(k => {
             proteinas[k] = (proteinas[k] || 0) + d.proteinas[k];
         });
-        total += d.total || 0;
-        mesas += d.mesas || 0;
+        cajaEntera += d.total || 0;
+        mesas      += d.mesas || 0;
     };
 
     Object.values(dias).forEach(sumar);
     Object.values(enVivo).forEach(sumar);
 
-    return { platos, proteinas, total, mesas, desde };
+    /* Dos cifras y no una, porque son dos preguntas: COCINA es lo que
+       suman las filas de la tabla —lo único que cuadra con lo que se ve—
+       y CAJA es toda la plata que entró, bebidas y porciones incluidas.
+       Confundirlas fue el susto: la tabla decía 499 y arriba salía
+       571.50, y esa diferencia parecía plata perdida. */
+    cocina     = Math.round(cocina     * 100) / 100;
+    cajaEntera = Math.round(cajaEntera * 100) / 100;
+
+    return { platos, proteinas, cocina, cajaEntera, mesas, desde };
 }
 
 function renderContabilidad() {
@@ -756,7 +790,7 @@ function renderContabilidad() {
             .join('');
     }
 
-    const { platos, proteinas, total, mesas } = contarPlatos();
+    const { platos, proteinas, cocina, cajaEntera, mesas } = contarPlatos();
     const lista = Object.values(platos);
 
     /* Si se está mirando un día suelto hay que decirlo Y dar la salida.
@@ -790,11 +824,22 @@ function renderContabilidad() {
         <div class="cont-total">
             <div><span class="cont-cifra">${totalUnidades}</span><span class="cont-pie">platos</span></div>
             <div><span class="cont-cifra">${mesas}</span><span class="cont-pie">mesas</span></div>
-            <div><span class="cont-cifra">${dinero(total)}</span><span class="cont-pie">vendido</span></div>
+            <div><span class="cont-cifra">${dinero(cocina)}</span><span class="cont-pie">vendido en platos</span></div>
         </div>
 
-        <!-- El total incluye bebidas y porciones, que no salen en la
-             tabla: el dinero entra igual aunque no sea un plato. -->
+        <!-- Lo vendido es EXACTAMENTE lo que suman las filas de abajo: si
+             el gerente saca la calculadora tiene que darle lo mismo. La
+             caja entera va aparte y con su nombre, para que la diferencia
+             se lea como lo que es —bebidas y porciones— y no como un
+             faltante. -->
+        <p class="ayuda cont-caja">
+            Toda la caja del periodo, con bebidas y porciones,
+            fue <b>${dinero(cajaEntera)}</b>.
+            ${cajaEntera > cocina
+                ? `La diferencia de ${dinero(Math.round((cajaEntera - cocina) * 100) / 100)}
+                   son bebidas y porciones de guarnición, que no se cuentan como platos.`
+                : ''}
+        </p>
 
         ${Object.values(porCat).map(g => `
             <div class="cont-grupo">
