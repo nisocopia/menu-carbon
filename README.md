@@ -721,6 +721,40 @@ la carne no apaga nada en la cocina, donde el plato todavía está por
 emplatar. Y un toque de más se deshace: en lo plegado, el botón dice
 **Devolver** y el pedido vuelve al tablero.
 
+### Lo que el asador tiene que sacar
+
+Barra fija arriba en la **parrilla**, pegada a la cabecera: **lo que está
+pedido y todavía no ha salido**, por plato y con las carnes del mixto.
+
+    🔥 POR SACAR   3 Chuleta   3 Mixto 2 Prot. Especial   2 Pollo Asado
+                               Costilla + Pollo Asado
+
+Es el hermano del contador de arroz de la cocina, y nació igual: el asador lo
+vio funcionando y pidió el suyo. Le sirve para dos cosas que dijo con esas
+palabras — repartir la parrilla sabiendo lo que viene, y poder avisarle al
+gerente de lo que se está acabando para que lo ponga en **Lo que hay hoy**.
+Una noche se vendieron cinco chuletas cuando quedaban cuatro, porque contar
+la nevera al empezar es difícil y el aviso llegó tarde.
+
+**Por plato y no por proteína suelta**, que es como lo pidió. Un mixto de
+pollo y carne no son "un pollo y una carne" tiradas en la parrilla: es un
+plato que sale junto. Cada mixto con carnes distintas es un renglón propio, y
+dos mixtos iguales son uno con un 2 — da igual el orden en que el mesero
+escogió las carnes.
+
+**Lo que no separa es el término ni el "para llevar".** Una chuleta a punto y
+otra bien cocida son dos chuletas que sacar de la nevera; el detalle fino
+sigue en la tarjeta, que es donde se cocina.
+
+**Pendiente, no lo de toda la noche.** Baja en cuanto él marca la comanda como
+sacada, y desaparece cuando no queda nada. Un número que no baja al trabajar
+deja de mirarse a la media hora.
+
+La secuencia manda: la barra no tapa ninguna tarjeta, no hay que tocarla para
+verla —con las manos en la parrilla, lo que hay que tocar no se mira— y si
+creciera mucho se queda con su alto y rueda por dentro en vez de empujar los
+pedidos fuera de la pantalla.
+
 ### Cosas que se calculan solas
 
 - **Los cubiertos.** Son los platos que se sientan a comer. Si alguien pide dos

@@ -20,9 +20,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Parrilla">
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608091310">
-    <link rel="stylesheet" href="css/iconos.css?v=202608091310">
-    <link rel="stylesheet" href="css/servicio.css?v=202608091310">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608091347">
+    <link rel="stylesheet" href="css/iconos.css?v=202608091347">
+    <link rel="stylesheet" href="css/servicio.css?v=202608091347">
 </head>
 
 <body class="srv-body estacion">
@@ -40,15 +40,24 @@
         </div>
     </div>
 
-    <header class="srv-top">
-        <h1><i class="fas fa-fire"></i> Parrilla</h1>
-        <!-- Llamar al salon sin salir de la cocina. Va aqui, junto al
-             punto de la conexion, para que este SIEMPRE: en las tarjetas,
-             un tablero vacio se quedaba sin poder pedir cubiertos. -->
-        <div class="srv-llamadas" id="llamar" hidden></div>
+    <!-- La cabecera y las proteínas viajan juntas: las dos tienen que
+         seguir ahí cuando el asador baja a mirar la cuarta tarjeta. -->
+    <div class="srv-fijo">
+        <header class="srv-top">
+            <h1><i class="fas fa-fire"></i> Parrilla</h1>
+            <!-- Llamar al salon sin salir de la cocina. Va aqui, junto al
+                 punto de la conexion, para que este SIEMPRE: en las tarjetas,
+                 un tablero vacio se quedaba sin poder pedir cubiertos. -->
+            <div class="srv-llamadas" id="llamar" hidden></div>
 
-        <div class="srv-red" id="red"></div>
-    </header>
+            <div class="srv-red" id="red"></div>
+        </header>
+
+        <!-- Lo pedido y todavía sin sacar, por plato y con las carnes del
+             mixto. No es una estimación: se cuenta. Sube cuando entra el
+             pedido y baja cuando el asador marca la comanda como sacada. -->
+        <div class="srv-porsacar" id="porsacar" hidden></div>
+    </div>
 
     <div class="srv-alarma" id="alarma" hidden></div>
 
@@ -93,13 +102,13 @@
 
     <div class="srv-toast" id="toast"></div>
 
-    <script src="js/menu-data.js?v=202608091310"></script>
-    <script src="js/sync.js?v=202608091310"></script>
-    <script src="js/store.js?v=202608091310"></script>
-    <script src="js/servicio.js?v=202608091310"></script>
-    <script src="js/estacion.js?v=202608091310"></script>
-    <script src="js/pwa.js?v=202608091310"></script>
-    <script src="js/aviso.js?v=202608091310"></script>
+    <script src="js/menu-data.js?v=202608091347"></script>
+    <script src="js/sync.js?v=202608091347"></script>
+    <script src="js/store.js?v=202608091347"></script>
+    <script src="js/servicio.js?v=202608091347"></script>
+    <script src="js/estacion.js?v=202608091347"></script>
+    <script src="js/pwa.js?v=202608091347"></script>
+    <script src="js/aviso.js?v=202608091347"></script>
     <script>iniciarEstacion('asador');</script>
 
 </body>

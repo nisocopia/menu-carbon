@@ -646,6 +646,7 @@ function pintar() {
                   .slice(0, 20);
 
     pintarArroz();
+    pintarPorSacar();
 
     const tablero = $('tablero');
 
@@ -700,6 +701,42 @@ function pintarArroz() {
     el.innerHTML = `<i class="fas fa-bowl-rice"></i>
         <b>${n}</b> ${n === 1 ? 'porción de arroz pedida' : 'porciones de arroz pedidas'}
         <span>sin servir todavía</span>`;
+}
+
+/**
+ * Lo que la parrilla tiene pedido y todavía no ha sacado.
+ *
+ * El asador vio el contador de arroz de la cocina y pidió el suyo, por
+ * dos cosas que dijo con esas palabras: repartir la parrilla sabiendo
+ * lo que viene, y poder avisarle al gerente de lo que se está acabando
+ * —la noche que no avisó a tiempo, se vendieron cinco chuletas cuando
+ * quedaban cuatro—.
+ *
+ * VA ARRIBA Y FIJA, PEGADA A LA CABECERA. La regla que él puso primero
+ * es que no se pierda de vista la secuencia de pedidos: esto es un
+ * apunte al margen, no el tablero. Por eso no tapa ninguna tarjeta, no
+ * hay que tocarla para verla —con las manos en la parrilla, lo que hay
+ * que tocar no se mira— y si creciera demasiado se queda con su alto y
+ * rueda por dentro, en vez de empujar los pedidos fuera de la pantalla.
+ *
+ * Solo en la parrilla: la cocina no saca proteínas, tiene su arroz.
+ */
+function pintarPorSacar() {
+    const el = $('porsacar');
+    if (!el) return;
+
+    const filas = Servicio.porSacar();
+    el.hidden = !filas.length;
+    if (!filas.length) return;
+
+    el.innerHTML = `
+        <span class="ps-tit"><i class="fas fa-fire"></i> Por sacar</span>
+        ${filas.map(f => `
+            <span class="ps-chip">
+                <b>${f.cantidad}</b>
+                <span class="ps-nom">${f.nombre}${f.elegidas.length
+                    ? `<em>${f.elegidas.join(' + ')}</em>` : ''}</span>
+            </span>`).join('')}`;
 }
 
 /* ---------- Una tarjeta ----------
