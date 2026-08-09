@@ -2994,6 +2994,41 @@ function probarContabilidad() {
         /data-tab="platos"/.test(fuente('panel.html')), true);
     comprobar('y sabe qué dejar fuera',
         /FUERA_DE_CUENTA = \['bebidas', 'porciones', 'extras'\]/.test(fuente('js/panel.js')), true);
+
+    /* LO VENDIDO TIENE QUE CUADRAR CON LA TABLA.
+       El gerente suma las filas a mano. Si la cifra de arriba trae la
+       plata de las colas —que no salen en ninguna fila— le falta plata
+       y piensa lo peor. Aquí se comprueban las dos cuentas por separado
+       con los mismos números de la comanda de arriba:
+         platos  2×3.5 + 2 + 2.5 + 6      = 17.50
+         caja    17.50 + 4×0.5 + 3×1.5    = 24.00 */
+    const plata = corre(`(() => {
+        const FUERA = ['bebidas', 'porciones', 'extras'];
+        let cocina = 0, caja = 0;
+        Object.values(Servicio.getComandas()).forEach(c => c.items.forEach(it => {
+            const vale = (it.precio || 0) * (it.cantidad || 0);
+            caja += vale;
+            const cat = Servicio.categoriaDe(it.platoId);
+            if (it.automatico || !cat || FUERA.includes(cat.id)) return;
+            cocina += vale;
+        }));
+        return { cocina: Math.round(cocina * 100) / 100, caja: Math.round(caja * 100) / 100 };
+    })()`);
+
+    comprobar('lo vendido en platos es lo que suman las filas', plata.cocina, 17.5);
+    comprobar('y la caja entera es otra cifra, más grande',     plata.caja, 24);
+
+    /* Que el panel enseñe la que cuadra. La cifra grande es «cocina»
+       —los importes de los platos— y la caja va debajo, con su nombre. */
+    const panel = fuente('js/panel.js');
+    comprobar('el panel suma la plata de los platos aparte',
+        /cocina\s*\+=\s*d\.platos\[id\]\.i/.test(panel), true);
+    comprobar('la cifra grande es la de los platos',
+        /cont-cifra">\$\{dinero\(cocina\)\}/.test(panel), true);
+    comprobar('y la caja entera se dice, no se esconde',
+        /cont-caja[\s\S]*dinero\(cajaEntera\)/.test(panel), true);
+    comprobar('el día por día también cuenta solo platos',
+        /cont-num">\$\{dinero\(plataDePlatos\(d\.platos\)\)\}/.test(panel), true);
 }
 
 /* ============================================================
