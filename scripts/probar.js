@@ -2939,6 +2939,121 @@ function probarNombreInterno() {
 }
 
 /* ============================================================
+   LO QUE EL ASADOR TIENE QUE SACAR
+
+   El asador vio el contador de arroz de la cocina y pidio el suyo. La
+   diferencia esta en como se cuenta: el arroz es un numero solo, y esto
+   va POR PLATO, con las carnes del mixto, que es como el lo cocina.
+
+   Lo delicado es lo mismo de siempre: si el numero miente una vez, deja
+   de mirarse. Aqui se comprueba que junte lo que es igual, que separe
+   lo que no lo es, y sobre todo que BAJE cuando el trabajo se hace.
+   ============================================================ */
+
+function probarPorSacar() {
+    console.log('\n--- Lo que el asador tiene que sacar ---');
+    nubeLimpia();
+    const { corre } = celular('asador');
+
+    const pedir = (nombre, comanda) =>
+        corre(`(() => {
+            const t = Servicio.getComandas();
+            t['${nombre}'] = ${JSON.stringify(comanda)};
+            localStorage.setItem('srv_comandas', JSON.stringify(t));
+        })()`);
+
+    const sacar = () => corre(`Servicio.porSacar()`);
+    const comoSale = () => corre(`Servicio.porSacar().map(f => f.cantidad + ' ' + f.nombre)`);
+
+    comprobar('sin pedidos no hay nada que sacar', sacar().length, 0);
+
+    pedir('n1', { id: 'n1', sesion: 's1', mesa: 3, creado: 1, estado: 'nuevo', items: [
+        { uid: 'a', platoId: 'p2', nombre: 'Chuleta',     cantidad: 1, precio: 4,   estacion: 'asador' },
+        { uid: 'b', platoId: 'p5', nombre: 'Pollo Asado', cantidad: 2, precio: 3.5, estacion: 'asador' }
+    ]});
+
+    comprobar('lo pedido aparece',            comoSale(), ['2 Pollo Asado', '1 Chuleta']);
+    comprobar('y el monton grande va primero', sacar()[0].nombre, 'Pollo Asado');
+
+    /* EL MIXTO NO SE DESARMA. El asador lo pidio asi con sus palabras:
+       un mixto de pollo y carne no son un pollo y una carne sueltas,
+       es un plato que sale junto. */
+    pedir('n2', { id: 'n2', sesion: 's2', mesa: 4, creado: 2, estado: 'nuevo', items: [
+        { uid: 'c', platoId: 'm1', nombre: 'Mixto 2 Carnes', cantidad: 1, precio: 6,
+          estacion: 'asador', elegidas: ['p5', 'p1'] }
+    ]});
+
+    const mixto = () => sacar().find(f => f.platoId === 'm1');
+    comprobar('el mixto va entero y con su nombre de adentro',
+        mixto().nombre, 'Mixto 2 Proteínas');
+    comprobar('y dice de que carnes es',
+        mixto().elegidas, ['Pollo Asado', 'Carne Asada']);
+    comprobar('sin inflar el pollo suelto',
+        sacar().find(f => f.platoId === 'p5').cantidad, 2);
+
+    /* Dos mixtos iguales son "2", y da igual en que orden los escogio
+       el mesero: pollo+carne y carne+pollo se cocinan igual. */
+    pedir('n3', { id: 'n3', sesion: 's3', mesa: 5, creado: 3, estado: 'nuevo', items: [
+        { uid: 'd', platoId: 'm1', nombre: 'Mixto 2 Carnes', cantidad: 1, precio: 6,
+          estacion: 'asador', elegidas: ['p1', 'p5'] }
+    ]});
+    comprobar('el mismo mixto al reves es el mismo renglon', mixto().cantidad, 2);
+
+    // Pero un mixto de OTRAS carnes es otro renglon: es otro trabajo
+    pedir('n4', { id: 'n4', sesion: 's4', mesa: 6, creado: 4, estado: 'nuevo', items: [
+        { uid: 'e', platoId: 'm2', nombre: 'Mixto 2 Carnes Especial', cantidad: 3, precio: 7,
+          estacion: 'asador', elegidas: ['p3', 'p5'] }
+    ]});
+    comprobar('otro mixto con otras carnes va aparte',
+        sacar().filter(f => String(f.platoId).startsWith('m')).length, 2);
+    comprobar('y ahora el especial manda, que son tres',
+        sacar()[0].nombre, 'Mixto 2 Proteínas Especial');
+
+    /* El termino NO separa: una chuleta a punto y otra bien cocida son
+       dos chuletas que sacar de la nevera. El detalle fino sigue en la
+       tarjeta, que es donde se cocina. */
+    pedir('n5', { id: 'n5', sesion: 's5', mesa: 7, creado: 5, estado: 'nuevo', items: [
+        { uid: 'f', platoId: 'p2', nombre: 'Chuleta', cantidad: 1, precio: 4,
+          estacion: 'asador', termino: 'bien cocida' }
+    ]});
+    comprobar('el termino no parte el renglon',
+        sacar().find(f => f.platoId === 'p2').cantidad, 2);
+
+    // Lo de la cocina no es suyo: el asador no saca bebidas ni arroz suelto
+    pedir('n6', { id: 'n6', sesion: 's6', mesa: 8, creado: 6, estado: 'nuevo', items: [
+        { uid: 'g', platoId: 'r1', nombre: 'Arroz', cantidad: 4, precio: 1.5, estacion: 'cocina' }
+    ]});
+    comprobar('lo de la cocina no le sale al asador',
+        sacar().some(f => f.platoId === 'r1'), false);
+
+    /* Y LO QUE IMPORTA: BAJA AL TRABAJAR. Un numero que no baja cuando
+       se hace el trabajo deja de mirarse a la media hora. */
+    corre(`Servicio.marcarSacado('n1', true)`);
+    comprobar('lo sacado deja de contar',
+        sacar().some(f => f.platoId === 'p5'), false);
+    comprobar('pero la chuleta de otra mesa sigue ahi',
+        sacar().find(f => f.platoId === 'p2').cantidad, 1);
+
+    corre(`(() => {
+        const t = Servicio.getComandas();
+        Object.keys(t).forEach(k => { t[k].sacado = true; });
+        localStorage.setItem('srv_comandas', JSON.stringify(t));
+    })()`);
+    comprobar('con todo sacado, la barra se vacia', sacar().length, 0);
+
+    /* La barra vive en la parrilla y en ninguna otra pantalla: la
+       cocina no saca proteinas, tiene su arroz. */
+    comprobar('la parrilla tiene su sitio en el HTML',
+        /id="porsacar"/.test(fuente('parrilla.html')), true);
+    comprobar('y la cocina no',
+        /id="porsacar"/.test(fuente('cocina.html')), false);
+    comprobar('va pegada a la cabecera, no flotando suelta',
+        /srv-fijo[\s\S]*?srv-top[\s\S]*?id="porsacar"/.test(fuente('parrilla.html')), true);
+    comprobar('y se pinta en cada vuelta del tablero',
+        /pintarPorSacar\(\);/.test(fuente('js/estacion.js')), true);
+}
+
+/* ============================================================
    CONTABILIDAD DE PLATOS
 
    Lo que salio de la cocina y de la parrilla. Sin bebidas ni porciones
@@ -3361,6 +3476,7 @@ async function main() {
     await probarCambioDeServicio();
     probarTableroParrilla();
     probarArrozPendiente();
+    probarPorSacar();
     probarEscaleraDeTurnos();
     probarTurnosDeMesa();
     probarCubiertosDeLaMesa();

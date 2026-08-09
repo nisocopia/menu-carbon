@@ -642,6 +642,63 @@ const Servicio = (() => {
                 .reduce((n, it) => n + (llevaArroz(it) ? it.cantidad : 0), 0), 0);
     }
 
+    /* ------------------------------------------------------------
+       LO QUE EL ASADOR TIENE QUE SACAR
+
+       Lo mismo que el arroz le hace a la cocina, pero para la parrilla:
+       no adivina nada, cuenta lo que está pedido y todavía no ha salido.
+
+       POR PLATO Y NO POR PROTEÍNA SUELTA, que es como lo pidió el
+       asador. Un mixto de pollo y carne no son "un pollo y una carne"
+       tiradas en la parrilla: son un plato que sale junto, y cada mixto
+       con carnes distintas es un renglón propio. Verlo como él lo
+       cocina es lo que le deja repartir la parrilla de un vistazo.
+
+       Se juntan por el plato Y por las carnes elegidas: dos mixtos de
+       pollo y carne son "2", y da igual en qué orden los escogió el
+       mesero. Lo que no los junta es el término ni si van para llevar
+       —eso cambia cómo se cocinan, no cuánto hay que sacar de la
+       nevera—, y por eso el detalle fino sigue estando en la tarjeta,
+       que es donde se cocina de verdad.
+
+       PENDIENTE, no lo de toda la noche: baja en cuanto el asador marca
+       la comanda como sacada. El número contesta una sola pregunta,
+       "¿qué me falta por poner?", y un número que no baja al trabajar
+       deja de mirarse a la media hora.
+       ------------------------------------------------------------ */
+
+    function porSacar() {
+        const filas = new Map();
+
+        /* Solo lo del asador y solo lo que sigue en pie: comandasDe ya
+           deja fuera lo entregado y lo anulado, y `sacado` es la marca
+           que él mismo pone cuando la saca de la parrilla. */
+        comandasDe('asador')
+            .filter(c => !c.sacado)
+            .forEach(c => (c.items || []).forEach(it => {
+                const elegidas = (it.elegidas || [])
+                    .map(id => (Store.findPlato(id) || {}).nombre || id);
+
+                // Ordenadas solo para la clave: pollo+carne y carne+pollo son lo mismo
+                const clave = it.platoId + '|' + [...elegidas].sort().join('+');
+
+                const fila = filas.get(clave) || {
+                    platoId: it.platoId,
+                    nombre: nombreDeItem(it),
+                    elegidas,
+                    cantidad: 0
+                };
+                fila.cantidad += it.cantidad || 0;
+                filas.set(clave, fila);
+            }));
+
+        /* El montón más grande primero: es el que decide cómo se reparte
+           la parrilla. A igual cantidad, por nombre, para que los
+           renglones no bailen de sitio entre un pedido y el siguiente. */
+        return [...filas.values()].sort((a, b) =>
+            b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre));
+    }
+
     /** Nombre corto para el código: "Camarón al Ajillo" → "Camarón Ajillo". */
     function nombreCorto(nombre) {
         return String(nombre || '').replace(/\s+(al|a la|de|con)\s+/gi, ' ');
@@ -2465,7 +2522,7 @@ const Servicio = (() => {
         getComandas, getSesiones, getPagos, comandasDe, comandasDeSesion, comandasDeMesa,
         sesionDeMesa, sesionesAbiertasDeMesa, cuentaDeSesion, cuentaDeMesa, pagosDeSesion,
         cubiertosDeSesion, turnosDeSesion,
-        estacionDe, guarnicionDe, arrozPendiente, categoriaDe, codigoDe, etiquetaDe,
+        estacionDe, guarnicionDe, arrozPendiente, porSacar, categoriaDe, codigoDe, etiquetaDe,
         cambiosDe, guarnicionFinal, comoSeSirve,
         productoDe, nombreProducto, consumoDe, quedanDe, quedanDePlato,
         sePuedePedir, quedanTodos, revisarStock,

@@ -1902,6 +1902,91 @@ body.hay-nuevo::after {
 .srv-arroz b { font-size: 1.6rem; line-height: 1; color: #ffd75e; }
 .srv-arroz span { color: #b9a97a; font-weight: 500; }
 
+/* ------------------------------------------------------------
+   LO QUE EL ASADOR TIENE QUE SACAR
+
+   La cabecera y esta barra van dentro del mismo bloque pegajoso: si
+   solo se pegara la cabecera, la cuenta se perdería justo cuando el
+   asador baja a mirar las tarjetas de más abajo, que es cuando está
+   decidiendo qué pone en la parrilla.
+
+   En rojo de brasa y no en el amarillo del arroz, a propósito: son dos
+   pantallas distintas y nadie las ve juntas, pero el que entra a las
+   dos tiene que saber en cuál está sin leer.
+   ------------------------------------------------------------ */
+.srv-fijo {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+
+.srv-porsacar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    background: #2b1a14;
+    border-bottom: 1px solid #7a3f22;
+    padding: 8px 12px;
+
+    /* Se queda con su alto y rueda por dentro. Una noche de doce
+       renglones distintos no puede empujar los pedidos fuera de la
+       pantalla: la secuencia manda, esto es el apunte al margen. */
+    max-height: 28vh;
+    overflow-y: auto;
+}
+
+.srv-porsacar[hidden] { display: none; }
+
+.ps-tit {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #e8a87c;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.ps-tit i { color: #ff7a3d; }
+
+.ps-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: #3a2018;
+    border: 1px solid #6b3a24;
+    border-radius: 10px;
+    padding: 4px 10px 4px 8px;
+}
+
+/* El número grande y a la izquierda: es lo único que se lee de lejos */
+.ps-chip b {
+    font-size: 1.35rem;
+    line-height: 1;
+    font-weight: 700;
+    color: #ffb27a;
+}
+
+.ps-nom {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #f3ded2;
+}
+
+/* Las carnes del mixto, debajo y en chico: dicen QUÉ mixto es sin
+   competir con el número, que es lo que se va a mirar de reojo. */
+.ps-nom em {
+    font-style: normal;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #c39c86;
+}
+
 /* El navegador no deja sonar hasta que alguien toca la pantalla. Mientras
    siga bloqueado hay que decirlo: un aviso que no suena y nadie sabe que
    no suena es peor que no tener aviso. */
