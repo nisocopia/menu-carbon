@@ -1921,13 +1921,59 @@ body.hay-nuevo::after {
 }
 
 .srv-porsacar {
+    background: #2b1a14;
+    border-bottom: 1px solid #7a3f22;
+}
+
+.srv-porsacar[hidden] { display: none; }
+
+/* La línea que siempre se ve, plegada o no. Es toda ella el botón: con
+   las manos ocupadas, un blanco pequeño se falla. */
+.ps-tit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    color: #e8a87c;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+}
+
+.ps-tit::-webkit-details-marker { display: none; }
+.ps-tit i { color: #ff7a3d; }
+
+/* Cuántos platos hay por sacar. Va en el título y no dentro, porque es
+   lo único que queda cuando la barra está plegada. */
+.ps-total {
+    font-size: 1rem;
+    letter-spacing: 0;
+    color: #ffb27a;
+}
+
+/* Que se note que se abre, y hacia dónde. Dibujada con caracteres y no
+   con el tipo de los iconos: una flecha que no carga deja el botón
+   pareciendo un cartel. */
+.ps-tit::after {
+    content: '▾';
+    margin-left: auto;
+    font-size: 0.9rem;
+    color: #c39c86;
+    transition: transform 0.15s ease;
+}
+
+.srv-porsacar[open] .ps-tit::after { transform: rotate(180deg); }
+
+.ps-lista {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 8px;
-    background: #2b1a14;
-    border-bottom: 1px solid #7a3f22;
-    padding: 8px 12px;
+    padding: 0 12px 10px;
 
     /* Se queda con su alto y rueda por dentro. Una noche de doce
        renglones distintos no puede empujar los pedidos fuera de la
@@ -1935,21 +1981,6 @@ body.hay-nuevo::after {
     max-height: 28vh;
     overflow-y: auto;
 }
-
-.srv-porsacar[hidden] { display: none; }
-
-.ps-tit {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: #e8a87c;
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.ps-tit i { color: #ff7a3d; }
 
 .ps-chip {
     display: flex;

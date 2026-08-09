@@ -20,9 +20,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Parrilla">
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608091347">
-    <link rel="stylesheet" href="css/iconos.css?v=202608091347">
-    <link rel="stylesheet" href="css/servicio.css?v=202608091347">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608091410">
+    <link rel="stylesheet" href="css/iconos.css?v=202608091410">
+    <link rel="stylesheet" href="css/servicio.css?v=202608091410">
 </head>
 
 <body class="srv-body estacion">
@@ -55,8 +55,13 @@
 
         <!-- Lo pedido y todavía sin sacar, por plato y con las carnes del
              mixto. No es una estimación: se cuenta. Sube cuando entra el
-             pedido y baja cuando el asador marca la comanda como sacada. -->
-        <div class="srv-porsacar" id="porsacar" hidden></div>
+             pedido y baja cuando el asador marca la comanda como sacada.
+
+             Se pliega de un toque, y plegada sigue diciendo el total: una
+             barra que al cerrarse no deja nada obliga a abrirla para saber
+             si valía la pena abrirla. Abierta o cerrada se recuerda en
+             ESTE celular. -->
+        <details class="srv-porsacar" id="porsacar" hidden open></details>
     </div>
 
     <div class="srv-alarma" id="alarma" hidden></div>
@@ -102,13 +107,13 @@
 
     <div class="srv-toast" id="toast"></div>
 
-    <script src="js/menu-data.js?v=202608091347"></script>
-    <script src="js/sync.js?v=202608091347"></script>
-    <script src="js/store.js?v=202608091347"></script>
-    <script src="js/servicio.js?v=202608091347"></script>
-    <script src="js/estacion.js?v=202608091347"></script>
-    <script src="js/pwa.js?v=202608091347"></script>
-    <script src="js/aviso.js?v=202608091347"></script>
+    <script src="js/menu-data.js?v=202608091410"></script>
+    <script src="js/sync.js?v=202608091410"></script>
+    <script src="js/store.js?v=202608091410"></script>
+    <script src="js/servicio.js?v=202608091410"></script>
+    <script src="js/estacion.js?v=202608091410"></script>
+    <script src="js/pwa.js?v=202608091410"></script>
+    <script src="js/aviso.js?v=202608091410"></script>
     <script>iniciarEstacion('asador');</script>
 
 </body>
