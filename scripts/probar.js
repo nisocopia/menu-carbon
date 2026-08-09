@@ -3054,6 +3054,75 @@ function probarPorSacar() {
 }
 
 /* ============================================================
+   Y LA BARRA SE PLIEGA
+
+   El asador la pidio plegable despues de verla. Lo que hay que vigilar
+   no es que se abra y se cierre —eso lo hace el navegador solo— sino
+   dos cosas que si se pueden romper sin que nadie se entere:
+
+     · Que PLEGADA siga diciendo algo. Una barra que al cerrarse no deja
+       nada obliga a abrirla para saber si valia la pena abrirla.
+     · Que NO SE ABRA SOLA. El tablero se repinta cada pocos segundos y
+       en cada comanda que entra; si el repintado la reabriera, plegarla
+       no serviria de nada en plena noche, que es cuando se pliega.
+   ============================================================ */
+
+function probarPorSacarPlegable() {
+    console.log('\n--- Y la barra del asador se pliega ---');
+    const p = pantallaEstacion('asador');
+
+    const poner = comandas =>
+        p.corre(`localStorage.setItem('srv_comandas', ${JSON.stringify(JSON.stringify(comandas))})`);
+
+    const barra  = () => p.nodo('porsacar');
+    const titulo = () => (barra().innerHTML.match(/<summary[\s\S]*?<\/summary>/) || [''])[0];
+    const total  = () => Number((barra().innerHTML.match(/ps-total">(\d+)/) || [])[1]);
+
+    poner({
+        a: { id: 'a', sesion: 's1', mesa: 3, creado: 1, estado: 'nuevo', sacado: false, items: [
+            { uid: '1', platoId: 'p2', nombre: 'Chuleta', cantidad: 3, precio: 4, estacion: 'asador' }
+        ]}
+    });
+    p.corre('pintarPorSacar()');
+
+    comprobar('la primera vez sale abierta', barra().open, true);
+    comprobar('y el titulo lleva el total',  total(), 3);
+
+    /* El asador la pliega. Queda apuntado en ESTE celular: es como mira
+       uno su pantalla, no un dato del local. */
+    p.corre(`localStorage.setItem('srv_porsacar_abierto', 'no')`);
+    p.corre('pintarPorSacar()');
+
+    comprobar('plegada sigue plegada al repintar', barra().open, false);
+    comprobar('y plegada todavia dice cuantos hay', total(), 3);
+    comprobar('el titulo se ve siempre', /Por sacar/.test(titulo()), true);
+
+    // Entra otro pedido: el tablero se repinta y NO se la abre en la cara
+    poner({
+        a: { id: 'a', sesion: 's1', mesa: 3, creado: 1, estado: 'nuevo', sacado: false, items: [
+            { uid: '1', platoId: 'p2', nombre: 'Chuleta', cantidad: 3, precio: 4, estacion: 'asador' }
+        ]},
+        b: { id: 'b', sesion: 's2', mesa: 5, creado: 2, estado: 'nuevo', sacado: false, items: [
+            { uid: '2', platoId: 'p5', nombre: 'Pollo Asado', cantidad: 2, precio: 3.5, estacion: 'asador' }
+        ]}
+    });
+    p.corre('pintarPorSacar()');
+
+    comprobar('un pedido nuevo no la abre sola', barra().open, false);
+    comprobar('pero el total sube igual',        total(), 5);
+
+    // Y si la vuelve a abrir, se queda abierta
+    p.corre(`localStorage.setItem('srv_porsacar_abierto', 'si')`);
+    p.corre('pintarPorSacar()');
+    comprobar('vuelve a abrirse cuando el la abre', barra().open, true);
+
+    comprobar('en el HTML es un acordeon de verdad',
+        /<details class="srv-porsacar" id="porsacar" hidden open><\/details>/.test(fuente('parrilla.html')), true);
+    comprobar('y el toque queda apuntado en este celular',
+        /addEventListener\('toggle'/.test(fuente('js/estacion.js')), true);
+}
+
+/* ============================================================
    CONTABILIDAD DE PLATOS
 
    Lo que salio de la cocina y de la parrilla. Sin bebidas ni porciones
@@ -3477,6 +3546,7 @@ async function main() {
     probarTableroParrilla();
     probarArrozPendiente();
     probarPorSacar();
+    probarPorSacarPlegable();
     probarEscaleraDeTurnos();
     probarTurnosDeMesa();
     probarCubiertosDeLaMesa();

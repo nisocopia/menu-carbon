@@ -714,10 +714,13 @@ function pintarArroz() {
  *
  * VA ARRIBA Y FIJA, PEGADA A LA CABECERA. La regla que él puso primero
  * es que no se pierda de vista la secuencia de pedidos: esto es un
- * apunte al margen, no el tablero. Por eso no tapa ninguna tarjeta, no
- * hay que tocarla para verla —con las manos en la parrilla, lo que hay
- * que tocar no se mira— y si creciera demasiado se queda con su alto y
- * rueda por dentro, en vez de empujar los pedidos fuera de la pantalla.
+ * apunte al margen, no el tablero. Por eso no tapa ninguna tarjeta y, si
+ * creciera demasiado, se queda con su alto y rueda por dentro en vez de
+ * empujar los pedidos fuera de la pantalla.
+ *
+ * SE PLIEGA DE UN TOQUE, y plegada sigue diciendo cuántos platos hay por
+ * sacar. Una barra que al cerrarse no deja nada obliga a abrirla para
+ * saber si valía la pena abrirla, y entonces plegarla no ahorra nada.
  *
  * Solo en la parrilla: la cocina no saca proteínas, tiene su arroz.
  */
@@ -729,14 +732,43 @@ function pintarPorSacar() {
     el.hidden = !filas.length;
     if (!filas.length) return;
 
+    /* Se pone en cada vuelta y no solo al abrir: el tablero se repinta
+       cada pocos segundos, y sin esto la barra se volvería a abrir sola
+       en la primera comanda que entrara. */
+    el.open = abiertoPorSacar();
+
+    const platos = filas.reduce((n, f) => n + f.cantidad, 0);
+
     el.innerHTML = `
-        <span class="ps-tit"><i class="fas fa-fire"></i> Por sacar</span>
-        ${filas.map(f => `
-            <span class="ps-chip">
-                <b>${f.cantidad}</b>
-                <span class="ps-nom">${f.nombre}${f.elegidas.length
-                    ? `<em>${f.elegidas.join(' + ')}</em>` : ''}</span>
-            </span>`).join('')}`;
+        <summary class="ps-tit">
+            <i class="fas fa-fire"></i> Por sacar
+            <b class="ps-total">${platos}</b>
+        </summary>
+        <div class="ps-lista">
+            ${filas.map(f => `
+                <span class="ps-chip">
+                    <b>${f.cantidad}</b>
+                    <span class="ps-nom">${f.nombre}${f.elegidas.length
+                        ? `<em>${f.elegidas.join(' + ')}</em>` : ''}</span>
+                </span>`).join('')}
+        </div>`;
+}
+
+/* Abierta o cerrada vive en ESTE celular y no viaja a la nube: es cómo
+   mira uno su pantalla, no un dato del local. Dos asadores en dos
+   aparatos no tienen por qué plegarla igual.
+
+   Empieza abierta: la primera vez tiene que enseñar para qué sirve. */
+const LLAVE_PORSACAR = 'srv_porsacar_abierto';
+
+function abiertoPorSacar() {
+    try { return localStorage.getItem(LLAVE_PORSACAR) !== 'no'; }
+    catch (e) { return true; }
+}
+
+function guardarPorSacar(abierto) {
+    try { localStorage.setItem(LLAVE_PORSACAR, abierto ? 'si' : 'no'); }
+    catch (e) { /* sin sitio para guardar: se pierde al recargar, no se rompe */ }
 }
 
 /* ---------- Una tarjeta ----------
@@ -1151,6 +1183,12 @@ function iniciarEstacion(cual) {
         document.addEventListener('pointermove', e => {
             if (sosteniendo && !e.target.closest('[data-largo]')) soltarSostener();
         });
+
+        /* `toggle` y no `click`: <details> se abre y se cierra solo, y
+           también con el teclado. Lo que hay que guardar es en qué quedó,
+           no que alguien lo tocó. */
+        const porsacar = $('porsacar');
+        if (porsacar) porsacar.addEventListener('toggle', () => guardarPorSacar(porsacar.open));
 
         document.addEventListener('click', e => {
             const tarea = e.target.closest('[data-tarea]');

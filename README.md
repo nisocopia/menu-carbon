@@ -750,10 +750,16 @@ sigue en la tarjeta, que es donde se cocina.
 sacada, y desaparece cuando no queda nada. Un número que no baja al trabajar
 deja de mirarse a la media hora.
 
-La secuencia manda: la barra no tapa ninguna tarjeta, no hay que tocarla para
-verla —con las manos en la parrilla, lo que hay que tocar no se mira— y si
-creciera mucho se queda con su alto y rueda por dentro en vez de empujar los
-pedidos fuera de la pantalla.
+**Se pliega de un toque**, y plegada sigue diciendo cuántos platos hay por
+sacar — una barra que al cerrarse no deja nada obliga a abrirla para saber si
+valía la pena abrirla. Abierta o cerrada se recuerda en ese celular y no viaja
+a la nube: es cómo mira uno su pantalla, no un dato del local. Y no se abre
+sola: el tablero se repinta en cada comanda que entra, y si eso la reabriera,
+plegarla no serviría de nada justo en la noche en que se pliega.
+
+La secuencia manda: la barra no tapa ninguna tarjeta y, si creciera mucho, se
+queda con su alto y rueda por dentro en vez de empujar los pedidos fuera de la
+pantalla.
 
 ### Cosas que se calculan solas
 
