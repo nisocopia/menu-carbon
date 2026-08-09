@@ -316,8 +316,10 @@ y los juniors también.
 **Y el dinero sigue la misma regla que la tabla.** Lo vendido que sale arriba
 es lo que suman las filas de abajo, ni un centavo más: el gerente saca la
 calculadora y le tiene que dar lo mismo. Antes ahí salía la caja entera —con
-bebidas y porciones— y la resta parecía plata perdida. La caja completa no se
-esconde, va debajo con su nombre y diciendo de dónde sale la diferencia.
+bebidas y porciones—, la resta no cuadraba con nada de lo que se veía y
+parecía plata perdida. La caja del día se sigue guardando entera en el
+resumen; lo que no se hace es enseñarla aquí al lado de una tabla que no la
+explica.
 
 **Día por día.** Los totales dicen cuánto se vendió; la lista de días dice
 *cuándo*. Es la que contesta "¿por qué el martes fue flojo?", y esa pregunta

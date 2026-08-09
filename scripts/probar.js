@@ -3018,15 +3018,14 @@ function probarContabilidad() {
     comprobar('lo vendido en platos es lo que suman las filas', plata.cocina, 17.5);
     comprobar('y la caja entera es otra cifra, más grande',     plata.caja, 24);
 
-    /* Que el panel enseñe la que cuadra. La cifra grande es «cocina»
-       —los importes de los platos— y la caja va debajo, con su nombre. */
+    /* Que el panel enseñe la que cuadra, y SOLO esa: la cifra grande es
+       «cocina», los importes de los platos. La caja entera se sigue
+       guardando, pero en esta pestaña no se enseña. */
     const panel = fuente('js/panel.js');
     comprobar('el panel suma la plata de los platos aparte',
         /cocina\s*\+=\s*d\.platos\[id\]\.i/.test(panel), true);
     comprobar('la cifra grande es la de los platos',
         /cont-cifra">\$\{dinero\(cocina\)\}/.test(panel), true);
-    comprobar('y la caja entera se dice, no se esconde',
-        /cont-caja[\s\S]*dinero\(cajaEntera\)/.test(panel), true);
     comprobar('el día por día también cuenta solo platos',
         /cont-num">\$\{dinero\(plataDePlatos\(d\.platos\)\)\}/.test(panel), true);
 }
