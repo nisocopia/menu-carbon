@@ -501,6 +501,20 @@
 .cont-cifra { display: block; font-size: 1.6rem; font-weight: 700; color: #FFC107; }
 .cont-pie   { display: block; font-size: 0.72rem; color: #888; margin-top: 3px; }
 
+/* Pedidos ya contados que siguen en pie. No es una alarma roja —la
+   cuenta está bien— pero tampoco es un renglón de ayuda cualquiera: dice
+   que aquella noche el servicio no llegó a borrarse. */
+.cont-sobrantes {
+    background: #2a2413;
+    border: 1px solid #5c4a12;
+    border-radius: 10px;
+    padding: 11px 13px;
+    margin: -6px 0 18px;
+    color: #bbb;
+}
+.cont-sobrantes i { color: #FFC107; margin-right: 5px; }
+.cont-sobrantes b { color: #e8e8e8; }
+
 .cont-grupo { margin-bottom: 18px; }
 .cont-grupo h3 {
     display: flex;

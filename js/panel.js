@@ -266,16 +266,25 @@ function escucharNube() {
         renderNumeros();
     }, true);
 
-    // Si otro dispositivo del local cambia el menú, este panel se entera
-    Nube.escuchar('menu/overrides', datos => {
-        Store.aplicarOverridesRemotos(datos);
+    /* Si otro dispositivo del local cambia el menú, este panel se entera.
+
+       LA RUTA HAY QUE PASARLA. Firebase avisa del hijo que cambió, no de
+       la rama entera, y tomar un hijo por la rama entera borra todo lo
+       demás. Store.aplicarAviso sabe distinguirlos. */
+    Nube.escuchar('menu/overrides', (datos, ruta, esRetoque) => {
+        Store.aplicarOverridesRemotos(datos, ruta, esRetoque);
         renderEditorMenu();
     });
 
     /* Lo que hay hoy también viaja: si el gerente lo pone desde el
-       celular, el panel de la caja se entera sin recargar. */
-    Nube.escuchar('menu/stock', datos => {
-        Store.aplicarStockRemoto(datos);
+       celular, el panel de la caja se entera sin recargar.
+
+       Aquí es donde más se notaba: el gerente escribía "quedan 3 pollos",
+       la nube le devolvía el eco de ESE hijo, y como se guardaba como si
+       fuera la nevera entera, los números desaparecían todos de golpe y
+       la pantalla decía "sin límite". */
+    Nube.escuchar('menu/stock', (datos, ruta, esRetoque) => {
+        Store.aplicarStockRemoto(datos, ruta, esRetoque);
         renderStock();
         renderEditorMenu();
     });
@@ -533,9 +542,11 @@ function renderDiaADia() {
         if (new Date(f + 'T00:00:00').getTime() >= desde) dias[f] = { ...guardada[f] };
     });
 
+    // Lo vivo que YA está contado no vuelve a entrar: ya está en la fila
     const vivas = {};
     Object.values(Servicio.getComandas()).forEach(c => {
-        if (c.estado !== 'anulado' && (c.creado || 0) >= desde) vivas[c.id] = c;
+        if (c.estado !== 'anulado' && (c.creado || 0) >= desde &&
+            !Servicio.yaEstaContada(c, guardada)) vivas[c.id] = c;
     });
     Object.entries(Servicio.resumirPorDia(vivas)).forEach(([f, d]) => {
         const y = dias[f];
@@ -721,11 +732,24 @@ function contarPlatos() {
         if (soloEste(f) && new Date(f + 'T00:00:00').getTime() >= desde) dias[f] = guardada[f];
     });
 
-    // --- y lo que todavía está vivo ---
+    /* --- y lo que todavía está vivo ---
+
+       Vivo NO quiere decir sin contar. Una comanda que sobrevivió al
+       cierre —porque el borrado de la nube no salió— ya está dentro del
+       resumen de arriba, y sumarla otra vez aquí es exactamente lo que
+       hacía que un sábado de 500 platos saliera por el triple. */
     const vivas = {};
+    let sobrantes = 0;
     Object.values(Servicio.getComandas()).forEach(c => {
-        if (c.estado !== 'anulado' && (c.creado || 0) >= desde &&
-            soloEste(Servicio.fechaDe(c.creado))) vivas[c.id] = c;
+        if (c.estado === 'anulado' || (c.creado || 0) < desde) return;
+        if (!soloEste(Servicio.fechaDe(c.creado))) return;
+
+        /* Ignorarla en silencio tampoco vale. Una comanda contada que
+           sigue viva quiere decir que el borrado de esa noche no salió, y
+           eso hay que poder verlo: es la diferencia entre una cuenta que
+           cuadra y una cuenta que cuadra por casualidad. */
+        if (Servicio.yaEstaContada(c, guardada)) { sobrantes++; return; }
+        vivas[c.id] = c;
     });
     const enVivo = Servicio.resumirPorDia(vivas);
 
@@ -764,7 +788,7 @@ function contarPlatos() {
        sí es justo lo que hizo pensar que faltaba plata. */
     cocina = Math.round(cocina * 100) / 100;
 
-    return { platos, proteinas, cocina, mesas, desde };
+    return { platos, proteinas, cocina, mesas, desde, sobrantes };
 }
 
 function renderContabilidad() {
@@ -784,8 +808,20 @@ function renderContabilidad() {
             .join('');
     }
 
-    const { platos, proteinas, cocina, mesas } = contarPlatos();
+    const { platos, proteinas, cocina, mesas, sobrantes } = contarPlatos();
     const lista = Object.values(platos);
+
+    /* Pedidos que ya están en la cuenta y que siguen en pie. No se
+       cuentan dos veces —eso ya está resuelto— pero se avisa, porque
+       significa que aquella noche el servicio no llegó a borrarse y van
+       a seguir apareciendo en la pestaña Pedidos como si fueran de hoy. */
+    const aviso = sobrantes ? `
+        <p class="ayuda cont-sobrantes">
+            <i class="fas fa-triangle-exclamation"></i>
+            Hay <b>${sobrantes} pedido${sobrantes === 1 ? '' : 's'}</b> que ya están en esta
+            cuenta y que siguen sin borrarse. No se cuentan dos veces, pero salen en la
+            pestaña Pedidos como si fueran de hoy. Se quitan con <b>«Vaciar el servicio»</b>.
+        </p>` : '';
 
     /* Si se está mirando un día suelto hay que decirlo Y dar la salida.
        Sin el cartel, se vuelve mañana, se ven números raros y no se
@@ -799,7 +835,7 @@ function renderContabilidad() {
     }
 
     if (!lista.length) {
-        caja.innerHTML = `<p class="vacio">Todavía no se ha vendido nada en este periodo.</p>`;
+        caja.innerHTML = aviso + `<p class="vacio">Todavía no se ha vendido nada en este periodo.</p>`;
         document.getElementById('cont-proteinas').innerHTML = '';
         /* La lista de días se pinta IGUAL. Antes se salía por aquí y el
            día por día no aparecía nunca en un periodo sin ventas — que
@@ -820,6 +856,7 @@ function renderContabilidad() {
             <div><span class="cont-cifra">${mesas}</span><span class="cont-pie">mesas</span></div>
             <div><span class="cont-cifra">${dinero(cocina)}</span><span class="cont-pie">vendido en platos</span></div>
         </div>
+        ${aviso}
 
         <!-- Lo vendido es EXACTAMENTE lo que suman las filas de abajo: si
              el gerente saca la calculadora tiene que darle lo mismo. -->

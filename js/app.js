@@ -537,20 +537,24 @@ function avisarAgotado() {
 function escucharCambiosDelLocal() {
     if (!Nube.activo) return;
 
-    Nube.escuchar('menu/overrides', datos => {
-        Store.aplicarOverridesRemotos(datos);
+    /* LA RUTA Y EL TIPO DE AVISO SE PASAN TAL CUAL. Firebase manda la
+       rama entera al conectar, pero después solo el hijo que cambió: si
+       se guarda ese hijo como si fuera la rama, se borra todo lo demás.
+       Un solo plato agotado dejaba la carta sin ningún otro agotado. */
+    Nube.escuchar('menu/overrides', (datos, ruta, esRetoque) => {
+        Store.aplicarOverridesRemotos(datos, ruta, esRetoque);
         redibujarMenu();
     });
 
     /* Cuántos quedan. Lo publica el celular del que toma el pedido:
        este no puede contarlo solo. */
-    Nube.escuchar('stock', datos => {
-        Store.aplicarEspejoRemoto(datos);
+    Nube.escuchar('stock', (datos, ruta, esRetoque) => {
+        Store.aplicarEspejoRemoto(datos, ruta, esRetoque);
         redibujarMenu();
     });
 
-    Nube.escuchar('config', datos => {
-        Store.aplicarConfigRemota(datos);
+    Nube.escuchar('config', (datos, ruta, esRetoque) => {
+        Store.aplicarConfigRemota(datos, ruta, esRetoque);
         CFG = Store.getConfig();
         renderInfoLocal();
     });

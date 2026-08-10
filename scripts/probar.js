@@ -3525,6 +3525,277 @@ function probarLoQueYaEntrego() {
         [true, true]);
 }
 
+/* ============================================================
+   LOS TRES ERRORES DEL PANEL DEL GERENTE
+
+   Los tres se veian en la misma pantalla y los tres salen de lo mismo:
+   dar por bueno algo que nadie estaba comprobando.
+
+     1. que un aviso de la nube trae siempre la rama entera
+     2. que la nube deja borrar lo que se le pide borrar
+     3. que una comanda contada ya no puede estar viva
+
+   Ninguna de las tres era verdad, y las tres juntas hicieron que un
+   sabado de 500 platos saliera por el triple.
+   ============================================================ */
+
+/**
+ * El eco de la nube trae UN HIJO, no la rama entera.
+ *
+ * El gerente escribia "quedan 3 pollos", Firebase le devolvia el eco de
+ * ESE producto —ruta "/pollo"—, el panel lo guardaba como si fuera la
+ * nevera completa y los numeros desaparecian todos de golpe: en
+ * pantalla, "sin limite". Y al escribir el siguiente numero, esa basura
+ * se publicaba a la nube y dejaba sin numero a todo el local.
+ */
+function probarEcoDeLaNevera() {
+    console.log('\n--- El numero de "Lo que hay hoy" no se borra solo ---');
+    nubeLimpia();
+    const { corre } = celular('gerente');
+
+    corre(`Store.setStock('pollo', 12)`);
+    corre(`Store.setStock('costilla', 6)`);
+    comprobar('el gerente pone dos numeros',
+        [corre(`Servicio.quedanDe('pollo')`), corre(`Servicio.quedanDe('costilla')`)], [12, 6]);
+
+    // Asi avisa Firebase cuando cambia UN producto: la ruta dice cual es
+    corre(`Store.aplicarStockRemoto({ hay: 3, puesto: Date.now() }, '/pollo', false)`);
+    comprobar('corrige el pollo y la costilla NO se pierde',
+        [corre(`Servicio.quedanDe('pollo')`), corre(`Servicio.quedanDe('costilla')`)], [3, 6]);
+
+    // Un hijo que llega en nulo quita ese, y solo ese
+    corre(`Store.aplicarStockRemoto(null, '/pollo', false)`);
+    comprobar('quitarle el numero al pollo deja el de la costilla',
+        [corre(`Servicio.quedanDe('pollo')`), corre(`Servicio.quedanDe('costilla')`)], [null, 6]);
+
+    /* Y la rama entera SI reemplaza. Es la otra mitad: si tampoco
+       obedeciera esto, un numero borrado desde otro celular no se
+       borraria nunca aqui. */
+    corre(`Store.aplicarStockRemoto({ pollo: { hay: 1, puesto: Date.now() } }, '/', false)`);
+    comprobar('pero la rama entera si reemplaza',
+        [corre(`Servicio.quedanDe('pollo')`), corre(`Servicio.quedanDe('costilla')`)], [1, null]);
+
+    /* Lo mismo con los agotados, que van por el mismo camino y se
+       rompian igual: un plato agotado borraba todos los demas. */
+    corre(`Store.aplicarOverridesRemotos({ p1: { agotado: true }, p3: { agotado: true } }, '/', false)`);
+    corre(`Store.aplicarOverridesRemotos({ agotado: false }, '/p1', false)`);
+    comprobar('desagotar un plato no desagota a los demas',
+        [corre(`!!Store.getOverrides().p1.agotado`), corre(`!!Store.getOverrides().p3.agotado`)],
+        [false, true]);
+}
+
+/**
+ * La nube tiene que dejar vaciar TODAS las ramas del servicio.
+ *
+ * `servicio/llamadas` estaba en `.write: false` y solo se podian tocar
+ * sus hijas. "Vaciar el servicio" intentaba borrar la rama entera, la
+ * nube decia que no, y `vaciarTodo()` devolvia false TODAS las noches
+ * aunque todo lo demas hubiera salido bien.
+ *
+ * Un aviso de fallo que sale siempre deja de creerse, y peor: invita a
+ * darle al boton otra vez. Ahi es donde empezaba a inflarse la cuenta.
+ */
+function probarQueSePuedeVaciarDeVerdad() {
+    console.log('\n--- La nube deja vaciar todas las ramas del servicio ---');
+
+    const GERENTE = 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3';
+    const reglas = JSON.parse(fuente('firebase-rules.json')).rules;
+
+    // Las ramas se leen del codigo, no de una lista a mano que se quede vieja
+    const lista = (fuente('js/servicio.js').match(/const ramas = \[([\s\S]*?)\];/) || ['', ''])[1];
+    const ramas = (lista.match(/'([^']+)'/g) || []).map(r => r.replace(/'/g, ''));
+    comprobar('se leyeron las ramas que borra vaciarTodo()', ramas.length > 0, true);
+
+    const sinPermiso = ramas.filter(r => {
+        const nodo = r.split('/').reduce((n, p) => (n && n[p]) || null, reglas);
+        const w = nodo && nodo['.write'];
+        return !(typeof w === 'string' && w.indexOf(GERENTE) >= 0);
+    });
+    comprobar('el gerente las puede vaciar todas', sinPermiso, []);
+}
+
+/**
+ * Vivo NO quiere decir sin contar.
+ *
+ * La regla de la contabilidad —una comanda esta VIVA o esta CONTADA,
+ * nunca las dos— era solo un comentario. Lo unico que la sostenia era
+ * que al cerrar el dia se borraban las comandas; en cuanto ese borrado
+ * fallaba una vez, las mismas comandas quedaban vivas Y contadas, el
+ * panel las sumaba dos veces, y volver a cerrar las sumaba una tercera.
+ */
+async function probarContabilidadQueNoSeInfla() {
+    console.log('\n--- La contabilidad no se multiplica aunque falle el borrado ---');
+    nubeLimpia();
+    const { corre } = celular('gerente');
+
+    corre(`Servicio.enviarComanda({ mesa: 4, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 10 }] })`);
+    await respirar();
+    const hoy = corre(`Servicio.fechaDe(Date.now())`);
+
+    // La nube acepta la cuenta, pero NO deja borrar las comandas
+    nube.prohibido = (rama, valor) => rama === 'servicio/comandas' && valor === null;
+
+    comprobar('vaciar avisa de que no salio', await corre(`Servicio.vaciarTodo()`), false);
+    comprobar('el dia quedo apuntado una sola vez',
+        corre(`Servicio.getContabilidad()['${hoy}'].platos.p5.c`), 10);
+
+    // Las comandas siguen en la nube, y el panel se las vuelve a traer
+    await corre(`Servicio.traerParaElPanel()`);
+    comprobar('las comandas volvieron al panel',
+        corre(`Object.keys(Servicio.getComandas()).length`), 1);
+
+    /* Y AQUI ESTA LO QUE FALTABA: vuelven, pero ya estan contadas. El
+       panel las tiene que reconocer y no sumarlas por segunda vez. */
+    comprobar('pero el panel las da por contadas',
+        corre(`Object.values(Servicio.getComandas()).every(c => Servicio.yaEstaContada(c))`), true);
+
+    // E insistir con el boton tampoco puede inflarla
+    await corre(`Servicio.vaciarTodo()`);
+    comprobar('insistir con el boton no la infla',
+        corre(`Servicio.getContabilidad()['${hoy}'].platos.p5.c`), 10);
+    comprobar('ni la plata', corre(`Servicio.getContabilidad()['${hoy}'].total`), 35);
+
+    // Lo que se venda DESPUES del cierre si entra, como siempre
+    nube.prohibido = null;
+    corre(`Servicio.enviarComanda({ mesa: 6, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 }] })`);
+    await respirar();
+    await corre(`Servicio.vaciarTodo()`);
+    comprobar('lo vendido despues del cierre si se suma',
+        corre(`Servicio.getContabilidad()['${hoy}'].platos.p5.c`), 12);
+}
+
+/**
+ * Contada es contada, no "hecha antes del cierre".
+ *
+ * El primer intento de arreglar esto miraba la HORA: lo anterior al
+ * cierre se daba por contado. Y es casi verdad, pero casi no basta —una
+ * comanda que se anota sin señal y llega a la nube despues del cierre se
+ * hizo ANTES y no la conto nadie. Con la hora se perdia, y sin hacer
+ * ruido: la venta desaparecia de los libros para siempre.
+ *
+ * Por eso se apunta CUAL se conto, uno por uno.
+ */
+async function probarLaComandaQueLlegoTarde() {
+    console.log('\n--- Una comanda que llega tarde no se da por contada ---');
+    nubeLimpia();
+    const { corre } = celular('gerente');
+
+    corre(`Servicio.enviarComanda({ mesa: 1, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3, cantidad: 4 }] })`);
+    await respirar();
+    const hoy = corre(`Servicio.fechaDe(Date.now())`);
+
+    comprobar('se cierra la noche', await corre(`Servicio.vaciarTodo()`), true);
+    comprobar('con sus 4 platos',
+        corre(`Servicio.getContabilidad()['${hoy}'].platos.p5.c`), 4);
+
+    /* Y ahora aparece la del mesero que estaba sin señal: se anotó ANTES
+       del cierre y la nube no la tenía cuando se contó. Su cola la sube
+       ahora, tarde, y el panel se la trae. */
+    const cerrado = corre(`Servicio.getContabilidad()['${hoy}'].cerrado`);
+    const tarde = {
+        id: 'tarde', mesa: 9, creado: cerrado - 1000, estado: 'nuevo',
+        items: [{ platoId: 'p5', nombre: 'Pollo Asado', precio: 3, cantidad: 2 }]
+    };
+    ponerEnNube('servicio/comandas/tarde', tarde);
+    await corre(`Servicio.traerParaElPanel()`);
+
+    comprobar('se hizo antes del cierre', corre(`Servicio.getComandas().tarde.creado < ${cerrado}`), true);
+    comprobar('pero NADIE la contó',
+        corre(`Servicio.yaEstaContada(Servicio.getComandas().tarde)`), false);
+
+    await corre(`Servicio.vaciarTodo()`);
+    comprobar('así que entra en la cuenta, no se pierde',
+        corre(`Servicio.getContabilidad()['${hoy}'].platos.p5.c`), 6);
+
+    // Y una vez contada, ya no puede volver a entrar
+    ponerEnNube('servicio/comandas/tarde', tarde);
+    await corre(`Servicio.traerParaElPanel()`);
+    comprobar('y ahora sí está contada',
+        corre(`Servicio.yaEstaContada(Servicio.getComandas().tarde)`), true);
+    await corre(`Servicio.vaciarTodo()`);
+    comprobar('volver a cerrar no la suma otra vez',
+        corre(`Servicio.getContabilidad()['${hoy}'].platos.p5.c`), 6);
+}
+
+/**
+ * Los identificadores no se guardan para siempre.
+ *
+ * Solo hacen falta mientras la comanda pueda seguir viva en algun
+ * celular. Un dia con 150 comandas son casi 3 KB de identificadores: a
+ * diez años eso es mas de lo que aguanta el almacen del navegador, y la
+ * cuenta tiene que durar años.
+ */
+async function probarQueLosIdsNoSeAcumulan() {
+    console.log('\n--- Los identificadores contados se barren solos ---');
+    nubeLimpia();
+    const { corre } = celular('gerente');
+
+    corre(`Servicio.enviarComanda({ mesa: 1, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3, cantidad: 1 }] })`);
+    await respirar();
+    const hoy = corre(`Servicio.fechaDe(Date.now())`);
+    await corre(`Servicio.vaciarTodo()`);
+
+    comprobar('el día recién cerrado sí los tiene',
+        corre(`Object.keys(Servicio.getContabilidad()['${hoy}'].contadas).length`), 1);
+
+    // Un día viejo, con sus identificadores, esperando a que lo barran
+    const viejo = corre(`Servicio.fechaDe(Date.now() - 30 * 24 * 3600 * 1000)`);
+    corre(`(() => {
+        const c = Servicio.getContabilidad();
+        c['${viejo}'] = { platos: {}, proteinas: {}, mesas: 1, total: 9,
+                          cerrado: 1, contadas: { uno: 1, dos: 1 } };
+        localStorage.setItem('srv_contabilidad', JSON.stringify(c));
+    })()`);
+
+    corre(`Servicio.enviarComanda({ mesa: 2, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3, cantidad: 1 }] })`);
+    await respirar();
+    await corre(`Servicio.vaciarTodo()`);
+
+    comprobar('al viejo se le quitan',
+        corre(`Servicio.getContabilidad()['${viejo}'].contadas`), undefined);
+    comprobar('pero su cuenta queda intacta',
+        corre(`Servicio.getContabilidad()['${viejo}'].total`), 9);
+    comprobar('y el día de hoy los conserva',
+        corre(`Object.keys(Servicio.getContabilidad()['${hoy}'].contadas).length`), 2);
+}
+
+/**
+ * Si la nube no acepta la cuenta, aqui tampoco se marca por contada.
+ *
+ * Antes se guardaba en este celular antes de saber si habia salido. El
+ * dia quedaba marcado como cerrado sin estarlo en la nube, y al
+ * reintentar se saltaba solo: esa noche no aparecia en la contabilidad
+ * de nadie, y no habia forma de recuperarla.
+ */
+async function probarCuentaQueNoSaleNoSeMarca() {
+    console.log('\n--- Si la cuenta no llega a la nube, no se da por cerrada ---');
+    nubeLimpia();
+    const { corre } = celular('gerente');
+
+    corre(`Servicio.enviarComanda({ mesa: 2, items: [
+        { platoId: 'p1', nombre: 'Carne Asada', precio: 4, cantidad: 3 }] })`);
+    await respirar();
+    const hoy = corre(`Servicio.fechaDe(Date.now())`);
+
+    nube.prohibido = rama => rama.indexOf('contabilidad/') === 0;
+    comprobar('no se vacia si la cuenta no salio', await corre(`Servicio.vaciarTodo()`), false);
+    comprobar('y el dia NO queda marcado como cerrado',
+        corre(`Servicio.getContabilidad()['${hoy}']`), undefined);
+    comprobar('las comandas siguen ahi',
+        corre(`Object.keys(Servicio.getComandas()).length`), 1);
+
+    // Vuelve a andar la nube y el reintento la apunta entera
+    nube.prohibido = null;
+    comprobar('al reintentar se vacia bien', await corre(`Servicio.vaciarTodo()`), true);
+    comprobar('con los 3 platos, ni uno menos',
+        corre(`Servicio.getContabilidad()['${hoy}'].platos.p1.c`), 3);
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -3567,6 +3838,12 @@ async function main() {
     await probarFiar();
     await probarContabilidadQueNoSeBorra();
     await probarFiadoSobreviveAlVaciado();
+    probarEcoDeLaNevera();
+    probarQueSePuedeVaciarDeVerdad();
+    await probarContabilidadQueNoSeInfla();
+    await probarLaComandaQueLlegoTarde();
+    await probarQueLosIdsNoSeAcumulan();
+    await probarCuentaQueNoSaleNoSeMarca();
     await probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();

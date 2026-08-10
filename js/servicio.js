@@ -1887,6 +1887,56 @@ const Servicio = (() => {
 
     const getContabilidad = () => read(K.conta, {});
 
+    /**
+     * ¿Esta comanda YA ESTÁ en la cuenta de su día?
+     *
+     * La regla de toda la contabilidad es que una comanda está VIVA o
+     * está CONTADA, nunca las dos cosas. Hasta ahora eso era solo un
+     * comentario: lo único que lo sostenía era que al cerrar el día se
+     * borraban las comandas. Si ese borrado fallaba una sola vez —y
+     * fallaba, porque la nube decía que no a una de las ramas— las
+     * mismas comandas seguían vivas Y contadas, y el panel las sumaba
+     * dos veces. Volver a cerrar las sumaba una tercera.
+     *
+     * Ahora se comprueba de verdad: cada día guarda CUÁLES comandas
+     * entraron en su cuenta, una por una.
+     *
+     * Se probó primero con la hora del cierre —lo anterior a esa hora se
+     * daba por contado— y no sirve. Una comanda que se anota sin señal y
+     * llega a la nube después del cierre se hizo ANTES y no la contó
+     * nadie: por la hora se daba por contada y esa venta desaparecía de
+     * los libros sin hacer ruido. Perder una venta es tan malo como
+     * contarla dos veces.
+     */
+    function yaEstaContada(c, guardada) {
+        if (!c || !c.creado) return false;
+        const dia = (guardada || getContabilidad())[fechaDe(c.creado)];
+        if (!dia) return false;
+
+        // Se apunta CUÁL se contó, no a qué hora: la hora no alcanza
+        if (dia.contadas) return !!dia.contadas[c.id];
+
+        /* Los días que se cerraron antes de que se apuntaran los
+           identificadores no tienen más rastro que la hora del cierre.
+           Es menos fino —una comanda que llegara tarde y justo en ese
+           mismo milisegundo se daría por contada— pero es lo único que
+           hay de ellos, y sirve para dejar de inflar lo ya guardado. */
+        return !!(dia.cerrado && c.creado <= dia.cerrado);
+    }
+
+    /* Los identificadores solo hacen falta mientras la comanda pueda
+       seguir viva en algún celular. limpiarViejo() barre a los dos días,
+       así que a los tres ya no queda ninguna. Guardarlos para siempre
+       engordaría por gusto una cuenta que tiene que durar años. */
+    const DIAS_CON_IDS = 3;
+
+    function podarContadas(guardada) {
+        const corte = fechaDe(Date.now() - DIAS_CON_IDS * 24 * 3600 * 1000);
+        return Object.keys(guardada)
+            .filter(f => f < corte && guardada[f] && guardada[f].contadas)
+            .map(f => { delete guardada[f].contadas; return f; });
+    }
+
     /** Lo que aporta un montón de comandas, repartido por día. */
     function resumirPorDia(comandas) {
         const dias = {};
@@ -1895,8 +1945,11 @@ const Servicio = (() => {
             if (!c || c.estado === 'anulado') return;
             const dia = fechaDe(c.creado);
             const d = dias[dia] || (dias[dia] = {
-                platos: {}, proteinas: {}, sesiones: {}, total: 0
+                platos: {}, proteinas: {}, sesiones: {}, ids: {}, total: 0
             });
+
+            // Cuáles entraron, para que no puedan entrar dos veces
+            if (c.id) d.ids[c.id] = 1;
 
             (c.items || []).forEach(it => {
                 d.total += (it.precio || 0) * (it.cantidad || 0);
@@ -1945,6 +1998,12 @@ const Servicio = (() => {
         });
         d.mesas = (d.mesas || 0) + (nuevo.mesas || 0);
         d.total = Math.round(((d.total || 0) + nuevo.total) * 100) / 100;
+
+        /* Y quiénes entraron. Es lo que hace que cerrar dos veces sobre
+           las mismas comandas sea imposible, y no solo improbable. */
+        d.contadas = d.contadas || {};
+        Object.keys(nuevo.ids || {}).forEach(id => { d.contadas[id] = 1; });
+
         d.cerrado = Date.now();
         return d;
     }
@@ -2040,28 +2099,56 @@ const Servicio = (() => {
             comandas = frescas || {};
         }
 
-        const dias = resumirPorDia(comandas);
-        if (!Object.keys(dias).length) return true;      // no había nada que contar
-
+        /* PRIMERO SE MIRA QUÉ HAY YA CONTADO, y se mira en la nube, que
+           es la que manda. Antes se resumía todo y se sumaba encima: si
+           estas mismas comandas ya se habían contado —porque el borrado
+           de la noche anterior no llegó a salir— el día entero se sumaba
+           por segunda vez, y por tercera al insistir con el botón. */
         const guardada = getContabilidad();
-        const salidas = [];
+        const fechas = [...new Set(Object.values(comandas)
+            .filter(c => c && c.estado !== 'anulado' && c.creado)
+            .map(c => fechaDe(c.creado)))];
 
-        for (const dia of Object.keys(dias)) {
-            let previo = guardada[dia];
-            if (Red.activo && Red.haySesion()) {
-                const enNube = await Red.leer(`contabilidad/${dia}`, true);
-                if (enNube !== undefined) previo = enNube || previo;
+        if (Red.activo && Red.haySesion()) {
+            for (const f of fechas) {
+                const enNube = await Red.leer(`contabilidad/${f}`, true);
+                if (enNube === undefined) return false;   // no se pudo mirar: no se apunta a ciegas
+                if (enNube) guardada[f] = enNube;
             }
-            const nuevo = sumarAlDia(previo, dias[dia]);
+        }
+
+        // Y solo entra lo que todavía NO está en la cuenta de su día
+        const pendientes = {};
+        Object.keys(comandas).forEach(k => {
+            if (!yaEstaContada(comandas[k], guardada)) pendientes[k] = comandas[k];
+        });
+
+        const dias = resumirPorDia(pendientes);
+        if (!Object.keys(dias).length) return true;      // no había nada nuevo que contar
+
+        const salidas = [];
+        for (const dia of Object.keys(dias)) {
+            const nuevo = sumarAlDia(guardada[dia], dias[dia]);
             guardada[dia] = nuevo;
             if (Red.activo && Red.haySesion()) {
                 salidas.push(Red.guardar(`contabilidad/${dia}`, nuevo));
             }
         }
 
-        write(K.conta, guardada);
+        /* SI NO SALIÓ, NO SE MARCA AQUÍ TAMPOCO. Guardar la cuenta en
+           este celular cuando la nube no la aceptó dejaba el día por
+           contado sin estarlo: al reintentar se saltaba solo y esa noche
+           no aparecía en la contabilidad de nadie. */
         const hechas = await Promise.all(salidas);
-        return hechas.every(Boolean);
+        if (salidas.length && !hechas.every(Boolean)) return false;
+
+        // Housekeeping: los identificadores viejos ya no protegen de nada
+        const podados = podarContadas(guardada);
+        write(K.conta, guardada);
+        if (podados.length && Red.activo && Red.haySesion()) {
+            await Promise.all(podados.map(f => Red.guardar(`contabilidad/${f}`, guardada[f])));
+        }
+        return true;
     }
 
     /* ============================================================
@@ -2548,7 +2635,8 @@ const Servicio = (() => {
         // fiar: se lo lleva ahora y paga después
         fiar, getFiados, pagarFiado, fiadosPendientes, totalFiado,
         // la cuenta que no se borra nunca
-        cerrarElDia, getContabilidad, resumirPorDia, fechaDe, cargarDelGerente, traerParaElPanel,
+        cerrarElDia, getContabilidad, resumirPorDia, fechaDe, yaEstaContada,
+        cargarDelGerente, traerParaElPanel,
         corregirDia,
         // lo que manda el comensal
         enviarEntrante, getEntrantes, confirmarEntrante, descartarEntrante,

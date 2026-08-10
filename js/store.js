@@ -112,16 +112,76 @@ const Store = (() => {
         }
     }
 
+    /* ------------------------------------------------------------
+       LO QUE LLEGA DE LA NUBE, EN SU SITIO
+
+       Firebase NO manda siempre la rama entera. Cuando cambia un solo
+       hijo manda solo ese hijo, y en la ruta dice cuál es:
+
+           ruta "/"        el dato es TODO lo que hay en la rama
+           ruta "/pollo"   el dato es SOLO el pollo; lo demás sigue ahí
+           patch           el dato son solo los campos que cambiaron
+
+       Guardar el segundo como si fuera el primero borra todo lo demás.
+       Así desaparecían los números de "Lo que hay hoy": el gerente
+       corregía el pollo, la nube le devolvía el eco de ESE hijo, y la
+       nevera entera pasaba a valer { hay: 3, puesto: … }. En pantalla,
+       todo "sin límite" — y al escribir el siguiente número, esa basura
+       se publicaba a la nube y dejaba sin número a todo el local.
+
+       Es el mismo cuidado que ya tenían las comandas en servicio.js.
+       ------------------------------------------------------------ */
+    function aplicarAviso(clave, dato, ruta, esRetoque) {
+        const partes = String(ruta || '/').split('/').filter(Boolean);
+
+        // La rama entera: lo de antes se tira, que es lo que se pidió
+        if (!partes.length && !esRetoque) { write(clave, dato || {}); return; }
+
+        const todo = read(clave, {});
+        let nodo = todo;
+
+        /* Un retoque nombra en su ruta el sitio ENTERO y trae dentro los
+           campos; un dato completo nombra en la ruta el campo que se
+           reemplaza. Por eso uno baja un escalón más que el otro. */
+        const hasta = esRetoque ? partes.length : partes.length - 1;
+        for (let i = 0; i < hasta; i++) {
+            if (!nodo[partes[i]] || typeof nodo[partes[i]] !== 'object') nodo[partes[i]] = {};
+            nodo = nodo[partes[i]];
+        }
+
+        if (esRetoque) {
+            Object.keys(dato || {}).forEach(k => {
+                if (dato[k] === null) delete nodo[k];
+                else nodo[k] = dato[k];
+            });
+        } else {
+            const ultima = partes[partes.length - 1];
+            if (dato === null || dato === undefined) delete nodo[ultima];
+            else nodo[ultima] = dato;
+        }
+
+        write(clave, todo);
+    }
+
     /**
      * Guarda los cambios que llegan de la nube sin volver a subirlos,
      * para no entrar en un ciclo.
+     *
+     * Quien pregunta cada tanto —el celular del mesero— llama sin ruta y
+     * eso quiere decir "esto es todo lo que hay". Quien escucha en vivo
+     * tiene que pasar la ruta y el aviso tal como se los dio la nube.
      */
-    function aplicarOverridesRemotos(ov) {
-        write(K.overrides, ov || {});
+    function aplicarOverridesRemotos(ov, ruta, esRetoque) {
+        aplicarAviso(K.overrides, ov, ruta, esRetoque);
     }
 
-    function aplicarConfigRemota(c) {
-        if (c) write(K.config, c);
+    /* La ficha del local no se borra por un aviso vacío: si la rama
+       llegara sin nada, el menú se quedaría sin nombre ni horario por un
+       tropiezo de la nube. Los cambios de un solo campo sí se aplican. */
+    function aplicarConfigRemota(c, ruta, esRetoque) {
+        const raiz = !esRetoque && !String(ruta || '/').split('/').filter(Boolean).length;
+        if (raiz && !c) return;
+        aplicarAviso(K.config, c, ruta, esRetoque);
     }
 
     /* ---------------- LO QUE HAY EN LA NEVERA ----------------
@@ -165,7 +225,9 @@ const Store = (() => {
         return { valor: s[producto] || null, salio };
     }
 
-    function aplicarStockRemoto(s) { write(K.stock, s || {}); }
+    function aplicarStockRemoto(s, ruta, esRetoque) {
+        aplicarAviso(K.stock, s, ruta, esRetoque);
+    }
 
     /* El espejo para la carta del comensal.
 
@@ -184,7 +246,9 @@ const Store = (() => {
         }
     }
 
-    function aplicarEspejoRemoto(q) { write(K.espejo, q || {}); }
+    function aplicarEspejoRemoto(q, ruta, esRetoque) {
+        aplicarAviso(K.espejo, q, ruta, esRetoque);
+    }
 
     function toggleAgotado(platoId) {
         const p = findPlato(platoId);

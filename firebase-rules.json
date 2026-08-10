@@ -97,7 +97,7 @@
 
       "llamadas": {
         ".read": "auth != null",
-        ".write": false,
+        ".write": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
         "$aQuien": {
           ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'rgi36tpn1KNHeDEqJN17dpbWguy2' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
           ".validate": "newData.hasChildren(['cuando'])",
