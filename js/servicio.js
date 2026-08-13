@@ -64,18 +64,26 @@ const Servicio = (() => {
        podría hacer trampa editando el navegador, allá no.
        ============================================================ */
 
+    /* `panel` dice quién puede ABRIRLO, no qué ve dentro. Lo segundo lo
+       reparte la lista PESTANAS de panel.js: el asador entra, pero solo
+       al menú y a la contabilidad. Las dos listas tienen que nombrar a
+       los mismos roles y hay una comprobación que falla si se separan. */
     const PERMISOS = {
-        gerente:  { comanda: 'todo',   cocina: 'todo', parrilla: 'todo', servir: 'ver' },
-        mesero:   { comanda: 'todo',   cocina: 'ver',  parrilla: 'ver',  servir: 'ver' },
-        cocina:   { comanda: 'no',     cocina: 'todo', parrilla: 'ver',  servir: 'ver' },
+        gerente:  { comanda: 'todo',   cocina: 'todo', parrilla: 'todo', servir: 'ver', panel: 'todo' },
+        mesero:   { comanda: 'todo',   cocina: 'ver',  parrilla: 'ver',  servir: 'ver', panel: 'no'   },
+        cocina:   { comanda: 'no',     cocina: 'todo', parrilla: 'ver',  servir: 'ver', panel: 'no'   },
         /* Al asador le llegan pedidos directos y tiene que poder
            anotarlos sin ir a buscar al mesero. Cobrar es otra cosa: el
-           dinero se queda donde estaba. */
-        parrilla: { comanda: 'anotar', cocina: 'ver',  parrilla: 'todo', servir: 'ver' },
+           dinero se queda donde estaba.
+
+           Y entra al panel: es quien primero ve que se está acabando el
+           pollo, así que es quien tiene que poder escribirlo en "Lo que
+           hay hoy" sin bajar a buscar al dueño. */
+        parrilla: { comanda: 'anotar', cocina: 'ver',  parrilla: 'todo', servir: 'ver', panel: 'todo' },
         /* El que pone los cubiertos y lleva los platos. Su pantalla es
            de puro leer: no hay un solo botón que cambie nada, porque
            lleva las manos ocupadas y porque el pedido no es suyo. */
-        servir:   { comanda: 'no',     cocina: 'no',   parrilla: 'no',   servir: 'ver' }
+        servir:   { comanda: 'no',     cocina: 'no',   parrilla: 'no',   servir: 'ver', panel: 'no'   }
     };
 
     /** El rol de quien entró en este celular, o null si no entró nadie. */

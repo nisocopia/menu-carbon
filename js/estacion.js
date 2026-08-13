@@ -524,7 +524,8 @@ function ajustarSegunPermiso() {
 
     document.querySelectorAll('.srv-links a[href]').forEach(a => {
         const destino = a.getAttribute('href') || '';
-        const pantalla = destino.includes('comanda')  ? 'comanda'
+        const pantalla = destino.includes('panel')    ? 'panel'
+                       : destino.includes('comanda')  ? 'comanda'
                        : destino.includes('parrilla') ? 'asador'
                        : destino.includes('cocina')   ? 'cocina' : null;
         if (pantalla) a.hidden = Servicio.permisoEn(pantalla) === 'no';

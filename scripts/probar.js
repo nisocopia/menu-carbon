@@ -3676,6 +3676,89 @@ function probarElPanelDelAsador() {
     comprobar('una cuenta cualquiera que se diga "gerente" no entra',
         puerta({ uid: 'uid-de-cualquiera', rol: 'gerente' }).entra, false);
 
+    /* ---- Y EL REPARTO, CORRIENDO CONTRA UN DOCUMENTO DE MENTIRA ----
+
+       ajustarPestanasSegunRol() es quien decide lo que se ve. Mirar el
+       texto del archivo no dice si esconde lo que tiene que esconder. */
+    const reparte = quien => {
+        const TABS = ['hoy', 'menu', 'numeros', 'platos', 'local'];
+        const clase = () => ({ add() {}, remove() {}, contains: () => false });
+        const tabs = TABS.map(t => ({ dataset: { tab: t }, hidden: false, classList: clase() }));
+        const volver = { hidden: false };
+
+        const ctx = vm.createContext({
+            console, Date, Math, JSON, Promise,
+            Sync: {
+                activo: true, haySesion: () => true,
+                uidSesion: () => quien.uid, rolSesion: () => quien.rol,
+                correoSesion: () => null, escuchar: () => (() => {}),
+                guardar: async () => false, parchear: async () => false,
+                agregar: async () => false, leer: async () => null, salir() {}, entrar() {}
+            },
+            Store: { getConfig: () => ({ gerenteUid: uidDe('gerente') }) },
+            document: {
+                addEventListener: () => {},
+                getElementById: id => (id === 'volver-estacion' ? volver : null),
+                querySelector: sel => (sel === '.tab:not([hidden])'
+                    ? tabs.find(t => !t.hidden) || null : null),
+                querySelectorAll: sel => (sel === '.tab' ? tabs : [])
+            },
+            sessionStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+            localStorage:   { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+            window: { addEventListener: () => {} },
+            setTimeout: () => 0, setInterval: () => 0, clearTimeout: () => {}
+        });
+        vm.runInContext(src, ctx);
+        vm.runInContext('ajustarPestanasSegunRol()', ctx);
+        return { visibles: tabs.filter(t => !t.hidden).map(t => t.dataset.tab), volver };
+    };
+
+    const vistaGerente = reparte({ uid: uidDe('gerente'), rol: 'gerente' });
+    comprobar('al gerente no se le esconde ninguna pestania',
+        vistaGerente.visibles, ['hoy', 'menu', 'numeros', 'platos', 'local']);
+    comprobar('y no necesita volver a ninguna parrilla',
+        vistaGerente.volver.hidden, true);
+
+    const vistaAsador = reparte({ uid: ASADOR, rol: 'parrilla' });
+    comprobar('al asador se le esconde todo menos dos',
+        vistaAsador.visibles, ['menu', 'platos']);
+    comprobar('y se le enseña la vuelta a la parrilla',
+        vistaAsador.volver.hidden, false);
+
+    /* ---- EL BOTON DE IDA, EN LA PANTALLA DE LA PARRILLA ---- */
+    const htmlParrilla = fuente('parrilla.html');
+    const enlace = (htmlParrilla.match(/<a[^>]*href="panel\.html"[^>]*>/) || [''])[0];
+    comprobar('la parrilla tiene enlace al panel', !!enlace, true);
+    comprobar('y nace escondido, por si el JavaScript no corre',
+        /\bhidden\b/.test(enlace), true);
+    comprobar('estacion.js sabe a qué pantalla apunta ese enlace',
+        /includes\('panel'\)\s*\?\s*'panel'/.test(fuente('js/estacion.js')), true);
+    comprobar('y el panel tiene la vuelta, tambien escondida',
+        /id="volver-estacion"[^>]*hidden|hidden[^>]*id="volver-estacion"/.test(fuente('panel.html')), true);
+
+    /* ---- LAS DOS LISTAS DE ROLES TIENEN QUE DECIR LO MISMO ----
+
+       PERMISOS.panel dice quién puede ABRIRLO; PESTANAS, qué ve dentro.
+       Si una nombra un rol que la otra no, el asador ve un botón que
+       rebota o entra a un panel sin pestañas. */
+    const permisos = (fuente('js/servicio.js').match(/const PERMISOS = \{([\s\S]*?)\n    \};/) || ['', ''])[1];
+    const conPanel = [];
+    permisos.replace(/(\w+):\s*\{[^}]*panel:\s*'(\w+)'/g, (_, r, v) => { if (v !== 'no') conPanel.push(r); });
+
+    comprobar('los roles que pueden abrir el panel', conPanel.sort(), ['gerente', 'parrilla']);
+    comprobar('son exactamente los que tienen pestanias repartidas',
+        conPanel.sort(), Object.keys({ gerente: 1, parrilla: 1 }).sort());
+    comprobar('y coinciden con la lista PESTANAS de panel.js',
+        conPanel.filter(r => !listaDe(r)), []);
+
+    /* Y el permiso CORRIENDO, que es lo que va a mirar la parrilla para
+       enseñar o esconder el botón. */
+    nubeLimpia();
+    ['gerente', 'parrilla'].forEach(r => comprobar(`${r}: le sale el botón Panel`,
+        celular(r).corre(`Servicio.permisoEn('panel')`) !== 'no', true));
+    ['mesero', 'cocina', 'servir'].forEach(r => comprobar(`${r}: no le sale`,
+        celular(r).corre(`Servicio.permisoEn('panel')`), 'no'));
+
     /* ---- Y AHORA LO QUE IMPORTA: que la nube diga lo mismo ----
 
        Esconder una pestania ordena la pantalla; no guarda nada. Si el
@@ -3707,6 +3790,40 @@ function probarElPanelDelAsador() {
         deja(reglas.menu['.write'], COCINA), false);
     comprobar('ni el mesero',
         deja(reglas.menu['.write'], MESERO), false);
+}
+
+/**
+ * Esconder de verdad esconde.
+ *
+ * TRAMPA FEA Y SILENCIOSA. El navegador esconde lo marcado con `hidden`
+ * poniendole display:none — pero eso lo pone SU hoja por defecto, y
+ * cualquier regla nuestra que diga `display` le gana. .tab es
+ * display:flex, asi que marcar hidden no escondia nada: el asador habria
+ * visto las cinco pestanias y habria podido tocarlas.
+ *
+ * Ninguna prueba de logica lo pilla: el JavaScript hace bien su trabajo
+ * —marca hidden en lo que toca— y la pantalla miente igual. Por eso esta
+ * prueba mira el CSS y no el codigo.
+ */
+function probarQueEsconderEsconde() {
+    console.log('\n--- Lo que se marca escondido, se esconde de verdad ---');
+
+    const revisar = (archivo, selectores) => {
+        const css = fuente(archivo);
+        selectores.forEach(sel => {
+            const escapado = sel.replace(/[.#]/g, '\\$&');
+            const fijaDisplay = new RegExp(escapado + '\\s*\\{[^}]*display\\s*:').test(css);
+            const tieneRegla  = new RegExp(escapado + '\\[hidden\\]').test(css);
+            comprobar(`${sel}  ${fijaDisplay ? 'fija display -> necesita regla [hidden]' : 'no fija display -> basta con hidden'}`,
+                !fijaDisplay || tieneRegla, true);
+        });
+    };
+
+    // Lo que panel.js marca escondido segun quien entre
+    revisar('css/panel.css', ['.tab', '.panel-ver-menu', '.bloque', '.cont-viendo', '.estado-nube']);
+
+    // Y el enlace al panel que la parrilla esconde a quien no puede abrirlo
+    revisar('css/servicio.css', ['.srv-links a']);
 }
 
 /**
@@ -4059,6 +4176,7 @@ async function main() {
     probarEcoDeLaNevera();
     probarQueSePuedeVaciarDeVerdad();
     probarElPanelDelAsador();
+    probarQueEsconderEsconde();
     await probarQueNoSePideLoProhibido();
     await probarContabilidadQueNoSeInfla();
     await probarLaComandaQueLlegoTarde();

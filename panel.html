@@ -9,10 +9,10 @@
     <meta name="referrer" content="no-referrer">
     <title>Panel del Gerente</title>
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608130912">
-    <link rel="stylesheet" href="css/iconos.css?v=202608130912">
-    <link rel="stylesheet" href="css/style.css?v=202608130912">
-    <link rel="stylesheet" href="css/panel.css?v=202608130912">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608131004">
+    <link rel="stylesheet" href="css/iconos.css?v=202608131004">
+    <link rel="stylesheet" href="css/style.css?v=202608131004">
+    <link rel="stylesheet" href="css/panel.css?v=202608131004">
 </head>
 
 <body class="panel-body">
@@ -42,6 +42,11 @@
                 <span class="estado-nube" id="estado-nube" hidden></span>
             </div>
             <div class="panel-header-acciones">
+                <!-- La vuelta a su pantalla. Sin esto, el asador que entra
+                     al panel solo tiene "Salir" para irse — y eso le cierra
+                     la sesión y le obliga a entrar de nuevo con la parrilla
+                     llena. Se destapa según quién entró. -->
+                <a href="parrilla.html" class="panel-ver-menu" id="volver-estacion" hidden><i class="fas fa-fire"></i> Volver a la parrilla</a>
                 <a href="index.html" class="panel-ver-menu"><i class="fas fa-up-right-from-square"></i> Ver menú</a>
                 <button class="panel-ver-menu" id="btn-salir"><i class="fas fa-right-from-bracket"></i> Salir</button>
             </div>
@@ -174,12 +179,12 @@
 
     </div>
 
-    <script src="js/menu-data.js?v=202608130912"></script>
-    <script src="js/sync.js?v=202608130912"></script>
-    <script src="js/store.js?v=202608130912"></script>
-    <script src="js/servicio.js?v=202608130912"></script>
-    <script src="js/panel.js?v=202608130912"></script>
-    <script src="js/pwa.js?v=202608130912"></script>
+    <script src="js/menu-data.js?v=202608131004"></script>
+    <script src="js/sync.js?v=202608131004"></script>
+    <script src="js/store.js?v=202608131004"></script>
+    <script src="js/servicio.js?v=202608131004"></script>
+    <script src="js/panel.js?v=202608131004"></script>
+    <script src="js/pwa.js?v=202608131004"></script>
 
 </body>
 

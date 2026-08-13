@@ -245,6 +245,14 @@ function ajustarPestanasSegunRol() {
         b.hidden = permitidas.indexOf(b.dataset.tab) < 0;
     });
 
+    /* Y la puerta de vuelta a su pantalla. El asador entra aquí desde la
+       parrilla a poner lo que se está acabando; si lo único para salir
+       fuera "Salir", cerraría la sesión y tendría que entrar de nuevo
+       con la parrilla llena de pedidos. Al gerente no le hace falta:
+       este panel ES su pantalla. */
+    const volver = document.getElementById('volver-estacion');
+    if (volver) volver.hidden = rolPanel() !== 'parrilla';
+
     /* Y la que queda abierta tiene que ser una que pueda ver. La
        primera del panel es Pedidos, que el asador no tiene: sin esto
        entraría a una pantalla en blanco. */

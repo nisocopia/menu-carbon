@@ -205,6 +205,28 @@
     font-weight: 600;
 }
 
+/* EL ATRIBUTO hidden NO BASTA AQUÍ, Y ES UNA TRAMPA FEA.
+
+   El navegador esconde lo marcado con `hidden` poniéndole display:none,
+   pero eso lo pone su hoja por defecto — y cualquier regla nuestra que
+   diga `display` le gana. Estas dos lo dicen: .tab y .panel-ver-menu son
+   display:flex. Sin lo de abajo, esconder una pestaña no la escondía:
+   el asador habría visto las cinco y habría podido tocarlas.
+
+   Van con [hidden] y no con una clase aparte porque el JavaScript ya
+   usa .hidden = true, que es lo natural, y así no hay dos formas de
+   esconder lo mismo.
+
+   Los dos últimos ya estaban rotos desde antes y nadie lo había visto:
+   el cartel de "viendo solo el jueves" se quedaba puesto como una barra
+   amarilla vacía cuando no había ningún día elegido, y el punto de la
+   conexión salía en los locales sin nube, que es justo donde no hay
+   ninguna conexión que mirar. */
+.tab[hidden],
+.panel-ver-menu[hidden],
+.cont-viendo[hidden],
+.estado-nube[hidden] { display: none; }
+
 /* ---------- Vistas ---------- */
 
 .panel-vista { display: none; padding: 16px 14px; }

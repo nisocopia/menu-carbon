@@ -20,9 +20,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Parrilla">
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608130912">
-    <link rel="stylesheet" href="css/iconos.css?v=202608130912">
-    <link rel="stylesheet" href="css/servicio.css?v=202608130912">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608131004">
+    <link rel="stylesheet" href="css/iconos.css?v=202608131004">
+    <link rel="stylesheet" href="css/servicio.css?v=202608131004">
 </head>
 
 <body class="srv-body estacion">
@@ -98,6 +98,13 @@
     </button>
 
     <nav class="srv-links">
+        <!-- Al panel, para poner lo que se está acabando sin bajar a buscar
+             al dueño. Nace ESCONDIDO y solo lo destapa ajustarSegunPermiso()
+             si la cuenta puede abrirlo: así, si el JavaScript no llegara a
+             correr, se queda oculto en vez de enseñar una puerta que rebota.
+             La sesión vive en el navegador, así que ir y volver no obliga a
+             entrar de nuevo. -->
+        <a href="panel.html" hidden><i class="fas fa-clipboard-list"></i> Panel</a>
         <a href="comanda.html"><i class="fas fa-pen-to-square"></i> Tomar pedido</a>
         <a href="servir.html"><i class="fas fa-utensils"></i> Servir</a>
         <a href="cocina.html"><i class="fas fa-kitchen-set"></i> Cocina</a>
@@ -107,13 +114,13 @@
 
     <div class="srv-toast" id="toast"></div>
 
-    <script src="js/menu-data.js?v=202608130912"></script>
-    <script src="js/sync.js?v=202608130912"></script>
-    <script src="js/store.js?v=202608130912"></script>
-    <script src="js/servicio.js?v=202608130912"></script>
-    <script src="js/estacion.js?v=202608130912"></script>
-    <script src="js/pwa.js?v=202608130912"></script>
-    <script src="js/aviso.js?v=202608130912"></script>
+    <script src="js/menu-data.js?v=202608131004"></script>
+    <script src="js/sync.js?v=202608131004"></script>
+    <script src="js/store.js?v=202608131004"></script>
+    <script src="js/servicio.js?v=202608131004"></script>
+    <script src="js/estacion.js?v=202608131004"></script>
+    <script src="js/pwa.js?v=202608131004"></script>
+    <script src="js/aviso.js?v=202608131004"></script>
     <script>iniciarEstacion('asador');</script>
 
 </body>
