@@ -148,7 +148,7 @@ function sacarDeNube(rama) {
 
 function celular(rol) {
     const guardado = {};
-    const propio = { enviado: [] };
+    const propio = { enviado: [], leidos: [] };
     const miNube = nube.gen;          // el celular pertenece a ESTA nube
     const esMia = () => nube.gen === miNube;
 
@@ -178,6 +178,7 @@ function celular(rol) {
            codigo los trata distinto y la mentira tambien tiene que
            hacerlo, o las pruebas de vaciado no prueban nada. */
         leer: async rama => {
+            propio.leidos.push(rama);   // para poder comprobar qué NO se pide
             if (rama === 'servicio/entrantes') return JSON.parse(JSON.stringify(nube.entrantes));
             if (nube.caida) return undefined;      // no se pudo leer
             if (nube.vacio) return null;           // esta vacio, que es otra cosa
@@ -2773,6 +2774,47 @@ function probarCuantasConexiones() {
     const comanda = abiertas(null);
     comprobar('la comanda, también 2', comanda.length, 2);
 
+    /* EL PANEL, UNA SOLA. Antes abría cinco —comandas, llamadas, vistas,
+       menu/overrides y menu/stock— y el tope del navegador son seis. Con
+       el asador abriendo el panel en el mismo teléfono de la parrilla,
+       que ya tiene dos, la cuenta se pasaba y una se quedaba colgada. El
+       navegador no dice cuál: podía ser el timbre.
+
+       El timbre no se pinta en el panel, así que esa conexión sobraba
+       desde el principio. Las vistas son de la pestaña Números y solo
+       las abre el gerente. */
+    const panel = abiertas('panel');
+    comprobar('Servicio abre 1 en modo panel', panel, ['servicio/comandas']);
+
+    /* Y HAY QUE CONTAR TAMBIÉN LAS QUE ABRE EL PANEL POR SU CUENTA. Solo
+       mirar las de Servicio da un número bonito y falso: el panel abre
+       además el menú, y son las que faltaban para pasarse del tope. */
+    const pjs = fuente('js/panel.js');
+    const propias = (pjs.match(/Nube\.escuchar\(/g) || []).length;
+    const soloGerente = (pjs.match(/puedeVer\('numeros'\)\s*&&?\s*Nube\.escuchar/g) ||
+                         pjs.match(/puedeVer\('numeros'\)\)?\s*Nube\.escuchar/g) || []).length;
+
+    comprobar('el panel abre 3 por su cuenta (menú, stock y vistas)', propias, 3);
+    comprobar('pero las vistas solo con la pestaña Números', soloGerente, 1);
+
+    const delGerente = panel.length + propias;          // 1 + 3
+    const delAsador  = panel.length + propias - 1;      // sin las vistas
+    comprobar('total del panel del gerente', delGerente, 4);
+    comprobar('total del panel del asador', delAsador, 3);
+
+    /* LA CUENTA QUE IMPORTA: el asador abre el panel en el mismo teléfono
+       donde tiene la parrilla. Antes eran 5 + 2 = 7 y el tope son 6: una
+       se quedaba colgada, el navegador no dice cuál, y podía ser el
+       timbre. Ahora son 3 + 2 = 5, y queda una libre para ENVIAR — que
+       es la que nunca puede faltar. */
+    comprobar('parrilla + panel del asador caben en el tope de 6',
+        estacion.length + delAsador <= 6, true);
+    comprobar('y sobra al menos una para enviar',
+        estacion.length + delAsador <= 5, true);
+
+    comprobar('el panel no escucha el timbre, que no pinta',
+        /escuchar\('servicio\/llamadas'/.test(pjs), false);
+
     /* El menú del gerente —agotados y stock— dejó de escucharse en vivo
        y pasó a preguntarse cada seis segundos, para dejarle la conexión
        al timbre. Un plato agotado puede tardar seis segundos; un timbre
@@ -3526,6 +3568,182 @@ function probarLoQueYaEntrego() {
 }
 
 /* ============================================================
+   EL ASADOR ENTRA AL PANEL, PERO NO A TODO
+
+   Ve el menu y la contabilidad. No ve los pedidos, ni los numeros, ni
+   los datos del local.
+
+   LO QUE ESTA PRUEBA VIGILA DE VERDAD no es que la pestania se
+   esconda: esconder un boton no guarda nada, y quien sepa la direccion
+   entra igual. Lo que vigila es que las dos listas vayan juntas —la de
+   pestanias en panel.js y la de permisos en firebase-rules.json— porque
+   abrir una pestania sin abrir su regla deja una pantalla vacia, y
+   abrir la regla sin la pestania regala un dato sin que nadie lo note.
+   ============================================================ */
+
+function probarElPanelDelAsador() {
+    console.log('\n--- El asador entra al panel, pero solo a dos pestanias ---');
+
+    const src = fuente('js/panel.js');
+    const bloque = (src.match(/const PESTANAS = \{([\s\S]*?)\};/) || ['', ''])[1];
+    const listaDe = rol => {
+        const m = bloque.match(new RegExp(rol + "\\s*:\\s*\\[([^\\]]*)\\]"));
+        return m ? m[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean) : null;
+    };
+
+    const delGerente = listaDe('gerente');
+    const delAsador  = listaDe('parrilla');
+
+    comprobar('el gerente sigue viendo las cinco',
+        delGerente, ['hoy', 'menu', 'numeros', 'platos', 'local']);
+    comprobar('el asador ve el menu y la contabilidad',
+        delAsador, ['menu', 'platos']);
+    comprobar('y NO los pedidos, los numeros ni el local',
+        ['hoy', 'numeros', 'local'].filter(t => delAsador.indexOf(t) >= 0), []);
+
+    /* Las pestanias que existen en el HTML son las que se pueden
+       repartir: una lista que nombre una pestania que ya no existe deja
+       al asador mirando una pantalla en blanco. */
+    const html = fuente('panel.html');
+    const enHtml = (html.match(/data-tab="([a-z]+)"/g) || []).map(s => s.replace(/.*"([a-z]+)"/, '$1'));
+    comprobar('todas las pestanias repartidas existen en la pagina',
+        delGerente.concat(delAsador).filter(t => enHtml.indexOf(t) < 0), []);
+
+    /* Quien es quien, leido de EQUIPO. Los uid se sacan de ahi y no de
+       una lista escrita a mano aqui, que se quedaria vieja. */
+    const reglas = JSON.parse(fuente('firebase-rules.json')).rules;
+    const equipo = (fuente('js/menu-data.js').match(/const EQUIPO = \{([\s\S]*?)\};/) || ['', ''])[1];
+    const uidDe = rol => {
+        const m = equipo.match(new RegExp("'([^']+)':\\s*'" + rol + "'"));
+        return m ? m[1] : null;
+    };
+    const ASADOR = uidDe('parrilla'), MESERO = uidDe('mesero'), COCINA = uidDe('cocina');
+    comprobar('se encontro el uid del asador en EQUIPO', !!ASADOR, true);
+
+    /* ---- LA PUERTA, EJECUTADA DE VERDAD ----
+
+       Se levanta panel.js con un documento de mentira y se le pregunta
+       por cada cuenta del local. Comprobar el texto del archivo no
+       serviria: lo que hay que saber es a quien deja pasar. */
+    const puerta = quien => {
+        const ctx = vm.createContext({
+            console, Date, Math, JSON, Promise,
+            Sync: {
+                activo: true,
+                haySesion: () => !!quien,
+                uidSesion: () => (quien ? quien.uid : null),
+                rolSesion: () => (quien ? quien.rol : null),
+                correoSesion: () => null,
+                escuchar: () => (() => {}), guardar: async () => false,
+                parchear: async () => false, agregar: async () => false,
+                leer: async () => null, salir() {}, entrar() {}
+            },
+            Store: { getConfig: () => ({ gerenteUid: uidDe('gerente') }) },
+            document: { addEventListener: () => {}, getElementById: () => null,
+                        querySelector: () => null, querySelectorAll: () => [] },
+            sessionStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+            localStorage:   { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+            window: { addEventListener: () => {} },
+            setTimeout: () => 0, setInterval: () => 0, clearTimeout: () => {}
+        });
+        vm.runInContext(src, ctx);
+        return {
+            rol: vm.runInContext('rolPanel()', ctx),
+            entra: vm.runInContext('sesionValida()', ctx),
+            pestanas: vm.runInContext('misPestanas()', ctx)
+        };
+    };
+
+    const gerente = puerta({ uid: uidDe('gerente'), rol: 'gerente' });
+    comprobar('el gerente entra', gerente.entra, true);
+    comprobar('y ve las cinco', gerente.pestanas.length, 5);
+
+    const asador = puerta({ uid: ASADOR, rol: 'parrilla' });
+    comprobar('el asador entra', asador.entra, true);
+    comprobar('y ve solo dos', asador.pestanas, ['menu', 'platos']);
+
+    const cocina = puerta({ uid: COCINA, rol: 'cocina' });
+    comprobar('la cocina NO entra', cocina.entra, false);
+    comprobar('el mesero tampoco',
+        puerta({ uid: MESERO, rol: 'mesero' }).entra, false);
+    comprobar('y sin sesion, nadie', puerta(null).entra, false);
+
+    /* EL AGUJERO QUE HAY QUE VIGILAR. Cuando EQUIPO esta vacia,
+       rolSesion() responde 'gerente' a cualquiera con cuenta, para que
+       un local recien montado no se quede sin pantallas. Si el panel se
+       fiara de eso, cualquier cuenta del local abriria la contabilidad
+       entera escribiendo la direccion. */
+    comprobar('una cuenta cualquiera que se diga "gerente" no entra',
+        puerta({ uid: 'uid-de-cualquiera', rol: 'gerente' }).entra, false);
+
+    /* ---- Y AHORA LO QUE IMPORTA: que la nube diga lo mismo ----
+
+       Esconder una pestania ordena la pantalla; no guarda nada. Si el
+       panel abre la Contabilidad al asador, la regla tiene que abrirla
+       tambien — y al reves: una regla abierta sin pestania regala un
+       dato sin que nadie lo note. Las dos listas van juntas o no valen. */
+    const deja = (regla, uid) => String(regla).indexOf(uid) >= 0 || String(regla) === 'true';
+
+    // La pestania Contabilidad no sirve de nada si no puede leerla
+    comprobar('el asador puede LEER la contabilidad',
+        deja(reglas.contabilidad['.read'], ASADOR), true);
+    comprobar('y escribirla, porque puede corregir un dia',
+        deja(reglas.contabilidad['.write'], ASADOR), true);
+
+    // La pestania Contabilidad lleva dentro los fiados
+    comprobar('puede leer quien debe', deja(reglas.servicio.fiados['.read'], ASADOR), true);
+    comprobar('y marcar que ya pago', deja(reglas.servicio.fiados['.write'], ASADOR), true);
+
+    // La pestania Menu escribe agotados, precios y "lo que hay hoy"
+    comprobar('puede escribir el menu', deja(reglas.menu['.write'], ASADOR), true);
+
+    /* Y NADIE MAS SE COLO. Es la otra mitad: abrirle la puerta al asador
+       no puede abrirsela a la cocina ni al mesero de rebote. */
+    comprobar('la cocina sigue sin ver la contabilidad',
+        deja(reglas.contabilidad['.read'], COCINA), false);
+    comprobar('el mesero tampoco',
+        deja(reglas.contabilidad['.read'], MESERO), false);
+    comprobar('ni la cocina puede tocar el menu',
+        deja(reglas.menu['.write'], COCINA), false);
+    comprobar('ni el mesero',
+        deja(reglas.menu['.write'], MESERO), false);
+}
+
+/**
+ * No se pide lo que esta cuenta no puede leer.
+ *
+ * `refrescarResto(soloMesas)` recibia el parametro y lo ignoraba, asi
+ * que la pantalla del que sirve pedia los cobros cada seis segundos —y
+ * las reglas no se los dejan leer. Era un permiso denegado por minuto,
+ * toda la noche, gastando una de las pocas conexiones que da el
+ * navegador y dejando puesto el ultimo fallo, que es lo que mira la
+ * alarma de "esta pantalla dejo de recibir".
+ */
+async function probarQueNoSePideLoProhibido() {
+    console.log('\n--- Nadie pide a la nube lo que no puede leer ---');
+    nubeLimpia();
+
+    const mira = async rol => {
+        const c = celular(rol);
+        c.corre(`Servicio.iniciar(() => {}, 'panel')`);
+        await c.corre(`Servicio.traerParaElPanel()`);
+        return c.propio.leidos;
+    };
+
+    const delGerente = await mira('gerente');
+    comprobar('el gerente si pide los cobros',
+        delGerente.indexOf('servicio/pagos') >= 0, true);
+
+    const delAsador = await mira('parrilla');
+    comprobar('el asador NO pide los cobros',
+        delAsador.indexOf('servicio/pagos') >= 0, false);
+    comprobar('pero si la contabilidad, que es su pestania',
+        delAsador.indexOf('contabilidad') >= 0, true);
+    comprobar('y las comandas, para lo vivo de hoy',
+        delAsador.indexOf('servicio/comandas') >= 0, true);
+}
+
+/* ============================================================
    LOS TRES ERRORES DEL PANEL DEL GERENTE
 
    Los tres se veian en la misma pantalla y los tres salen de lo mismo:
@@ -3840,6 +4058,8 @@ async function main() {
     await probarFiadoSobreviveAlVaciado();
     probarEcoDeLaNevera();
     probarQueSePuedeVaciarDeVerdad();
+    probarElPanelDelAsador();
+    await probarQueNoSePideLoProhibido();
     await probarContabilidadQueNoSeInfla();
     await probarLaComandaQueLlegoTarde();
     await probarQueLosIdsNoSeAcumulan();

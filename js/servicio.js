@@ -1824,10 +1824,14 @@ const Servicio = (() => {
     async function traerParaElPanel() {
         if (!Red.activo || !Red.haySesion()) return false;
 
+        /* Los cobros no los lee todo el que abre el panel: las reglas los
+           dejan para el gerente y el mesero. El asador entra al panel a
+           ver el menú y la contabilidad, y esas dos pestañas no los usan
+           para nada — pedirlos sería un permiso denegado de adorno. */
         const [com, ses, pag, fia, con] = await Promise.all([
             Red.leer('servicio/comandas', true),
             Red.leer('servicio/sesiones', true),
-            Red.leer('servicio/pagos',    true),
+            puedeCobrar() ? Red.leer('servicio/pagos', true) : Promise.resolve(undefined),
             Red.leer('servicio/fiados',   true),
             Red.leer('contabilidad',      true)
         ]);
@@ -2438,13 +2442,28 @@ const Servicio = (() => {
      * Nunca se borra lo local con una lectura fallida: `leer` devuelve
      * undefined cuando no pudo, y null cuando de verdad no había nada.
      */
-    async function refrescarResto() {
+    async function refrescarResto(soloMesas) {
         if (!Red.activo) return;
+
+        /* SE PIDE SOLO LO QUE ESTA CUENTA PUEDE LEER.
+
+           `soloMesas` llegaba como parámetro y la función lo ignoraba,
+           así que la pantalla del que sirve pedía los cobros y la
+           bandeja igual — y las reglas no le dejan leer los cobros. Era
+           un "permiso denegado" cada seis segundos, toda la noche, sin
+           que nadie lo viera. Lo mismo le pasaría al asador entrando al
+           panel: el dinero cobrado no es suyo.
+
+           Pedir lo que se sabe que va a fallar no es inofensivo: gasta
+           una de las pocas conexiones que da el navegador y deja el
+           último fallo puesto, que es lo que mira la alarma de "esta
+           pantalla dejó de recibir". */
+        const cobros = !soloMesas && puedeCobrar();
 
         const [ses, pag, ent] = await Promise.all([
             Red.leer('servicio/sesiones',  true),
-            Red.leer('servicio/pagos',     true),
-            Red.leer('servicio/entrantes', true)
+            cobros    ? Red.leer('servicio/pagos',     true) : Promise.resolve(undefined),
+            soloMesas ? Promise.resolve(undefined) : Red.leer('servicio/entrantes', true)
         ]);
 
         if (ses !== undefined) mezclar(K.sesiones, ses);
@@ -2484,8 +2503,14 @@ const Servicio = (() => {
 
            Va en vivo y no en la ronda de cada seis segundos a propósito:
            un timbre que llega seis segundos tarde es un timbre que el de
-           la cocina cree que no funcionó, y va a tocarlo otra vez. */
-        Red.escuchar('servicio/llamadas', (datos, ruta, esRetoque) => {
+           la cocina cree que no funcionó, y va a tocarlo otra vez.
+
+           EL PANEL NO. Ahí no hay timbre que pintar —se toca en la cocina
+           y suena en el salón— así que esa conexión se quedaba abierta
+           toda la noche sin que nadie mirara lo que traía. Y con el
+           asador entrando al panel desde el mismo teléfono de la
+           parrilla, la cuenta se pasaba del tope del navegador. */
+        if (modo !== 'panel') Red.escuchar('servicio/llamadas', (datos, ruta, esRetoque) => {
             aplicarEnRuta(K.llamadas, ruta, datos, esRetoque);
             alCambiar();
         }, true);

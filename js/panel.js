@@ -177,17 +177,95 @@ function esGerente() {
     return uid === cfg.gerenteUid;
 }
 
+/* ------------------------------------------------------------
+   QUIÉN ENTRA Y QUÉ VE
+
+   El panel era del gerente y de nadie más. Ahora el asador también
+   entra, pero no a lo mismo: ve el menú y la contabilidad, y nada más.
+
+   OJO CON LO QUE ESTO ES Y LO QUE NO ES. Esconder una pestaña ordena
+   la pantalla; no guarda nada. Quien de verdad decide es Firebase, que
+   compara contra el token firmado y no se puede engañar desde aquí. Si
+   una pestaña se abre, hay que abrir también su regla — y entonces ese
+   dato es suyo, escriba o no la dirección a mano. Por eso las dos
+   listas van juntas: esta y firebase-rules.json.
+   ------------------------------------------------------------ */
+
+const PESTANAS = {
+    gerente:  ['hoy', 'menu', 'numeros', 'platos', 'local'],
+    parrilla: ['menu', 'platos']
+};
+
+/** El papel con el que se entró al panel, o null si no puede pasar. */
+function rolPanel() {
+    if (!Nube.activo) return 'gerente';        // local sin nube: como siempre
+    if (!Nube.haySesion()) return null;
+    if (esGerente()) return 'gerente';
+
+    const rol = Nube.rolSesion ? Nube.rolSesion() : null;
+
+    /* OJO CON ESTE 'gerente'. Cuando la lista EQUIPO está vacía,
+       rolSesion() responde 'gerente' a todo el que tenga cuenta — a
+       propósito, para que un local recién montado no se quede con el
+       personal fuera de las pantallas del servicio. Pero aquí eso sería
+       regalarle el panel entero a cualquier cuenta del local, que es
+       justo lo que esta puerta existe para impedir. Gerente es uno solo
+       y ya se comprobó arriba, contra su uid. */
+    if (!rol || rol === 'gerente') return null;
+
+    return PESTANAS[rol] ? rol : null;
+}
+
+/** Las pestañas que le tocan a quien entró. */
+function misPestanas() {
+    return PESTANAS[rolPanel()] || [];
+}
+
+const puedeVer = tab => misPestanas().indexOf(tab) >= 0;
+
 function sesionValida() {
-    if (Nube.activo) return Nube.haySesion() && esGerente();
+    if (Nube.activo) return Nube.haySesion() && !!rolPanel();
     try {
         const s = JSON.parse(sessionStorage.getItem(SESION));
         return !!(s && s.hasta > Date.now());
     } catch (e) { return false; }
 }
 
+/**
+ * Deja a la vista solo lo que le toca a quien entró.
+ *
+ * Se ESCONDE, no se borra: el resto del panel busca sus casillas por
+ * id al dibujar, y quitarlas del documento haría que renderTodo() se
+ * cayera a la mitad y dejara la pantalla sin pintar.
+ */
+function ajustarPestanasSegunRol() {
+    const permitidas = misPestanas();
+
+    document.querySelectorAll('.tab').forEach(b => {
+        b.hidden = permitidas.indexOf(b.dataset.tab) < 0;
+    });
+
+    /* Y la que queda abierta tiene que ser una que pueda ver. La
+       primera del panel es Pedidos, que el asador no tiene: sin esto
+       entraría a una pantalla en blanco. */
+    const activa = document.querySelector('.tab.activo');
+    if (activa && !activa.hidden) return;
+
+    const primera = document.querySelector('.tab:not([hidden])');
+    if (!primera) return;
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('activo'));
+    document.querySelectorAll('.panel-vista').forEach(v => v.classList.remove('activa'));
+    primera.classList.add('activo');
+    const vista = document.getElementById('vista-' + primera.dataset.tab);
+    if (vista) vista.classList.add('activa');
+}
+
 function abrirPanel() {
     document.getElementById('lock-screen').style.display = 'none';
     document.getElementById('panel-app').hidden = false;
+
+    // Antes de dibujar: quien entró decide qué pestañas existen
+    try { ajustarPestanasSegunRol(); } catch (e) { console.error('Error al repartir las pestañas:', e); }
 
     // Si algo del dibujado fallara, la conexión en vivo tiene que arrancar
     // igual: es lo que hace que los agotados y los pedidos funcionen.
@@ -245,21 +323,30 @@ function escucharNube() {
        propósito para no contar dos veces el mismo pedido. Escucharla
        solo gastaba una de las pocas conexiones que da el navegador. */
 
-    // Las comandas del mesero: son la venta real del local
+    /* Las comandas del mesero: son la venta real del local.
+
+       EN MODO 'panel', que NO abre el canal de las llamadas. El timbre
+       se toca desde la cocina y suena en el salón; aquí no se pinta por
+       ningún lado, así que esa conexión no servía para nada — y las
+       conexiones son el recurso escaso de este sistema. */
     if (typeof Servicio !== 'undefined') {
         Servicio.iniciar(() => {
             marcarEstadoNube('en-vivo');
             renderResumenDia();
             renderPedidos();
             renderNumeros();
-        });
+        }, 'panel');
     }
 
     /* Solo el recuento completo. Cada visita de un comensal llega como un
        aviso suelto de UNA vista, y tomarlo por el total dejaba el contador
        marcando 1 hasta recargar. Aquí no hace falta que sea al segundo:
-       es un número para mirar, no para trabajar. */
-    Nube.escuchar('vistas', (datos, ruta) => {
+       es un número para mirar, no para trabajar.
+
+       Solo para el gerente: es la pestaña Números, y además las reglas
+       no le dejan leer las vistas a nadie más. Pedirlas igual sería
+       gastar una conexión en un permiso denegado. */
+    if (puedeVer('numeros')) Nube.escuchar('vistas', (datos, ruta) => {
         if (ruta && ruta !== '/') return;
         vistasNube = datos || {};
         podarVistas(datos);
