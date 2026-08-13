@@ -2349,11 +2349,63 @@ const Servicio = (() => {
      * "no se pudo leer" y lo filtra quien llama; `null` es "esto está
      * vacío" y hay que obedecerlo.
      */
+    /**
+     * Lo que este celular todavía no ha conseguido mandar.
+     *
+     * Es lo único suyo que no se puede tirar por mucho que la nube diga
+     * que no existe: nadie más lo ha visto todavía, así que no es algo
+     * que la nube estuviera borrando — es algo que aún no ha llegado.
+     */
+    const idDeRama = t => String((t && t.rama) || '').split('/')[2];
+
+    function idsEnCola() {
+        return new Set(read(K.cola, []).map(idDeRama).filter(Boolean));
+    }
+
+    /**
+     * Todo lo que, hasta donde sabe este celular, NO EXISTE EN NINGÚN
+     * OTRO SITIO: lo que espera turno para salir y lo que la nube
+     * rechazó y quedó apartado.
+     *
+     * Lo apartado también cuenta. Su reintento no necesita la comanda
+     * —el envío entero se guardó aparte— pero la pantalla que lo enseña
+     * sí la busca para poder decir "no salió el A57" en vez de soltarle
+     * al mesero una dirección de la base de datos.
+     */
+    function idsSoloAqui() {
+        const fuera = read(K.apartado, []).map(idDeRama).filter(Boolean);
+        const set = idsEnCola();
+        fuera.forEach(id => set.add(id));
+        return set;
+    }
+
     function mezclar(clave, remotos) {
         if (remotos == null) { vaciarSegunNube(clave); return; }
+
+        /* LO QUE LA NUBE YA NO TIENE, SE VA DE AQUÍ TAMBIÉN.
+           Antes esto era un Object.assign: la nube ganaba en lo que
+           coincidía, pero lo que solo estaba aquí SOBREVIVÍA para
+           siempre. Y eso convertía un descuido en algo permanente.
+
+           La mesa que alguien dejó sin cobrar anoche, borrada al vaciar
+           el servicio, se quedaba pegada en el celular que estuviera
+           apagado en ese momento. Al día siguiente, esa mesa tenía dos
+           cuentas abiertas: la de ayer y la de hoy. Y como para anotar
+           se coge SIEMPRE la más vieja —que es lo correcto, para que lo
+           nuevo caiga en la cuenta que ya estaba— la pantalla del que
+           sirve enseñaba la de ayer, con sus cero cubiertos y sus cero
+           platos, y escondía detrás la mesa de verdad.
+
+           Solo se salva lo que este celular aún no ha podido mandar.
+           Para todo lo demás, la nube es la que sabe. */
         const propios = read(clave, {});
-        // Lo que llega de la nube manda: es lo que ya vieron los demás
-        write(clave, Object.assign({}, propios, remotos));
+        const pendientes = idsSoloAqui();
+
+        const fusion = {};
+        Object.keys(propios).forEach(id => { if (pendientes.has(id)) fusion[id] = propios[id]; });
+        Object.assign(fusion, remotos);   // y lo de la nube manda encima
+
+        write(clave, fusion);
     }
 
     /**
@@ -2366,10 +2418,12 @@ const Servicio = (() => {
      * que el gerente estuviera borrando.
      */
     function vaciarSegunNube(clave) {
-        const pendientes = new Set(
-            read(K.cola, [])
-                .map(t => String(t.rama || '').split('/')[2])
-                .filter(Boolean));
+        /* La MISMA regla que en mezclar, y a propósito: lo que solo
+           existe en este celular no se va por una noticia de la nube.
+           Tener dos reglas parecidas para lo mismo fue lo que dejó que
+           un pedido rechazado se borrara solo y su aviso se quedara
+           enseñando una dirección de la base en vez de su código. */
+        const pendientes = idsSoloAqui();
 
         if (!pendientes.size) { write(clave, {}); return; }
 
@@ -2624,15 +2678,30 @@ const Servicio = (() => {
     function limpiarViejo(dias) {
         const corte = Date.now() - (dias || 2) * 24 * 3600 * 1000;
 
+        // Lo que solo existe aquí no se toca, tenga la edad que tenga
+        const pendientes = idsSoloAqui();
+
         const comandas = getComandas();
         Object.keys(comandas).forEach(k => {
+            if (pendientes.has(k)) return;
             if (comandas[k].creado < corte && comandas[k].estado !== 'nuevo') delete comandas[k];
         });
         write(K.comandas, comandas);
 
+        /* UNA MESA ABIERTA TAMBIÉN CADUCA.
+
+           Antes se salvaba a las abiertas sin mirar la fecha, por miedo
+           a borrar una mesa con gente sentada. La intención era buena y
+           el efecto, el contrario: la mesa que alguien dejó sin cobrar
+           se volvía inmortal en ese celular, y como para anotar se coge
+           la cuenta más vieja de esa mesa, tapaba a la de verdad.
+
+           Ningún comedor tiene una mesa abierta dos días. Si lleva más
+           que eso, no es una mesa: es un descuido de hace dos noches. */
         const sesiones = getSesiones();
         Object.keys(sesiones).forEach(k => {
-            if (sesiones[k].creado < corte && !sesiones[k].abierta) delete sesiones[k];
+            if (pendientes.has(k)) return;
+            if (sesiones[k].creado < corte) delete sesiones[k];
         });
         write(K.sesiones, sesiones);
     }

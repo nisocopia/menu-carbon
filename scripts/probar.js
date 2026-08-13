@@ -3792,6 +3792,157 @@ function probarElPanelDelAsador() {
         deja(reglas.menu['.write'], MESERO), false);
 }
 
+/* ============================================================
+   LA MESA DE AYER NO PUEDE TAPAR LA DE HOY
+
+   Lo que contó el dueño: el que sirve "a veces no puede ver los
+   siguientes pedidos, o se quedan congelados en los del dia anterior".
+   Son el mismo fallo.
+
+   Para anotar lo nuevo de una mesa se coge SIEMPRE su cuenta abierta
+   mas vieja — y eso esta bien: lo que se pide a las 9 tiene que caer en
+   la cuenta que se abrio a las 8, no en una nueva. Pero convertia
+   cualquier descuido en algo permanente:
+
+     · la limpieza de las dos noches salvaba a TODA mesa abierta, sin
+       mirar la fecha, asi que una mesa sin cobrar era inmortal
+     · y al traer las mesas de la nube se mezclaba en vez de obedecer,
+       asi que lo que solo estaba en ese celular no se iba nunca
+
+   Resultado: la mesa 5 tenia dos cuentas abiertas —la de ayer y la de
+   hoy— y la pantalla enseniaba la de ayer, con cero cubiertos y cero
+   platos, escondiendo detras la de verdad.
+   ============================================================ */
+
+async function probarQueLaMesaDeAyerNoTapa() {
+    console.log('\n--- La mesa de ayer no tapa la de hoy ---');
+    nubeLimpia();
+
+    const AYER = Date.now() - 26 * 3600 * 1000;
+    const HACE3 = Date.now() - 3 * 24 * 3600 * 1000;
+
+    // El mesero abre HOY la mesa 5 y anota. Eso si llega a la nube.
+    const mesero = celular('mesero');
+    mesero.corre(`Servicio.enviarComanda({ mesa: 5, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 }] })`);
+    await respirar();
+    const hoyId = mesero.corre(`Servicio.sesionDeMesa(5).id`);
+
+    // El celular del que sirve arrastra dos mesas que la nube ya no tiene
+    const servir = celular('servir');
+    servir.corre(`localStorage.setItem('srv_sesiones', JSON.stringify({
+        vieja:   { id: 'vieja',   mesa: 5, nombre: '', abierta: true, creado: ${AYER},  cerrado: null },
+        antigua: { id: 'antigua', mesa: 7, nombre: '', abierta: true, creado: ${HACE3}, cerrado: null }
+    }))`);
+
+    // Arranca la pantalla, igual que servir.js: limpia y se conecta
+    servir.corre(`Servicio.limpiarViejo(2)`);
+    comprobar('la mesa abierta de hace 3 dias se barre',
+        servir.corre(`!!Servicio.getSesiones().antigua`), false);
+    comprobar('pero la de ayer todavia no, que esta dentro del plazo',
+        servir.corre(`!!Servicio.getSesiones().vieja`), true);
+
+    servir.corre(`Servicio.iniciar(() => {}, 'servir')`);
+    // La nube le grita las comandas por el canal en vivo, como en el local
+    servir.eco('/', sacarDeNube('servicio/comandas'), false, 'servicio/comandas');
+    await respirar();
+
+    /* Y aqui manda la nube: la de ayer ya no esta en el local, asi que
+       tampoco puede seguir en este celular. */
+    comprobar('al llegar las mesas de la nube, la de ayer se va',
+        servir.corre(`!!Servicio.getSesiones().vieja`), false);
+    comprobar('la mesa 5 enseña la cuenta de HOY',
+        servir.corre(`Servicio.sesionDeMesa(5).id`), hoyId);
+    comprobar('y con sus platos, no vacia',
+        servir.corre(`Servicio.comandasDeSesion(Servicio.sesionDeMesa(5).id).length`), 1);
+    comprobar('la mesa 7 quedo libre',
+        servir.corre(`!!Servicio.sesionDeMesa(7)`), false);
+}
+
+/**
+ * Pero lo que este celular no ha podido mandar NO se tira.
+ *
+ * Es la otra mitad, y sin ella el arreglo seria peor que el fallo: el
+ * mesero anota una mesa sin señal, la nube todavia no la tiene, y si se
+ * obedeciera a la nube a ciegas ese pedido desapareceria de la unica
+ * pantalla que lo tenia.
+ */
+async function probarQueLoNoEnviadoSeQueda() {
+    console.log('\n--- Lo que aun no ha salido de este celular no se tira ---');
+    nubeLimpia();
+    const { corre, propio } = celular('mesero');
+
+    nube.caida = true;                     // sin señal: se anota, no sale
+    corre(`Servicio.enviarComanda({ mesa: 9, items: [
+        { platoId: 'p1', nombre: 'Carne Asada', precio: 3.5, cantidad: 1 }] })`);
+    await respirar();
+
+    comprobar('la mesa se anoto aqui', corre(`!!Servicio.sesionDeMesa(9)`), true);
+    comprobar('y quedo en la cola por mandar',
+        corre(`JSON.parse(localStorage.getItem('srv_cola') || '[]').length > 0`), true);
+
+    /* Vuelve la señal y llega la verdad de la nube — que NO tiene esa
+       mesa, porque nunca se pudo mandar. */
+    nube.caida = false;
+    await corre(`Servicio.traerParaElPanel()`);
+
+    comprobar('la mesa sigue aqui, esperando su turno',
+        corre(`!!Servicio.sesionDeMesa(9)`), true);
+    comprobar('y su comanda tambien',
+        corre(`Object.keys(Servicio.getComandas()).length`), 1);
+
+    /* Y una que NO esta en la cola —arrastrada de otro dia— si se va */
+    corre(`(() => {
+        const s = Servicio.getSesiones();
+        s.colada = { id: 'colada', mesa: 4, nombre: '', abierta: true,
+                     creado: Date.now() - 3600000, cerrado: null };
+        localStorage.setItem('srv_sesiones', JSON.stringify(s));
+    })()`);
+    comprobar('se cuela una mesa que la nube no tiene',
+        corre(`!!Servicio.getSesiones().colada`), true);
+
+    await corre(`Servicio.traerParaElPanel()`);
+    comprobar('y se va, porque nadie la esta esperando',
+        corre(`!!Servicio.getSesiones().colada`), false);
+    comprobar('pero la que si falta por mandar sigue',
+        corre(`!!Servicio.sesionDeMesa(9)`), true);
+}
+
+/**
+ * Y lo que la nube RECHAZO tampoco se tira.
+ *
+ * Un envio que las reglas niegan no vuelve a la cola: se aparta, para
+ * que alguien lo mire. El reintento no necesita la comanda —el envio
+ * entero se guarda aparte— pero la pantalla que lo enseña si la busca,
+ * para poder decir "no salio el A57" en vez de soltarle al mesero una
+ * direccion de la base de datos.
+ */
+async function probarQueLoApartadoNoSeTira() {
+    console.log('\n--- Lo que la nube rechazo se queda a la vista ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    // Las reglas niegan este envio: no es falta de señal, es un "no"
+    nube.prohibido = rama => rama.indexOf('servicio/comandas/') === 0;
+    corre(`Servicio.enviarComanda({ mesa: 3, items: [
+        { platoId: 'p2', nombre: 'Chuleta', precio: 4, cantidad: 1 }] })`);
+    await respirar();
+
+    comprobar('quedo apartado', corre(`Servicio.apartadas()`) > 0, true);
+    const codigo = corre(`Servicio.detalleApartado()[0]`);
+    comprobar('y se puede decir CUAL, con su codigo',
+        /^servicio\//.test(String(codigo)), false);
+
+    // Llega la verdad de la nube, que no tiene esa comanda
+    nube.prohibido = null;
+    await corre(`Servicio.traerParaElPanel()`);
+
+    comprobar('la comanda sigue aqui',
+        corre(`Object.keys(Servicio.getComandas()).length`), 1);
+    comprobar('y se sigue pudiendo nombrar',
+        corre(`Servicio.detalleApartado()[0]`), codigo);
+}
+
 /**
  * Esconder de verdad esconde.
  *
@@ -4177,6 +4328,9 @@ async function main() {
     probarQueSePuedeVaciarDeVerdad();
     probarElPanelDelAsador();
     probarQueEsconderEsconde();
+    await probarQueLaMesaDeAyerNoTapa();
+    await probarQueLoNoEnviadoSeQueda();
+    await probarQueLoApartadoNoSeTira();
     await probarQueNoSePideLoProhibido();
     await probarContabilidadQueNoSeInfla();
     await probarLaComandaQueLlegoTarde();
