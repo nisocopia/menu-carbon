@@ -195,6 +195,36 @@ function celular(rol) {
             return true;
         },
         parchear: async (rama, valor) => { propio.enviado.push({ metodo: 'PATCH', rama, valor }); return true; },
+
+        /* Varias ramas de una sola vez, o ninguna. La mentira imita LA
+           REGLA de verdad del cerrojo: solo se puede poner si no hay
+           otro puesto, y uno de mas de media hora ya no cuenta. Sin
+           esto la prueba no probaria nada: escribiria siempre. */
+        todoONada: async rutas => {
+            if (nube.caida) return { ok: false, status: 0 };
+            const choca = Object.keys(rutas).some(r => {
+                if (String(r).indexOf('servicio/pidiendo/') !== 0) return false;
+                const puesto = sacarDeNube(r);
+                return !!(puesto && Date.now() - (puesto.cuando || 0) < 30 * 60 * 1000);
+            });
+            if (choca) return { ok: false, status: 401 };
+            Object.keys(rutas).forEach(r => {
+                /* La marca de tiempo del servidor la resuelve la nube, no
+                   el celular. Aqui se imita: si llega el `.sv`, se cambia
+                   por la hora de esta mentira. */
+                const v = JSON.parse(JSON.stringify(rutas[r]));
+                if (v && v.cuando && v.cuando['.sv'] === 'timestamp') v.cuando = Date.now();
+
+                propio.enviado.push({ metodo: 'PATCH', rama: r, valor: v });
+                ponerEnNube(r, v);
+                /* La bandeja se lee de su propio sitio en esta mentira,
+                   asi que el pedido tiene que aparecer tambien ahi: si no,
+                   la prueba nunca veria lo que ve el mesero. */
+                const m = String(r).match(/^servicio\/entrantes\/(.+)$/);
+                if (m) nube.entrantes[m[1]] = v;
+            });
+            return { ok: true, status: 200 };
+        },
         agregar:  async (rama, valor) => { propio.enviado.push({ metodo: 'POST',  rama, valor }); return true; },
         /* La cola manda por aquí. `nube.prohibido` deja simular que las
            reglas rechazan algo, que es lo que pasa cuando un celular
@@ -3568,6 +3598,176 @@ function probarLoQueYaEntrego() {
 }
 
 /* ============================================================
+   EL MENÚ DEL COMENSAL ES LA PUERTA DE LA CALLE
+
+   Su celular escribe en la nube SIN CUENTA — no tiene login, y no
+   puede tenerlo: es un cliente sentado, no un empleado. Eso deja la
+   bandeja del mesero abierta a cualquiera que sepa la direccion.
+
+   Dos candados, y los dos van en las reglas. Lo del navegador es la
+   cortesia —decirle por que no puede— pero cualquiera lo salta
+   abriendo la consola. Lo que de verdad impide es Firebase.
+   ============================================================ */
+
+function probarLaFranjaDePedir() {
+    console.log('\n--- Solo se pide dentro del horario ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    /* Ecuador es UTC-5, asi que para que en el local sean las h en punto
+       hay que pedirle al reloj universal las h+5. */
+    const aLaHora = h => Date.UTC(2026, 7, 10, h + 5, 0, 0);
+
+    comprobar('a las 5 de la tarde, no', corre(`Servicio.horaDePedir(${aLaHora(17)}).ok`), false);
+    comprobar('a las 6 en punto, si',    corre(`Servicio.horaDePedir(${aLaHora(18)}).ok`), true);
+    comprobar('a las 9 de la noche, si', corre(`Servicio.horaDePedir(${aLaHora(21)}).ok`), true);
+    comprobar('a las 10:30 justo, si',
+        corre(`Servicio.horaDePedir(${Date.UTC(2026, 7, 10, 22 + 5, 30)}).ok`), true);
+    comprobar('a las 10:31, ya no',
+        corre(`Servicio.horaDePedir(${Date.UTC(2026, 7, 10, 22 + 5, 31)}).ok`), false);
+    comprobar('a las 3 de la madrugada, no', corre(`Servicio.horaDePedir(${aLaHora(3)}).ok`), false);
+
+    // Y sabe decir de que hora a que hora, que es lo que se le enseña
+    comprobar('sabe decir su horario',
+        [corre(`Servicio.horaDePedir().desde`), corre(`Servicio.horaDePedir().hasta`)],
+        ['18:00', '22:30']);
+
+    /* LO MISMO EN LA NUBE, que es lo unico que no se puede saltar. La
+       regla se escribe en milisegundos, asi que hay que comprobar que
+       los numeros son los del horario y no otros cualesquiera. */
+    const reglas = JSON.parse(fuente('firebase-rules.json')).rules;
+    const val = String(reglas.servicio.entrantes.$entrante['.validate']);
+    const cfg = fuente('js/menu-data.js');
+
+    const aMs = hhmm => {
+        const p = hhmm.split(':');
+        return (Number(p[0]) * 60 + Number(p[1])) * 60000;
+    };
+    const desde = (cfg.match(/pedirDesde:\s*'([\d:]+)'/) || [])[1];
+    const hasta = (cfg.match(/pedirHasta:\s*'([\d:]+)'/) || [])[1];
+    const huso  = Number((cfg.match(/husoLocal:\s*(-?\d+)/) || [])[1]);
+
+    comprobar('la regla usa la hora del servidor, no la del celular', /\bnow\b/.test(val), true);
+    comprobar('y el huso del local coincide',
+        val.indexOf(String(Math.abs(huso) * 3600000)) >= 0, true);
+    comprobar('la hora de apertura de la regla es la del menu',
+        val.indexOf(String(aMs(desde))) >= 0, true);
+    comprobar('y la de cierre tambien',
+        val.indexOf(String(aMs(hasta))) >= 0, true);
+
+    /* Y que la fecha del pedido no se pueda inventar: sin esto, se
+       manda un `creado` de las 8 de la noche a las 3 de la madrugada. */
+    comprobar('el pedido no puede venir con fecha inventada',
+        /creado.*now -|now -.*creado/.test(val.replace(/\s+/g, ' ')), true);
+
+    // Y un pedido no puede traer mil renglones
+    comprobar('un pedido no puede traer renglones sin fin',
+        /hasChild\('\d+'\)/.test(String(reglas.servicio.entrantes.$entrante.items['.validate'])), true);
+}
+
+async function probarUnPedidoPorMesa() {
+    console.log('\n--- Una mesa, un pedido esperando ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    const pedir = mesa => corre(`Servicio.enviarEntrante({ mesa: ${mesa}, items: [
+        { platoId: 'p2', nombre: 'Chuleta', precio: 4, cantidad: 2 }] })`);
+
+    const uno = await pedir(5);
+    comprobar('la mesa 5 pide y sale', uno.ok, true);
+    comprobar('y queda echado su cerrojo',
+        !!sacarDeNube('servicio/pidiendo/5'), true);
+
+    const dos = await pedir(5);
+    comprobar('la mesa 5 pide otra vez y NO sale', dos.ok, false);
+    comprobar('y se sabe por que: ya tiene uno esperando', dos.motivo, 'ya-pidio');
+
+    // Que a la mesa 5 le rebote no puede dejar mudo al resto del comedor
+    const otra = await pedir(6);
+    comprobar('la mesa 6 sigue pudiendo pedir', otra.ok, true);
+
+    /* Y cuando el mesero lo atiende, la mesa vuelve a poder pedir. Si el
+       cerrojo se quedara puesto, esa mesa no pediria en toda la noche y
+       nadie relacionaria una cosa con la otra.
+
+       Se recorre el camino de verdad: la bandeja se llena desde la nube
+       —que es de donde la lee el mesero— y recien ahi se atiende. */
+    corre(`Servicio.iniciar(() => {})`);
+    await respirar();
+    comprobar('el pedido le llega a la bandeja del mesero',
+        corre(`Servicio.getEntrantes().length`), 2);
+
+    corre(`Servicio.descartarEntrante('${uno.entrante.id}')`);
+    await respirar();
+    comprobar('atendido el pedido, el cerrojo se suelta',
+        !!sacarDeNube('servicio/pidiendo/5'), false);
+
+    const tres = await pedir(5);
+    comprobar('y la mesa 5 puede volver a pedir', tres.ok, true);
+}
+
+/**
+ * Si el pedido no sale, al comensal NO se le vacia el carrito.
+ *
+ * Es el fallo silencioso que mas duele: eligio ocho platos, toca pedir,
+ * la nube dice que no —fuera de hora, o su mesa ya tiene uno esperando—
+ * y si se le vacia el carrito igual, se queda mirando una pantalla en
+ * blanco sin saber que paso y con todo por elegir otra vez.
+ *
+ * Se comprueba el ORDEN de lo que hace enviarPedido: la salida por el
+ * fallo tiene que estar ANTES de vaciar nada.
+ */
+function probarQueNoSePierdeElCarrito() {
+    console.log('\n--- Un pedido que no sale no le borra el carrito al comensal ---');
+    const app = fuente('js/app.js');
+
+    const cuerpo = (app.match(/async function enviarPedido\([\s\S]*?\n\}/) || [''])[0];
+    comprobar('enviarPedido espera la respuesta de la nube', !!cuerpo, true);
+    comprobar('y la espera de verdad, no la manda y sigue',
+        /await\s+Servicio\.enviarEntrante/.test(cuerpo), true);
+
+    const fallo  = cuerpo.indexOf('!r.ok');
+    const salida = cuerpo.indexOf('return;', fallo);
+    const vaciar = cuerpo.indexOf('limpiarCarrito');
+
+    comprobar('mira si salio', fallo >= 0, true);
+    comprobar('y si no salio, se va antes de tocar el carrito',
+        salida > fallo && salida < vaciar, true);
+
+    // Y que le diga las dos cosas distintas, que no son lo mismo
+    comprobar('sabe decir "ya pediste, espera al mesero"',
+        /ya-pidio/.test(cuerpo) && /espera/.test(cuerpo), true);
+
+    // El horario se avisa antes de hacerle elegir mesa
+    const antes = (app.match(/function confirmarPedido\([\s\S]*?\n\}/) || [''])[0];
+    comprobar('el horario se avisa antes de preguntar la mesa',
+        antes.indexOf('horaDePedir') >= 0 &&
+        antes.indexOf('horaDePedir') < antes.indexOf('mesa-modal'), true);
+}
+
+function probarQueElCerrojoNoSeAtasca() {
+    console.log('\n--- Un cerrojo trabado no deja la mesa muda toda la noche ---');
+    const reglas = JSON.parse(fuente('firebase-rules.json')).rules;
+    const cerrojo = reglas.servicio.pidiendo;
+
+    comprobar('la rama del cerrojo existe', !!cerrojo, true);
+
+    const w = String(cerrojo.$mesa['.write']);
+    comprobar('el comensal puede echarlo si no hay ninguno', /!data\.exists\(\)/.test(w), true);
+    comprobar('y puede pisar uno viejo, para que no se atasque',
+        /data\.child\('cuando'\)\.val\(\) < now -/.test(w), true);
+    comprobar('el mesero puede soltarlo',
+        w.indexOf('YHeMmcUbMFdsPQrIcvT561FDunt1') >= 0, true);
+
+    /* Y vaciar el servicio tiene que llevarselos: si la bandeja se
+       vacia y los cerrojos se quedan, hay mesas sin poder pedir por un
+       pedido que ya no existe. */
+    const lista = (fuente('js/servicio.js').match(/const ramas = \[([\s\S]*?)\];/) || ['', ''])[1];
+    comprobar('vaciar el servicio se lleva los cerrojos',
+        /servicio\/pidiendo/.test(lista), true);
+}
+
+/* ============================================================
    EL ASADOR ENTRA AL PANEL, PERO NO A TODO
 
    Ve el menu y la contabilidad. No ve los pedidos, ni los numeros, ni
@@ -4326,6 +4526,10 @@ async function main() {
     await probarFiadoSobreviveAlVaciado();
     probarEcoDeLaNevera();
     probarQueSePuedeVaciarDeVerdad();
+    probarLaFranjaDePedir();
+    await probarUnPedidoPorMesa();
+    probarQueNoSePierdeElCarrito();
+    probarQueElCerrojoNoSeAtasca();
     probarElPanelDelAsador();
     probarQueEsconderEsconde();
     await probarQueLaMesaDeAyerNoTapa();

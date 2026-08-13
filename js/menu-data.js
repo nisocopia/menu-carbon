@@ -20,6 +20,24 @@ const RESTAURANTE = {
     // mandar el pedido, porque el QR de la mesa no lleva el número dentro.
     mesas:      11,
 
+    /* A QUÉ HORA SE PUEDE PEDIR DESDE EL CELULAR DEL COMENSAL.
+
+       Fuera de esta franja el botón de pedir se apaga y explica por qué.
+       Pero lo que de verdad manda son las reglas de Firebase, que
+       comparan contra la hora del SERVIDOR: un celular con el reloj
+       cambiado no se salta nada.
+
+       Se cuenta con el huso del local y no con el del teléfono, para
+       que los dos lados digan lo mismo aunque el comensal traiga el
+       celular en otra hora. Ecuador es UTC-5 todo el año y no cambia en
+       verano, así que un número fijo vale.
+
+       SI CAMBIAS ESTO, cámbialo también en firebase-rules.json — hay una
+       comprobación que falla si los dos no dicen lo mismo. */
+    pedirDesde: '18:00',
+    pedirHasta: '22:30',
+    husoLocal:  -5,
+
     /* Quién es el dueño. Se saca de Firebase → Authentication → Users,
        columna User UID.
 

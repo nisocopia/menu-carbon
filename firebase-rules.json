@@ -156,7 +156,7 @@
         ".write": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
         "$entrante": {
           ".write": "!data.exists() || (auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1'))",
-          ".validate": "newData.hasChildren(['items', 'creado'])",
+          ".validate": "newData.hasChildren(['items', 'creado']) && newData.child('creado').val() > now - 1800000 && newData.child('creado').val() < now + 1800000 && ((now - 18000000) % 86400000) >= 64800000 && ((now - 18000000) % 86400000) <= 81000000",
           "mesa": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99"
           },
@@ -167,7 +167,7 @@
             ".validate": "newData.isString() && newData.val().length < 300"
           },
           "items": {
-            ".validate": "newData.hasChildren()",
+            ".validate": "newData.hasChildren() && !newData.hasChild('60')",
             "$item": {
               ".validate": "newData.hasChildren(['nombre', 'cantidad'])",
               "cantidad": {
@@ -181,6 +181,17 @@
               }
             }
           }
+        }
+      },
+
+      "pidiendo": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
+        "$mesa": {
+          ".write": "!data.exists() || data.child('cuando').val() < now - 1800000 || (auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1'))",
+          ".validate": "$mesa.matches(/^[0-9]{1,2}$/) && newData.hasChildren(['cuando']) && newData.child('cuando').val() == now",
+          "cuando": { ".validate": "newData.isNumber()" },
+          "$otro":  { ".validate": false }
         }
       },
 

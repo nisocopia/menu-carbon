@@ -437,6 +437,26 @@ const Sync = (() => {
     const agregar = async (rama, valor) => (await escribir(rama, valor, 'POST', false)).ok;
 
     /**
+     * VARIAS RAMAS DE UNA SOLA VEZ, Y O ENTRAN TODAS O NO ENTRA NINGUNA.
+     *
+     * Firebase revisa cada ruta por separado, pero aplica el conjunto
+     * entero o nada. Eso es justo lo que hace falta para el pedido del
+     * comensal, que son dos cosas que no pueden separarse: el pedido en
+     * la bandeja y el cerrojo de su mesa.
+     *
+     * Si se mandaran sueltas habría dos formas de quedar mal, y las dos
+     * malas: el pedido sin cerrojo deja pedir otra vez y llena la
+     * bandeja; el cerrojo sin pedido deja la mesa sin poder pedir por
+     * algo que nunca llegó.
+     *
+     * Va SIN CUENTA, como el resto de lo del comensal: su celular no
+     * tiene login. Y devuelve el estado, no un sí o un no, porque la
+     * diferencia importa — un 401 aquí no es un fallo de red, es la
+     * nube diciendo "esta mesa ya tiene un pedido esperando".
+     */
+    const todoONada = async rutas => escribir('', rutas, 'PATCH', false);
+
+    /**
      * Escribe con el detalle del fallo a la vista. Se usa para reclamar
      * algo que solo puede ser de uno: las reglas dejan crear el nodo
      * únicamente si todavía no existe, así que el primer celular que
@@ -457,7 +477,7 @@ const Sync = (() => {
     return {
         activo,
         entrar, salir, porQueNoEntro, haySesion, correoSesion, uidSesion, rolSesion, token,
-        escuchar, leer, guardar, parchear, agregar, reclamar, enviar,
+        escuchar, leer, guardar, parchear, agregar, todoONada, reclamar, enviar,
         ramaViva, desdeUltimoContacto, fallo
     };
 })();

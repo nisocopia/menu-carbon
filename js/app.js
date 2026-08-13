@@ -301,6 +301,17 @@ let sugerenciaAceptada = false;
 function confirmarPedido() {
     if (!carrito.length) return;
 
+    /* EL HORARIO SE MIRA ANTES DE PREGUNTAR LA MESA. Hacerle elegir
+       mesa para después decirle que está cerrado es hacerle perder el
+       tiempo dos veces. Esto es la cortesía; quien de verdad lo impide
+       son las reglas de Firebase, que miran la hora del servidor. */
+    const hora = (typeof Servicio !== 'undefined') ? Servicio.horaDePedir() : { ok: true };
+    if (!hora.ok) {
+        avisar(`Los pedidos desde el celular se toman de ${horaEnLetras(hora.desde)} a ` +
+               `${horaEnLetras(hora.hasta)}. Llama al mesero y con gusto te atiende.`, 9);
+        return;
+    }
+
     const total = Number(CFG.mesas) || 11;
     document.getElementById('mesa-botones').innerHTML =
         Array.from({ length: total }, (_, i) => i + 1)
@@ -313,7 +324,7 @@ function cerrarMesaModal() {
     document.getElementById('mesa-modal').classList.remove('open');
 }
 
-function enviarPedido(mesa) {
+async function enviarPedido(mesa) {
     if (!carrito.length) return;
     cerrarMesaModal();
 
@@ -322,9 +333,23 @@ function enviarPedido(mesa) {
 
     /* El pedido no entra directo a la cocina: cae en la bandeja del
        mesero, que lo confirma de un toque. Así nadie puede meterle
-       platos falsos a la parrilla desde el celular. */
+       platos falsos a la parrilla desde el celular.
+
+       Y AHORA SE ESPERA LA RESPUESTA. Antes se mandaba y se seguía sin
+       mirar, así que un pedido rechazado por la nube desaparecía en
+       silencio: al comensal se le vaciaba el carrito y se le enseñaba
+       su comanda como si todo hubiera ido bien. Si no salió, lo que
+       eligió TIENE que seguir donde estaba. */
     if (typeof Servicio !== 'undefined') {
-        Servicio.enviarEntrante({ mesa, items, nota });
+        const r = await Servicio.enviarEntrante({ mesa, items, nota });
+
+        if (!r || !r.ok) {
+            avisar(r && r.motivo === 'ya-pidio'
+                ? 'Ya hiciste tu pedido y está esperando a que el mesero lo acepte. ' +
+                  'Si quieres más platos, espera a que te acepte los primeros.'
+                : 'No se pudo enviar el pedido. Llama al mesero y muéstrale la pantalla.', 10);
+            return;                       // el carrito se queda como estaba
+        }
     }
 
     // Se guarda también aquí para el aviso de progreso y las estadísticas
@@ -525,12 +550,38 @@ function redibujarMenu() {
     if (document.getElementById('cart-modal').classList.contains('open')) renderCarrito();
 }
 
-function avisarAgotado() {
+/**
+ * La cinta roja de arriba, que ahora dice lo que haga falta.
+ *
+ * Era solo para "se agotó un plato" y llevaba el texto escrito en el
+ * HTML. Los avisos del pedido —fuera de hora, o ya hay uno esperando—
+ * tienen que salir por el mismo sitio: es donde el comensal ya está
+ * acostumbrado a que le hablen, y meterle una ventana encima cuando
+ * acaba de tocar "pedir" es una interrupción de más.
+ */
+function avisar(texto, segundos) {
     const aviso = document.getElementById('aviso-agotado');
     if (!aviso) return;
+
+    const span = aviso.querySelector('span');
+    if (span && texto) span.textContent = texto;
+
     aviso.classList.add('visible');
-    clearTimeout(avisarAgotado._t);
-    avisarAgotado._t = setTimeout(() => aviso.classList.remove('visible'), 6000);
+    clearTimeout(avisar._t);
+    avisar._t = setTimeout(() => aviso.classList.remove('visible'), (segundos || 6) * 1000);
+}
+
+function avisarAgotado() {
+    avisar('Se acaba de agotar un plato de tu pedido. Disculpa.');
+}
+
+/** "18:00" -> "6:00 pm", que es como se lee la hora aquí. */
+function horaEnLetras(hhmm) {
+    const p = String(hhmm || '').split(':');
+    const h = Number(p[0]) || 0;
+    const m = p[1] || '00';
+    const doce = h % 12 === 0 ? 12 : h % 12;
+    return `${doce}:${m} ${h < 12 ? 'am' : 'pm'}`;
 }
 
 /** Se engancha a la nube, si el restaurante la tiene configurada. */

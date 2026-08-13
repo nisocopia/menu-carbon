@@ -2177,7 +2177,64 @@ const Servicio = (() => {
        ============================================================ */
 
     /** Lo manda el comensal. Va sin sesión porque no tiene cuenta. */
-    function enviarEntrante({ mesa, items, nota }) {
+    /* ------------------------------------------------------------
+       LA FRANJA EN QUE SE PUEDE PEDIR
+
+       Se mide con el huso del LOCAL y no con el del celular: un
+       comensal con el teléfono en otra hora vería el botón encendido
+       cuando el local está cerrado, y al enviar le rebotaría la nube
+       sin entender por qué.
+
+       Esto es la cortesía. El candado son las reglas de Firebase, que
+       miran la hora del servidor.
+       ------------------------------------------------------------ */
+
+    const enMinutos = hhmm => {
+        const p = String(hhmm || '').split(':');
+        return (Number(p[0]) || 0) * 60 + (Number(p[1]) || 0);
+    };
+
+    /** Minutos transcurridos del día, en la hora del local. */
+    function minutosDelLocal(cuando) {
+        const cfg = Store.getConfig();
+        const huso = typeof cfg.husoLocal === 'number' ? cfg.husoLocal : 0;
+        const d = new Date((cuando || Date.now()) + huso * 3600000);
+        return d.getUTCHours() * 60 + d.getUTCMinutes();
+    }
+
+    /**
+     * ¿Se puede pedir ahora? Devuelve también el horario, para poder
+     * decirlo: "de 6:00 pm a 10:30 pm" es una respuesta; "no se puede",
+     * no lo es.
+     */
+    function horaDePedir(cuando) {
+        const cfg = Store.getConfig();
+        const desde = enMinutos(cfg.pedirDesde);
+        const hasta = enMinutos(cfg.pedirHasta);
+
+        // Sin horario puesto, se pide siempre: es como funcionaba antes
+        if (!desde && !hasta) return { ok: true, desde: cfg.pedirDesde, hasta: cfg.pedirHasta };
+
+        const ahora = minutosDelLocal(cuando);
+        return { ok: ahora >= desde && ahora <= hasta,
+                 desde: cfg.pedirDesde, hasta: cfg.pedirHasta };
+    }
+
+    /**
+     * El pedido del comensal, con su cerrojo de mesa.
+     *
+     * LAS DOS COSAS VAN JUNTAS O NO VA NINGUNA. El pedido cae en la
+     * bandeja y, a la vez, se echa el cerrojo de esa mesa. Las reglas
+     * solo dejan crear el cerrojo si no hay otro puesto, así que una
+     * mesa no puede tener dos pedidos esperando: el segundo rebota, y
+     * rebota en el servidor — no en la pantalla, que se salta abriendo
+     * la consola.
+     *
+     * Devuelve POR QUÉ no salió, que es lo que decide qué se le dice al
+     * comensal: no es lo mismo "ya pediste, espera al mesero" que "no
+     * hay internet".
+     */
+    async function enviarEntrante({ mesa, items, nota }) {
         const entrante = {
             id: nuevoId(),
             mesa: mesa || 0,
@@ -2190,10 +2247,40 @@ const Servicio = (() => {
             nota: nota || '',
             creado: Date.now()
         };
-        // Sin cola: si no sale, el comensal igual tiene la pantalla para
-        // mostrársela al mesero, que es como funciona hoy.
-        Red.agregar('servicio/entrantes', entrante);
-        return entrante;
+
+        // Sin nube todo vive en este celular: el comensal le enseña la
+        // pantalla al mesero, que es como funcionaba antes de todo esto.
+        if (!Red.activo || !Red.todoONada) return { ok: true, motivo: 'sin-nube', entrante };
+
+        /* LA HORA DEL CERROJO LA PONE EL SERVIDOR, no este celular.
+
+           De esa hora depende cuándo caduca, así que si la pusiera el
+           comensal bastaría con mandarla media hora atrasada para que el
+           cerrojo naciera vencido y no frenara nada. `.sv` es la marca de
+           tiempo de Firebase; la regla exige que sea exactamente esa, así
+           que no hay número que valga inventarse.
+
+           El `creado` del pedido sí va de aquí, y no pasa nada: no es lo
+           que cierra ninguna puerta, y al aceptarlo el mesero la comanda
+           nace con su propia hora. */
+        const r = await Red.todoONada({
+            [`servicio/entrantes/${entrante.id}`]: entrante,
+            [`servicio/pidiendo/${entrante.mesa}`]: { cuando: { '.sv': 'timestamp' } }
+        });
+
+        if (r && r.ok) return { ok: true, motivo: '', entrante };
+
+        /* Un 401 aquí no es un fallo de red: es la nube diciendo que no.
+           O la mesa ya tiene un pedido esperando, o es fuera de hora —
+           y lo segundo ya se miró antes de llegar hasta aquí. */
+        const negado = r && (r.status === 401 || r.status === 403);
+        return { ok: false, motivo: negado ? 'ya-pidio' : 'no-salio', entrante };
+    }
+
+    /** Suelta el cerrojo de esa mesa: ya puede volver a pedir. */
+    function soltarCerrojo(mesa) {
+        if (!Red.activo) return;
+        encolar(`servicio/pidiendo/${mesa || 0}`, null);
     }
 
     let entrantes = {};
@@ -2283,13 +2370,35 @@ const Servicio = (() => {
             origen: 'cliente'
         });
 
-        descartarEntrante(llave);
+        /* El cerrojo se suelta con la mesa QUE PIDIÓ, no con la mesa a la
+           que el mesero lo mande. Si el comensal se equivocó de número y
+           el mesero lo corrige al aceptar, el cerrojo que hay puesto es
+           el de la mesa equivocada: soltar el otro dejaría a esa mesa
+           sin poder pedir media hora. */
+        descartarEntrante(llave, e.mesa);
         return comanda;
     }
 
-    function descartarEntrante(llave) {
+    /**
+     * Fuera de la bandeja, y CON SU CERROJO SUELTO.
+     *
+     * Las dos cosas, siempre. Un pedido atendido que deja el cerrojo
+     * puesto es una mesa que no puede volver a pedir en toda la noche,
+     * y nadie relacionaría una cosa con la otra. La mesa se saca del
+     * pedido antes de borrarlo, que después ya no se sabe cuál era.
+     */
+    function descartarEntrante(llave, mesa) {
+        const e = entrantes[llave];
+        /* La mesa se saca del pedido, pero se acepta también por fuera:
+           quien ya la tiene en la mano no debería depender de que el
+           pedido siga en la bandeja de ESTE celular. Si aun así no hay
+           forma de saberla, el cerrojo caduca solo a la media hora — por
+           eso las reglas lo permiten pisar, y no es un adorno. */
+        const cual = mesa != null ? mesa : (e ? e.mesa : null);
+
         delete entrantes[llave];
         encolar(`servicio/entrantes/${llave}`, null);
+        if (cual !== null) soltarCerrojo(cual);
         alCambiar();
     }
 
@@ -2667,8 +2776,13 @@ const Servicio = (() => {
         /* Las reglas de Firebase solo le dejan borrar estas ramas al
            gerente. Si lo intenta otra cuenta, la nube dice que no y aquí
            se devuelve false para que la pantalla no mienta. */
+        /* 'pidiendo' son los cerrojos de las mesas que tienen un pedido
+           esperando en la bandeja. Si la bandeja se vacía, los cerrojos
+           no pueden quedarse puestos: dejarían mesas sin poder pedir por
+           un pedido que ya no existe. */
         const ramas = ['servicio/comandas', 'servicio/sesiones', 'servicio/pagos',
-                       'servicio/entrantes', 'servicio/tomados', 'servicio/llamadas'];
+                       'servicio/entrantes', 'servicio/pidiendo',
+                       'servicio/tomados', 'servicio/llamadas'];
         const hechos = await Promise.all(ramas.map(r => Red.guardar(r, null)));
         alCambiar();
         return hechos.every(Boolean);
@@ -2742,6 +2856,7 @@ const Servicio = (() => {
         corregirDia,
         // lo que manda el comensal
         enviarEntrante, getEntrantes, confirmarEntrante, descartarEntrante,
+        horaDePedir, soltarCerrojo,
         // para el panel del gerente
         comandasComoPedidos, sesionesEntre,
         // estado del sistema
