@@ -32,7 +32,8 @@ const Servicio = (() => {
         llamadas: NS + 'llamadas',    // la cocina o el asador llamando al salón
         misLlam:  NS + 'mis_llamadas',// cuándo llamó ESTE aparato, para el freno
         fiados:   NS + 'fiados',      // lo que se llevaron sin pagar
-        conta:    NS + 'contabilidad' // el resumen por día, que no se borra nunca
+        conta:    NS + 'contabilidad',// el resumen por día, que no se borra nunca
+        gastos:   NS + 'gastos'       // lo comprado: mercado, carne, carbón, gas
     };
 
     /* Un dispositivo puede quedarse sin nube (sync.js no cargó o el
@@ -112,6 +113,50 @@ const Servicio = (() => {
 
     /** ¿Puede cobrar y cerrar mesas? El asador anota, pero no toca el dinero. */
     const puedeCobrar = () => permisoEn('comanda') === 'todo';
+
+    /**
+     * ¿Puede ver y anotar gastos?
+     *
+     * El gerente y el asador. Son UNA SOLA libreta, no una por
+     * persona: los dos compran para el mismo local —el gerente el
+     * mercado, el asador la carne y el carbón— y partirla en dos haría
+     * falso el único número que importa, que es cuánto salió en total.
+     *
+     * Existe como línea propia, y no colgada de `permisoEn('panel')`,
+     * porque el panel se reparte por pantallas y esto es una pestaña
+     * dentro de una de ellas.
+     */
+    const puedeVerGastos = () =>
+        !Red.activo || ['gerente', 'parrilla'].indexOf(rol()) >= 0;
+
+    /** El correo con el que se entró, que es lo que firma cada gasto. */
+    const miCorreo = () => (Red.correoSesion && Red.correoSesion()) || null;
+
+    /**
+     * ¿Puede borrar ESTE gasto?
+     *
+     * Cada uno borra lo suyo; el gerente borra cualquiera. No es
+     * desconfianza: es que borrar no se deshace, y el asador buscando
+     * su compra de carbón no tiene por qué poder llevarse por delante
+     * la del mercado del gerente.
+     *
+     * Lo mismo está escrito en las reglas de Firebase, que son las que
+     * de verdad lo impiden. Esto solo evita ofrecer un botón que el
+     * servidor va a rechazar.
+     */
+    function puedeBorrarGasto(gasto) {
+        /* SIN NUBE NO HAY DOS MANOS. Un local que no configuró Firebase
+           no tiene cuentas, y rol() no devuelve 'gerente' sino null: no
+           hay sesión a la que preguntarle. Sin esta línea, ese local se
+           quedaba con una libreta en la que se podía anotar y nada se
+           podía borrar. Es la misma regla que usa rolPanel() en
+           panel.js: sin nube, quien está delante es el dueño. */
+        if (!Red.activo) return true;
+
+        if (rol() === 'gerente') return true;
+        const yo = miCorreo();
+        return !!(yo && gasto && gasto.quien === yo);
+    }
 
     let alCambiar = () => {};
     let enLinea   = true;
@@ -1812,9 +1857,10 @@ const Servicio = (() => {
      * pantallas solo serviría para encender la alarma de "no llega
      * nada" por algo que no les toca.
      */
-    function cargarDelGerente(fiados, conta) {
+    function cargarDelGerente(fiados, conta, gastos) {
         if (fiados !== undefined) write(K.fiados, fiados || {});
         if (conta  !== undefined) write(K.conta,  conta  || {});
+        if (gastos !== undefined) write(K.gastos, gastos || {});
     }
 
     /**
@@ -1834,14 +1880,15 @@ const Servicio = (() => {
 
         /* Los cobros no los lee todo el que abre el panel: las reglas los
            dejan para el gerente y el mesero. El asador entra al panel a
-           ver el menú y la contabilidad, y esas dos pestañas no los usan
-           para nada — pedirlos sería un permiso denegado de adorno. */
-        const [com, ses, pag, fia, con] = await Promise.all([
+           ver el menú, la contabilidad y sus gastos, y ninguna de esas
+           tres los usa — pedirlos sería un permiso denegado de adorno. */
+        const [com, ses, pag, fia, con, gas] = await Promise.all([
             Red.leer('servicio/comandas', true),
             Red.leer('servicio/sesiones', true),
             puedeCobrar() ? Red.leer('servicio/pagos', true) : Promise.resolve(undefined),
             Red.leer('servicio/fiados',   true),
-            Red.leer('contabilidad',      true)
+            Red.leer('contabilidad',      true),
+            puedeVerGastos() ? Red.leer('gastos', true) : Promise.resolve(undefined)
         ]);
 
         /* `undefined` es "no se pudo leer" y se deja lo que había;
@@ -1849,7 +1896,7 @@ const Servicio = (() => {
         if (com !== undefined) mezclar(K.comandas, com);
         if (ses !== undefined) mezclar(K.sesiones, ses);
         if (pag !== undefined) mezclar(K.pagos,    pag);
-        cargarDelGerente(fia, con);
+        cargarDelGerente(fia, con, gas);
 
         alCambiar();
         return true;
@@ -1871,6 +1918,194 @@ const Servicio = (() => {
 
     const totalFiado = () =>
         fiadosPendientes().reduce((s, f) => s + (f.monto || 0), 0);
+
+    /* ============================================================
+       LOS GASTOS
+
+       Se sale a comprar y se anota de pie, en la calle, con una mano:
+       "carnicería, 120". Eso es TODO lo que se pide. La fecha la pone
+       el reloj y el nombre no se elige de ninguna lista — se escribe,
+       y a la segunda vez ya está aprendido.
+
+       La libreta es de dos manos, el gerente y el asador, y cada gasto
+       va FIRMADO con el correo de quien lo anotó: es lo que deja que
+       cada uno borre lo suyo sin tocar lo del otro.
+
+       VIVEN EN SU PROPIA RAMA, no dentro de `contabilidad/$dia`. Ahí
+       cerrarElDia() reescribe el día ENTERO con un PUT, así que meter
+       los gastos dentro sería verlos desaparecer cada noche al cerrar
+       el servicio, sin que nadie entendiera por qué.
+
+       Partidos por día, además, se lee solo lo que se mira.
+       ============================================================ */
+
+    /** Todo lo anotado: { '2026-08-14': { id: {que, monto, cuando, quien} } } */
+    const getGastos = () => read(K.gastos, {});
+
+    /**
+     * Anota un gasto.
+     *
+     * Se guarda AQUÍ primero y se sube después, por la cola de siempre.
+     * El mercado y la carnicería son justo donde no hay señal, y un
+     * gasto que no se puede anotar sin internet es un gasto que no se
+     * anota.
+     */
+    function anotarGasto(que, monto) {
+        const nombre = String(que || '').trim();
+        const plata  = Math.round(Number(monto) * 100) / 100;
+
+        /* El tope es el mismo que revisan las reglas de la nube. Si se
+           dejara pasar aquí, el gasto se guardaría en el celular, se
+           encolaría, la nube lo rechazaría y acabaría en el apartado:
+           el gerente lo vería anotado en su pantalla y en ninguna otra.
+           Y OJO CON EL REDONDEO: se compara DESPUÉS de redondear,
+           porque 9999.999 pasa el tope y se guarda como 10000.
+           Un gasto más grande que eso se anota en dos. */
+        if (!nombre || !(plata > 0) || plata >= 10000) return null;
+
+        const gasto = {
+            id: 'g' + nuevoId(),
+            que: nombre.slice(0, 40),
+            monto: plata,
+            cuando: Date.now(),
+            /* QUIÉN LO ANOTÓ. Hoy solo entra el gerente y sobra; cuando
+               entre el asador va a hacer falta saber de quién fue cada
+               compra. Ponerlo ahora es gratis; ponerlo después es ir a
+               arreglar los gastos viejos que no lo tienen. */
+            quien: miCorreo() || rol()
+        };
+
+        /* Con nube, cada gasto va FIRMADO con el correo de quien lo
+           anota: es lo que deja que el asador borre lo suyo y no lo
+           del gerente, y las reglas lo exigen. Sin correo, el gasto se
+           guardaría aquí y la nube lo rechazaría para siempre. Mejor
+           no anotarlo y que se vuelva a entrar. */
+        if (Red.activo && !miCorreo()) return null;
+
+        const dia = fechaDe(gasto.cuando);
+        const todos = getGastos();
+        (todos[dia] || (todos[dia] = {}))[gasto.id] = gasto;
+
+        write(K.gastos, todos);
+        encolar(`gastos/${dia}/${gasto.id}`, gasto);
+        alCambiar();
+        return gasto;
+    }
+
+    /** Se equivocó al teclear y puso 1200 en vez de 120. */
+    function borrarGasto(dia, id) {
+        const todos = getGastos();
+        if (!todos[dia] || !todos[dia][id]) return false;
+        if (!puedeBorrarGasto(todos[dia][id])) return false;
+
+        delete todos[dia][id];
+        if (!Object.keys(todos[dia]).length) delete todos[dia];
+
+        write(K.gastos, todos);
+        encolar(`gastos/${dia}/${id}`, null);
+        alCambiar();
+        return true;
+    }
+
+    /**
+     * Los días con gasto, del más nuevo al más viejo, ya sumados.
+     *
+     * @param desde  marca de tiempo; 0 es todo el historial.
+     */
+    function gastosPorDia(desde) {
+        const todos = getGastos();
+
+        return Object.keys(todos)
+            .filter(f => !desde || new Date(f + 'T00:00:00').getTime() >= desde)
+            .sort().reverse()
+            .map(fecha => {
+                const lista = Object.values(todos[fecha] || {})
+                    .filter(Boolean)
+                    .sort((a, b) => b.cuando - a.cuando);
+                return {
+                    fecha,
+                    lista,
+                    total: Math.round(lista.reduce((s, g) => s + (g.monto || 0), 0) * 100) / 100
+                };
+            })
+            .filter(d => d.lista.length);
+    }
+
+    /**
+     * El lunes de la semana en que cae esa fecha.
+     *
+     * La semana empieza el LUNES, no el domingo. Es como cuenta la
+     * gente aquí y como piensa el gerente cuando dice "esta semana":
+     * de lunes a domingo, con el fin de semana —que es cuando más se
+     * vende y más se compra— junto al final y no partido en dos.
+     */
+    function lunesDe(fecha) {
+        const d = new Date(fecha + 'T00:00:00');
+        const dia = d.getDay();                      // 0 domingo, 1 lunes…
+        d.setDate(d.getDate() - (dia === 0 ? 6 : dia - 1));
+        return fechaDe(d.getTime());
+    }
+
+    /**
+     * Lo mismo que gastosPorDia, pero con los días metidos en su semana.
+     *
+     * Se arma ENCIMA de gastosPorDia y no aparte: así el orden, el
+     * filtro del periodo y el redondeo son una sola verdad, y una
+     * semana no puede sumar distinto que los días que la componen.
+     */
+    function gastosPorSemana(desde) {
+        const semanas = {};
+
+        gastosPorDia(desde).forEach(d => {
+            const lunes = lunesDe(d.fecha);
+            const s = semanas[lunes] || (semanas[lunes] = { semana: lunes, dias: [], total: 0 });
+            s.dias.push(d);
+            s.total = Math.round((s.total + d.total) * 100) / 100;
+        });
+
+        // Los días ya vienen del más nuevo al más viejo; las semanas igual
+        return Object.values(semanas).sort((a, b) => (a.semana < b.semana ? 1 : -1));
+    }
+
+    /**
+     * Los nombres que ya usó, para tocarlos en vez de teclearlos.
+     *
+     * No hay lista que mantener en ninguna parte: los nombres SON el
+     * historial. Manda el que más se repite, y entre dos que se repiten
+     * igual, el más reciente — que es como funciona una compra: el pan
+     * de todos los días arriba, la vez que compró una olla abajo.
+     *
+     * Si borra todo, los botones desaparecen. Es lo honesto: no puede
+     * quedar ofreciéndole un nombre del que ya no hay ni rastro.
+     */
+    function nombresDeGastos(cuantos) {
+        const vistos = {};
+
+        Object.values(getGastos()).forEach(dia =>
+            Object.values(dia || {}).filter(Boolean).forEach(g => {
+                const escrito = String(g.que || '').trim();
+                const clave = escrito.toLowerCase();
+                if (!clave) return;
+
+                const v = vistos[clave] ||
+                          (vistos[clave] = { veces: 0, ultima: 0, grafias: {} });
+                v.veces++;
+                if (g.cuando > v.ultima) v.ultima = g.cuando;
+
+                /* "Carnicería" y "carnicería" son el mismo sitio, pero hay
+                   que enseñar UNA. Gana la que más veces escribió, no la
+                   última: un resbalón con la mayúscula no debe cambiarle
+                   el botón que lleva un mes viendo igual. */
+                const gr = v.grafias;
+                gr[escrito] = (gr[escrito] || 0) + 1;
+                if (!v.nombre || gr[escrito] > gr[v.nombre]) v.nombre = escrito;
+            }));
+
+        return Object.values(vistos)
+            .sort((a, b) => b.veces - a.veces || b.ultima - a.ultima)
+            .slice(0, cuantos || 8)
+            .map(v => v.nombre);
+    }
 
     /* ============================================================
        LA CONTABILIDAD NO SE BORRA
@@ -2839,7 +3074,8 @@ const Servicio = (() => {
         // plato por plato en la cocina
         marcarListo, listasDe, todoListo,
         // quién puede qué
-        rol, permisoEn, puedeTocar, puedeAnotar, puedeCobrar,
+        rol, permisoEn, puedeTocar, puedeAnotar, puedeCobrar, puedeVerGastos,
+        puedeBorrarGasto, miCorreo,
         // hacer
         enviarComanda, editarComanda, marcarEntregado, devolverANuevo, marcarSacado, anularComanda,
         // llamar al salón desde la cocina o la parrilla
@@ -2850,6 +3086,8 @@ const Servicio = (() => {
         getExtras, guardarExtra,
         // fiar: se lo lleva ahora y paga después
         fiar, getFiados, pagarFiado, fiadosPendientes, totalFiado,
+        // lo que el gerente compró, de su bolsillo y con su mano
+        anotarGasto, borrarGasto, getGastos, gastosPorDia, gastosPorSemana, nombresDeGastos,
         // la cuenta que no se borra nunca
         cerrarElDia, getContabilidad, resumirPorDia, fechaDe, yaEstaContada,
         cargarDelGerente, traerParaElPanel,

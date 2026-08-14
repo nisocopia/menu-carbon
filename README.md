@@ -330,6 +330,87 @@ Debajo, las **proteínas desarmadas**: un mixto es un plato pero son dos o tres
 proteínas, y de la nevera salieron dos o tres. Las dos cuentas son verdad y
 responden preguntas distintas — cuánto se vendió, y cuánto hay que comprar.
 
+### Gastos
+
+La libreta del gerente. Sale a comprar y anota de pie, en la calle, con una
+mano: **en qué gastó y cuánto**. Eso es todo lo que se le pide — la fecha la
+pone el reloj y no hay categorías, ni forma de pago, ni nada que elegir. Un
+formulario de cinco casillas por cada compra se abandona a la semana, y una
+libreta abandonada no vale nada.
+
+**Los nombres se aprenden solos.** Escribe "Carnicería" una vez; a partir de
+ahí le aparece como botón y a la segunda compra anota sin teclear una letra:
+toca el nombre, pone el número, listo. No hay lista que mantener en ninguna
+parte — los nombres *son* el historial. Manda el que más se repite, y de dos
+formas de escribirlo —"Carnicería" y "carnicería" son el mismo sitio— gana la
+que más veces usó, no la última: un resbalón con la mayúscula no le cambia el
+botón que lleva un mes viendo igual. Si borra todo, los botones desaparecen,
+que es lo honesto.
+
+Arriba, **hasta dónde mirar**: hoy, la semana, el mes o todo, con el total del
+periodo. Debajo, **cómo partirlo**, que es otra pregunta:
+
+**Día por día** — cada día con sus compras a la vista. Es la de todos los días:
+se entra a anotar y se ve lo que va del día. Tocar la equis de una compra la
+borra, preguntando con el nombre y el monto dentro — dos filas seguidas pueden
+decir lo mismo y borrar la equivocada no se deshace.
+
+**Semana por semana** — cada semana con su total, partida en sus días: el día,
+cuántas compras y cuánto. Contesta "¿qué semana se me fue la mano?", que con
+los días sueltos no se puede ver. Los días salen cerrados a propósito: un mes
+entero desplegado son ochenta renglones. **Tocar un día abre lo que se compró**
+ese día, con su equis para borrar; volver a tocarlo lo cierra, y solo hay uno
+abierto a la vez.
+
+La semana va de **lunes a domingo**, que es como cuenta la gente aquí y deja el
+fin de semana —cuando más se vende y más se compra— junto al final en vez de
+partido en dos. Se rotula "Esta semana", "Semana pasada" y de ahí para atrás
+por fechas: *3 – 9 ago*.
+
+**Lo vendido no se enseña al lado.** Se pensó y el dueño dijo que no: esta
+pantalla es para anotar lo que salió, no para sacar una cuenta de ganancia que
+no sería cierta — faltan arriendo, sueldos y luz.
+
+**Viven en su propia rama, no dentro de `contabilidad/$dia`.** Ahí el cierre
+del día reescribe el día entero de una sola vez, así que meter los gastos
+dentro sería verlos desaparecer cada noche al vaciar el servicio, sin que
+nadie entendiera por qué. Van en `/gastos/2026-08-14/<id>`, partidos por día,
+y se guardan en el celular antes de subirse: el mercado y la carnicería son
+justo donde no hay señal.
+
+### Una libreta, dos manos
+
+La escriben el **gerente y el asador**. Es una sola y no una por persona: los
+dos compran para el mismo local —el gerente el mercado, el asador la carne y
+el carbón— y partirla en dos haría falso el único número que importa, que es
+cuánto salió en total. Los dos ven todo lo anotado y el total sale sumado.
+
+**Cada gasto va firmado** con el correo de quien lo anotó. En la pantalla, la
+firma se enseña solo cuando **no** fue quien está mirando: lo propio no
+necesita etiqueta —ya sabe que fue él— y ponérsela a todo llenaría la lista de
+su propio nombre repetido. Del correo se enseña lo de antes de la arroba.
+
+**Cada uno borra lo suyo; el gerente borra cualquiera.** No es desconfianza:
+es que borrar no se deshace, y el asador buscando su compra de carbón no tiene
+por qué poder llevarse por delante el mercado del gerente. Al gasto ajeno se
+le deja el hueco donde iría la equis, para que la columna de los montos no
+baile de fila en fila.
+
+Y esto **no se sostiene escondiendo un botón**. La regla `gastos` de
+`firebase-rules.json` compara el `quien` guardado contra `auth.token.email` del
+lado del servidor, así que el asador no puede borrar lo ajeno ni escribiendo la
+petición a mano. La pantalla solo evita ofrecerle un botón que la nube va a
+rechazar.
+
+Un efecto de eso: **un gasto sin firmar no se anota**. Si la sesión se quedó
+sin correo, la pantalla pide salir y volver a entrar en vez de guardarlo aquí
+y que la nube lo rechace para siempre.
+
+Si se toca quién entra a esta pestaña, hay que tocar **tres** sitios:
+`PESTANAS` en `js/panel.js`, `puedeVerGastos()` en `js/servicio.js` y la rama
+`gastos` de `firebase-rules.json`. Las dos primeras ordenan la pantalla; **la
+tercera es la única que decide**, y sin ella lo demás es decoración.
+
 ### Lo que no se anuncia
 
 Los **juniors no salen en el menú del comensal**. Son porción de niño y

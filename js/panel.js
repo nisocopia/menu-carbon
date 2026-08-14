@@ -192,8 +192,12 @@ function esGerente() {
    ------------------------------------------------------------ */
 
 const PESTANAS = {
-    gerente:  ['hoy', 'menu', 'numeros', 'platos', 'local'],
-    parrilla: ['menu', 'platos']
+    /* Si aquí se toca 'gastos', hay que tocar también puedeVerGastos()
+       en servicio.js y la rama `gastos` de firebase-rules.json. Las
+       tres van juntas: las dos primeras ordenan la pantalla, la tercera
+       es la única que decide de verdad. */
+    gerente:  ['hoy', 'menu', 'numeros', 'platos', 'gastos', 'local'],
+    parrilla: ['menu', 'platos', 'gastos']
 };
 
 /** El papel con el que se entró al panel, o null si no puede pasar. */
@@ -1051,6 +1055,346 @@ function conectarContabilidad() {
 }
 
 /* ============================================================
+   GASTOS
+
+   La libreta del local, y nada más que eso. Se sale a comprar y se
+   anota de pie, en la calle, con una mano: "carnicería, 120". Todo lo
+   demás —categorías, fecha, forma de pago— se dejó fuera a propósito:
+   un formulario de cinco casillas por cada compra se abandona a la
+   semana, y una libreta abandonada no vale nada.
+
+   La escriben dos: el gerente y el asador. Es UNA sola —los dos
+   compran para el mismo local— y cada gasto lleva la firma de quien
+   lo anotó, que es lo que deja que cada uno borre lo suyo.
+
+   Lo vendido NO se enseña aquí al lado. Se pensó y el dueño dijo que
+   no: esta pantalla es para anotar lo que salió, no para sacar cuentas
+   de ganancia que no serían ciertas —faltan arriendo, sueldos, luz—.
+   ============================================================ */
+
+let gastoDias   = 30;       // 30 = el mes; los gastos son pocos y salteados
+let gastoAgrupa = 'dia';    // 'dia' o 'semana'
+
+/* Qué día está abierto en la vista por semanas. Uno solo: en un celular,
+   tres días desplegados a la vez ya no se leen. */
+let gastoDiaAbierto = null;
+
+/** "del 3 al 9 de ago" — el nombre de una semana en una fila de celular. */
+function semanaEnLetras(lunes) {
+    const l = new Date(lunes + 'T00:00:00');
+    const d = new Date(l); d.setDate(d.getDate() + 6);   // el domingo
+
+    /* Se cuenta de LUNES A LUNES, no contra hoy. Midiendo contra hoy,
+       el viernes está a cuatro días de su propio lunes, eso redondea a
+       una semana y la semana en curso se rotulaba "Semana pasada" desde
+       el miércoles en adelante. */
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const lunesDeHoy = new Date(hoy);
+    lunesDeHoy.setDate(lunesDeHoy.getDate() - ((hoy.getDay() + 6) % 7));
+
+    const cuantas = Math.round((lunesDeHoy - l) / (7 * 86400000));
+    if (cuantas === 0) return 'Esta semana';
+    if (cuantas === 1) return 'Semana pasada';
+
+    const mes = f => f.toLocaleDateString('es-EC', { month: 'short' });
+    // Si la semana cruza de mes, hay que decir los dos: "28 jul – 3 ago"
+    return l.getMonth() === d.getMonth()
+        ? `${l.getDate()} – ${d.getDate()} ${mes(d)}`
+        : `${l.getDate()} ${mes(l)} – ${d.getDate()} ${mes(d)}`;
+}
+
+/**
+ * Quién anotó un gasto, cuando no fue quien está mirando.
+ *
+ * La libreta es de dos manos: el gerente y el asador. Lo propio no
+ * necesita etiqueta —ya sabe que fue él— y ponérsela a todo llenaría
+ * la pantalla de su propio nombre repetido. Lo del otro sí, porque es
+ * lo que contesta "¿y esto quién lo compró?".
+ *
+ * Del correo se enseña lo de antes de la arroba: "asador", no
+ * "asador@gmail.com", que no cabe en la fila de un celular.
+ */
+function quienAnoto(g) {
+    const yo = Nube.correoSesion ? Nube.correoSesion() : null;
+    if (!g.quien || g.quien === yo) return '';
+    return `<em class="gasto-quien">${escapar(String(g.quien).split('@')[0])}</em>`;
+}
+
+/** Las filas de un día: lo que se compró, con su equis para borrar. */
+function filasDeGastos(dia) {
+    return dia.lista.map(g => {
+        /* Cada uno borra lo suyo; el gerente borra cualquiera. Al que
+           no puede se le deja el hueco en vez del botón: quitar la
+           columna entera descuadraría los montos de las otras filas. */
+        const mio = Servicio.puedeBorrarGasto(g);
+
+        return `
+        <div class="gasto-fila">
+            <span class="gasto-que">${escapar(g.que)}${quienAnoto(g)}</span>
+            <span class="gasto-monto">${dinero(g.monto)}</span>
+            ${mio
+                ? /* Una equis de texto y no un icono: el paquete de
+                     iconos de este sitio va recortado a los que se
+                     usan, y fa-xmark no está dentro. Con el icono
+                     suelto el botón se dibujaba en blanco y no había
+                     forma de saber dónde tocar para borrar. */
+                  `<button class="gasto-borrar" title="Borrar"
+                           data-borrar="${g.id}" data-dia="${dia.fecha}">&times;</button>`
+                : `<span class="gasto-borrar gasto-borrar-no"></span>`}
+        </div>`;
+    }).join('');
+}
+
+function renderGastos() {
+    const lista = document.getElementById('gasto-lista');
+    if (!lista || typeof Servicio === 'undefined') return;
+
+    const botones = document.getElementById('gasto-dias');
+    if (botones) {
+        botones.innerHTML = [[1, 'Hoy'], [7, 'Semana'], [30, 'Mes'], [0, 'Todo']]
+            .map(([n, t]) => `<button class="cont-dia ${gastoDias === n ? 'on' : ''}" data-gdias="${n}">${t}</button>`)
+            .join('');
+    }
+
+    /* Cómo se agrupa lo de abajo. Es OTRA pregunta que hasta dónde
+       mirar: "el mes" dice cuánto abarca, "por semana" dice cómo se
+       parte. Por eso son dos filas de botones y no una. */
+    const agrupa = document.getElementById('gasto-agrupa');
+    if (agrupa) {
+        agrupa.innerHTML = [['dia', 'Día por día'], ['semana', 'Semana por semana']]
+            .map(([v, t]) => `<button class="cont-dia ${gastoAgrupa === v ? 'on' : ''}" data-gagrupa="${v}">${t}</button>`)
+            .join('');
+    }
+
+    renderSugeridos();
+
+    const desde = gastoDias === 0 ? 0 : arrancaDelDia(gastoDias);
+    const dias  = Servicio.gastosPorDia(desde);
+    const suma  = Math.round(dias.reduce((s, d) => s + d.total, 0) * 100) / 100;
+
+    const total = document.getElementById('gasto-total');
+
+    if (!dias.length) {
+        if (total) total.innerHTML = '';
+        lista.innerHTML = `
+            <p class="vacio">
+                Todavía no hay nada anotado${gastoDias === 1 ? ' hoy' : ' en este periodo'}.<br>
+                Escribe arriba en qué gastaste y cuánto.
+            </p>`;
+        return;
+    }
+
+    const rotulo = gastoDias === 1 ? 'Hoy'
+                 : gastoDias === 0 ? 'En total'
+                 : `Últimos ${gastoDias} días`;
+
+    if (total) total.innerHTML = `
+        <div class="gasto-suma">
+            <span>${rotulo}</span>
+            <strong>${dinero(suma)}</strong>
+        </div>`;
+
+    lista.innerHTML = gastoAgrupa === 'semana'
+        ? pintarPorSemana(Servicio.gastosPorSemana(desde))
+        : pintarPorDia(dias);
+}
+
+/** Cada día con sus compras a la vista. Es la de todos los días. */
+function pintarPorDia(dias) {
+    return dias.map(d => `
+        <div class="gasto-dia">
+            <h3>${diaEnLetras(d.fecha)} <span>${dinero(d.total)}</span></h3>
+            ${filasDeGastos(d)}
+        </div>`).join('');
+}
+
+/**
+ * Cada semana con su total, partida en sus días.
+ *
+ * Los días salen como una fila corta —el día y cuánto— y no con todas
+ * las compras abiertas: un mes entero desplegado son ochenta renglones
+ * y la pregunta que se viene a hacer aquí es "¿qué semana se me fue la
+ * mano?", no "¿qué compré el martes?". Para eso está tocar el día.
+ */
+function pintarPorSemana(semanas) {
+    return semanas.map(s => `
+        <div class="gasto-semana">
+            <h3>${semanaEnLetras(s.semana)} <span>${dinero(s.total)}</span></h3>
+            ${s.dias.map(d => `
+                <div class="gasto-dia-fila ${gastoDiaAbierto === d.fecha ? 'on' : ''}"
+                     data-abrir="${d.fecha}">
+                    <span class="gasto-que">${diaEnLetras(d.fecha)}</span>
+                    <!-- "2 compras" y no un "2" suelto: pegado al monto,
+                         el número solo parecía parte de la plata. -->
+                    <span class="gasto-cuantos">${d.lista.length} ${d.lista.length === 1 ? 'compra' : 'compras'}</span>
+                    <span class="gasto-monto">${dinero(d.total)}</span>
+                    <!-- Que se vea que se toca. El paquete de iconos no
+                         trae chevron hacia abajo, así que se gira el de
+                         la derecha con CSS al abrirse. -->
+                    <i class="fas fa-chevron-right gasto-flecha"></i>
+                </div>
+                ${gastoDiaAbierto === d.fecha
+                    ? `<div class="gasto-abierto">${filasDeGastos(d)}</div>`
+                    : ''}`).join('')}
+        </div>`).join('');
+}
+
+/**
+ * Los nombres que ya usó, como botones.
+ *
+ * A la segunda compra en el mismo sitio anota sin teclear una letra:
+ * toca "Carnicería", pone el número y listo. Es la diferencia entre un
+ * módulo que se usa todos los días y uno que se usa una semana.
+ */
+function renderSugeridos() {
+    const caja = document.getElementById('gasto-sugeridos');
+    if (!caja || typeof Servicio === 'undefined') return;
+
+    const nombres = Servicio.nombresDeGastos(8);
+    caja.hidden = !nombres.length;
+    caja.innerHTML = nombres
+        .map(n => `<button class="gasto-sug" data-sug="${escapar(n)}">${escapar(n)}</button>`)
+        .join('');
+}
+
+/**
+ * El gerente escribe lo que quiera y eso termina dentro de un atributo
+ * y de la pantalla. Una comilla suelta rompería el HTML; algo peor
+ * sería peor. Se escapa antes de pintarlo.
+ */
+function escapar(txt) {
+    return String(txt == null ? '' : txt)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/** Como avisar(), pero en la pestaña de gastos: el otro cartel vive en Local. */
+function avisarGasto(texto, mal) {
+    const el = document.getElementById('aviso-gasto');
+    if (!el) return;
+    el.textContent = (mal ? '✕ ' : '✓ ') + texto;
+    el.classList.toggle('mal', !!mal);
+    clearTimeout(avisarGasto._t);
+    avisarGasto._t = setTimeout(() => el.textContent = '', 2600);
+}
+
+function anotarGastoDesdeElPanel() {
+    const campoQue   = document.getElementById('gasto-que');
+    const campoMonto = document.getElementById('gasto-monto');
+    if (!campoQue || !campoMonto) return;
+
+    const que   = campoQue.value.trim();
+    const monto = Number(campoMonto.value);
+
+    if (!que)         { avisarGasto('Falta en qué gastaste', true); campoQue.focus();   return; }
+    if (!(monto > 0)) { avisarGasto('Falta cuánto gastaste', true); campoMonto.focus(); return; }
+
+    /* El tope de la nube, dicho con palabras antes de intentarlo. Sin
+       esto, un cero de más se guardaba aquí, la nube lo rechazaba y el
+       gerente lo veía anotado en su pantalla y en ninguna otra. */
+    if (monto >= 10000) {
+        avisarGasto('Máximo 9999.99 por gasto. Anótalo en dos.', true);
+        campoMonto.focus();
+        return;
+    }
+
+    /* Cada gasto se firma con el correo de quien lo anota. Si la sesión
+       se quedó sin él, la nube lo va a rechazar: vale más decirlo aquí
+       que dejarlo anotado en esta pantalla y en ninguna otra. */
+    if (Nube.activo && !(Nube.correoSesion && Nube.correoSesion())) {
+        avisarGasto('Sal y vuelve a entrar: se perdió tu sesión', true);
+        return;
+    }
+
+    if (!Servicio.anotarGasto(que, monto)) {
+        avisarGasto('No se pudo anotar', true);
+        return;
+    }
+
+    campoQue.value = '';
+    campoMonto.value = '';
+
+    /* De vuelta al primer campo: el gerente que vuelve del mercado
+       tiene tres o cuatro seguidos, no uno. */
+    campoQue.focus();
+
+    renderGastos();
+    avisarGasto('Anotado');
+}
+
+function conectarGastos() {
+    const boton = document.getElementById('btn-anotar-gasto');
+    if (boton) boton.addEventListener('click', anotarGastoDesdeElPanel);
+
+    /* Enter en cualquiera de los dos campos anota. Con el teclado del
+       celular abierto, el botón queda tapado la mitad de las veces. */
+    ['gasto-que', 'gasto-monto'].forEach(id => {
+        const campo = document.getElementById(id);
+        if (campo) campo.addEventListener('keydown', e => {
+            if (e.key === 'Enter') anotarGastoDesdeElPanel();
+        });
+    });
+
+    const sug = document.getElementById('gasto-sugeridos');
+    if (sug) sug.addEventListener('click', e => {
+        const b = e.target.closest('[data-sug]');
+        if (!b) return;
+        document.getElementById('gasto-que').value = b.dataset.sug;
+        // Ya tiene el nombre: lo que le falta es el número
+        document.getElementById('gasto-monto').focus();
+    });
+
+    const dias = document.getElementById('gasto-dias');
+    if (dias) dias.addEventListener('click', e => {
+        const b = e.target.closest('[data-gdias]');
+        if (!b) return;
+        gastoDias = Number(b.dataset.gdias);
+        renderGastos();
+    });
+
+    const agrupa = document.getElementById('gasto-agrupa');
+    if (agrupa) agrupa.addEventListener('click', e => {
+        const b = e.target.closest('[data-gagrupa]');
+        if (!b) return;
+        gastoAgrupa = b.dataset.gagrupa;
+        /* Cambiar de vista suelta el día abierto: al volver a semanas,
+           tenerlo desplegado de antes es una sorpresa, no una ayuda. */
+        gastoDiaAbierto = null;
+        renderGastos();
+    });
+
+    const lista = document.getElementById('gasto-lista');
+    if (lista) lista.addEventListener('click', e => {
+
+        /* Tocar un día de la vista por semanas abre lo que se compró
+           ese día. Volver a tocarlo lo cierra: es el mismo dedo. */
+        const fila = e.target.closest('[data-abrir]');
+        if (fila) {
+            gastoDiaAbierto = (gastoDiaAbierto === fila.dataset.abrir)
+                ? null : fila.dataset.abrir;
+            renderGastos();
+            return;
+        }
+
+        const b = e.target.closest('[data-borrar]');
+        if (!b) return;
+
+        /* Se pregunta con el nombre y el monto dentro, no un "¿seguro?"
+           a secas: la fila de arriba y la de abajo pueden decir lo
+           mismo, y borrar el gasto equivocado no se deshace. */
+        const suya   = b.closest('.gasto-fila');
+        const que    = suya ? suya.querySelector('.gasto-que').textContent : 'este gasto';
+        const cuanto = suya ? suya.querySelector('.gasto-monto').textContent : '';
+
+        if (!confirm(`¿Borrar "${que}" de ${cuanto}?`)) return;
+
+        Servicio.borrarGasto(b.dataset.dia, b.dataset.borrar);
+        renderGastos();
+        avisarGasto('Borrado');
+    });
+}
+
+/* ============================================================
    EDITOR DEL MENÚ
    ============================================================ */
 
@@ -1429,6 +1773,7 @@ function renderTodo() {
     renderNumeros();
     renderContabilidad();
     renderFiados();
+    renderGastos();
     renderFormLocal();
 }
 
@@ -1442,6 +1787,7 @@ document.addEventListener('DOMContentLoaded', () => {
     conectarStock();
     conectarContabilidad();
     conectarFiados();
+    conectarGastos();
     conectarAnularPedidos();
 
     // Con nube se entra con correo y clave; sin nube, solo con la clave

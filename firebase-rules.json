@@ -27,6 +27,22 @@
       }
     },
 
+    "gastos": {
+      ".read":  "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
+      ".write": "auth != null && auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3'",
+      "$dia": {
+        ".validate": "$dia.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+        "$gasto": {
+          ".write": "auth != null && auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1' && (!data.exists() || data.child('quien').val() == auth.token.email)",
+          ".validate": "!newData.exists() || newData.hasChildren(['que', 'monto', 'cuando', 'quien'])",
+          "que":    { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 41" },
+          "monto":  { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000" },
+          "cuando": { ".validate": "newData.isNumber()" },
+          "quien":  { ".validate": "newData.isString() && newData.val().length < 90 && newData.val() == auth.token.email" }
+        }
+      }
+    },
+
     "servicio": {
       "comandas": {
         ".read": "auth != null",

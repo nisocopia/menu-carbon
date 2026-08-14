@@ -9,10 +9,10 @@
     <meta name="referrer" content="no-referrer">
     <title>Panel del Gerente</title>
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202608131105">
-    <link rel="stylesheet" href="css/iconos.css?v=202608131105">
-    <link rel="stylesheet" href="css/style.css?v=202608131105">
-    <link rel="stylesheet" href="css/panel.css?v=202608131105">
+    <link rel="stylesheet" href="css/fuentes.css?v=202608141617">
+    <link rel="stylesheet" href="css/iconos.css?v=202608141617">
+    <link rel="stylesheet" href="css/style.css?v=202608141617">
+    <link rel="stylesheet" href="css/panel.css?v=202608141617">
 </head>
 
 <body class="panel-body">
@@ -57,6 +57,7 @@
             <button class="tab" data-tab="menu"><i class="fas fa-pen-to-square"></i> Menú</button>
             <button class="tab" data-tab="numeros"><i class="fas fa-chart-simple"></i> Números</button>
             <button class="tab" data-tab="platos"><i class="fas fa-clipboard-list"></i> Contabilidad</button>
+            <button class="tab" data-tab="gastos"><i class="fas fa-bag-shopping"></i> Gastos</button>
             <button class="tab" data-tab="local"><i class="fas fa-store"></i> Local</button>
         </nav>
 
@@ -167,6 +168,53 @@
             </div>
         </section>
 
+        <!-- ===== GASTOS =====
+             La libreta del local, que escriben el gerente y el asador.
+             Se sale a comprar y se anota de pie, en la calle: qué se
+             compró y cuánto. Nada más — ni categorías, ni fecha que
+             elegir, ni forma de pago. Un módulo que pide cinco datos
+             por cada compra es un módulo que se abandona a la semana,
+             y una libreta abandonada no sirve de nada. -->
+        <section class="panel-vista" id="vista-gastos">
+
+            <!-- ANOTAR va arriba del todo: es a lo que se entra aquí.
+                 Mirar lo anotado es lo de después. -->
+            <div class="bloque">
+                <h2><i class="fas fa-pen"></i> Anotar un gasto</h2>
+
+                <div class="gasto-form">
+                    <input id="gasto-que" type="text" placeholder="¿En qué gastaste?"
+                           maxlength="40" autocomplete="off" spellcheck="false">
+                    <input id="gasto-monto" type="number" placeholder="0.00"
+                           inputmode="decimal" step="0.01" min="0" autocomplete="off">
+                </div>
+
+                <!-- Los nombres que ya usó. A la segunda compra en el
+                     mismo sitio anota sin teclear una letra. -->
+                <div class="gasto-sugeridos" id="gasto-sugeridos"></div>
+
+                <button class="btn-principal" id="btn-anotar-gasto">
+                    <i class="fas fa-plus"></i> Anotar
+                </button>
+                <p class="guardado" id="aviso-gasto"></p>
+            </div>
+
+            <!-- LO ANOTADO, por día -->
+            <div class="bloque">
+                <div class="bloque-head">
+                    <h2>Lo que llevas gastado</h2>
+                    <div class="cont-dias" id="gasto-dias"></div>
+                </div>
+                <!-- Cómo se parte lo de abajo: día por día o semana por
+                     semana. Es otra pregunta que hasta dónde mirar. -->
+                <div class="gasto-agrupa" id="gasto-agrupa"></div>
+
+                <div id="gasto-total"></div>
+                <div id="gasto-lista"></div>
+            </div>
+
+        </section>
+
         <!-- ===== LOCAL ===== -->
         <section class="panel-vista" id="vista-local">
             <div class="bloque">
@@ -179,12 +227,12 @@
 
     </div>
 
-    <script src="js/menu-data.js?v=202608131105"></script>
-    <script src="js/sync.js?v=202608131105"></script>
-    <script src="js/store.js?v=202608131105"></script>
-    <script src="js/servicio.js?v=202608131105"></script>
-    <script src="js/panel.js?v=202608131105"></script>
-    <script src="js/pwa.js?v=202608131105"></script>
+    <script src="js/menu-data.js?v=202608141617"></script>
+    <script src="js/sync.js?v=202608141617"></script>
+    <script src="js/store.js?v=202608141617"></script>
+    <script src="js/servicio.js?v=202608141617"></script>
+    <script src="js/panel.js?v=202608141617"></script>
+    <script src="js/pwa.js?v=202608141617"></script>
 
 </body>
 

@@ -159,8 +159,19 @@ const Sync = (() => {
         return !!sesion;
     }
 
+    /**
+     * El correo con el que se entró.
+     *
+     * Carga la sesión si todavía no está en memoria, igual que hace
+     * uidSesion(). Sin eso, quien preguntara antes de que algo llamara
+     * a haySesion() recibía null teniendo sesión abierta — y hay cosas
+     * que se FIRMAN con este correo (quién autorizó un fiado, quién
+     * anotó un gasto), así que un null aquí no es un hueco en la
+     * pantalla: es un dato que sale mal escrito y que la nube rechaza.
+     */
     function correoSesion() {
-        return sesion ? sesion.correo : null;
+        if (!sesion) cargarSesion();
+        return (sesion && sesion.correo) || null;
     }
 
     /**

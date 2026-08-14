@@ -903,6 +903,222 @@
     margin: 12px 0 0;
 }
 
+/* ---------- Gastos ----------
+
+   Se anota de pie, en la calle, con una mano. Todo lo que se toca aquí
+   es grande a propósito: el campo, el botón y la equis de borrar. */
+
+.gasto-form {
+    display: grid;
+    /* El nombre es largo y el número corto: 2 a 1. En un celular
+       angosto siguen cabiendo los dos en la misma línea, que es lo que
+       hace que anotar sea un gesto y no un formulario. */
+    grid-template-columns: 2fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.gasto-form input {
+    width: 100%;
+    background: #1f1f1f;
+    border: 1px solid #303030;
+    border-radius: 10px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 14px 12px;
+}
+
+.gasto-form input:focus { outline: none; border-color: #FFC107; }
+.gasto-form input::placeholder { color: #5e5e5e; }
+
+/* El monto: a la derecha y en grande, que es como se lee la plata */
+#gasto-monto { text-align: right; font-weight: 700; }
+
+/* Las flechitas de arriba y abajo del campo numérico no pintan nada
+   aquí y se comen el ancho del número. */
+#gasto-monto::-webkit-outer-spin-button,
+#gasto-monto::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+#gasto-monto { -moz-appearance: textfield; appearance: textfield; }
+
+.gasto-sugeridos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-bottom: 14px;
+}
+
+.gasto-sug {
+    background: #1f1f1f;
+    border: 1px solid #333;
+    border-radius: 999px;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 0.8rem;
+    padding: 8px 14px;
+    cursor: pointer;
+}
+.gasto-sug:active { background: #2a2413; border-color: #6b5a1f; color: #FFC107; }
+
+.aviso-gasto.mal, .guardado.mal { color: #ff8a80; }
+
+/* Lo gastado en el periodo. Un número solo, sin comparar con nada:
+   esta pantalla no saca cuentas de ganancia. */
+.gasto-suma {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    background: #1a1414;
+    border: 1px solid #3a2020;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+}
+.gasto-suma span   { color: #999; font-size: 0.8rem; }
+.gasto-suma strong { color: #ff8a80; font-size: 1.3rem; font-weight: 700; }
+
+/* Los dos botones de agrupación. Debajo del periodo, en su propia
+   fila: "el mes" dice cuánto abarca y "por semana" dice cómo se parte,
+   y encimarlos en la misma línea los hacía parecer lo mismo. */
+.gasto-agrupa {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.gasto-dia { margin-bottom: 18px; }
+
+.gasto-dia h3 {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #888;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #262626;
+    margin: 0 0 4px;
+}
+.gasto-dia h3 span { color: #ff8a80; font-weight: 700; font-size: 0.95rem; }
+
+.gasto-fila {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid #1e1e1e;
+}
+.gasto-dia .gasto-fila:last-child { border-bottom: none; }
+
+.gasto-que {
+    flex: 1;
+    color: #e8e8e8;
+    font-size: 0.92rem;
+    /* Un nombre largo empuja el monto fuera de la pantalla si no se
+       le pone freno. */
+    overflow-wrap: anywhere;
+}
+
+.gasto-monto { color: #ddd; font-weight: 600; white-space: nowrap; }
+
+/* Quién anotó el gasto, cuando no fue quien mira. Debajo del nombre y
+   en chico: acompaña, no compite. */
+.gasto-quien {
+    display: block;
+    color: #666;
+    font-size: 0.72rem;
+    font-style: normal;
+    margin-top: 3px;
+}
+
+.gasto-borrar {
+    background: none;
+    border: none;
+    color: #5e5e5e;
+    font-family: inherit;
+    font-size: 1.35rem;
+    line-height: 1;
+    /* Ancho de dedo. Una equis de diez píxeles al lado de un número no
+       se acierta yendo en el carro. */
+    padding: 6px 4px 6px 10px;
+    /* Fijo, para que el hueco del gasto ajeno mida lo mismo que el
+       botón del propio y los montos queden en la misma columna. */
+    min-width: 28px;
+    text-align: center;
+    cursor: pointer;
+}
+.gasto-borrar:active { color: #ff8a80; }
+
+/* El gasto que anotó el otro: se ve, no se borra. El hueco se queda
+   para que la columna de los montos no baile de fila en fila. */
+.gasto-borrar-no { display: inline-block; cursor: default; }
+
+/* ---------- Gastos, semana por semana ---------- */
+
+.gasto-semana { margin-bottom: 22px; }
+
+.gasto-semana h3 {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #888;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #262626;
+    margin: 0 0 4px;
+}
+.gasto-semana h3 span { color: #ff8a80; font-weight: 700; font-size: 0.95rem; }
+
+/* La fila de un día dentro de su semana. Se toca entera: apuntar con
+   el dedo a un texto de diez píxeles no es razonable. */
+.gasto-dia-fila {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 8px;
+    margin: 0 -8px;
+    border-bottom: 1px solid #1e1e1e;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.gasto-dia-fila:active { background: #1f1f1f; }
+.gasto-dia-fila.on { background: #2a2413; border-bottom-color: transparent; }
+.gasto-dia-fila.on .gasto-que { color: #FFC107; }
+
+.gasto-dia-fila .gasto-que { font-weight: 600; flex: 0 1 auto; }
+
+/* Cuántas compras hubo ese día. En chico y apagado: acompaña al
+   número de la plata, no compite con él. */
+.gasto-cuantos {
+    color: #666;
+    font-size: 0.74rem;
+    white-space: nowrap;
+    /* Empuja el monto a la derecha del todo, donde se lee la plata */
+    margin-left: auto;
+}
+
+.gasto-flecha {
+    color: #4a4a4a;
+    font-size: 0.7rem;
+    transition: transform 0.15s;
+}
+.gasto-dia-fila.on .gasto-flecha { transform: rotate(90deg); color: #FFC107; }
+
+/* Lo que se compró el día que se abrió */
+.gasto-abierto {
+    background: #141414;
+    border-radius: 0 0 10px 10px;
+    padding: 2px 12px 6px;
+    margin: 0 -8px 6px;
+}
+.gasto-abierto .gasto-fila { border-bottom-color: #202020; }
+.gasto-abierto .gasto-fila:last-child { border-bottom: none; }
+.gasto-abierto .gasto-que { color: #bbb; font-size: 0.88rem; }
+
 /* ---------- Pantallas grandes ---------- */
 
 @media (min-width: 720px) {
