@@ -234,6 +234,9 @@ const PRODUCTOS = {
    - estilo:    'tarjetas' (con foto) o 'lista' (compacto)
    - agotado:   true lo muestra tachado y no se puede pedir
    - destacado: true le pone el sello "El más pedido"
+   - masFotos:  otras fotos del mismo plato, además de `img`. Con alguna,
+                la tarjeta las pasa de lado (carrusel). `img` sigue siendo
+                la principal: la que sale primero y la que usan los juegos.
 
    PARA EL SISTEMA DE COMANDAS:
    - estacion:  'asador' | 'cocina' | 'barra'
@@ -307,7 +310,7 @@ const MENU = [
         platos: [
             { id: 'm1', nombre: 'Mixto 2 Carnes',           interno: 'Mixto 2 Proteínas',          precio: 6.00,  img: 'img/productos/Mixto2proteinas.webp', sigla: 'X2',  atajo: 'x2',  minutos: 15, descripcion: 'Pollo + Carne o Chuleta',
               elegir: { cuantas: 2, entre: ['p5', 'p1', 'p2'] } },
-            { id: 'm2', nombre: 'Mixto 2 Carnes Especial',  interno: 'Mixto 2 Proteínas Especial', precio: 7.00,  img: 'img/productos/MixtoEspecial2proteinas.webp', sigla: 'X2E', atajo: 'x2e', minutos: 20, descripcion: 'Costilla o Matambre + Pollo, Carne o Chuleta',
+            { id: 'm2', nombre: 'Mixto 2 Carnes Especial',  interno: 'Mixto 2 Proteínas Especial', precio: 7.00,  img: 'img/productos/MixtoEspecial2proteinas.webp', masFotos: ['img/productos/MixtoEspecial2proteinas2.webp'], sigla: 'X2E', atajo: 'x2e', minutos: 20, descripcion: 'Costilla o Matambre + Pollo, Carne o Chuleta',
               elegir: { cuantas: 2, entre: ['p3', 'p4', 'p5', 'p1', 'p2'] } },
             { id: 'm3', nombre: 'Mixto 3 Carnes',           interno: 'Mixto 3 Proteínas',          precio: 8.00,  img: '', sigla: 'X3',  atajo: 'x3',  minutos: 15, descripcion: 'Pollo + Carne + Chuleta',
               elegir: { cuantas: 3, entre: ['p5', 'p1', 'p2'] } },

@@ -83,10 +83,42 @@ function renderNav(menu) {
 const sinFoto = icono =>
     `<div class="image-placeholder"><i class="fas ${icono || 'fa-utensils'}"></i><span>Foto próximamente</span></div>`;
 
+const imgPlato = (src, alt, icono) =>
+    `<img src="${src}" alt="${alt}" loading="lazy" decoding="async" data-icono="${icono || ''}">`;
+
+/**
+ * Varias fotos del mismo plato, una al lado de otra. Se pasan con el
+ * dedo (el navegador hace el deslizamiento y el encaje) y, con ratón,
+ * con las flechas o los puntos. No cambian solas: la foto la elige
+ * quien está mirando.
+ */
+function carruselFotos(p, fotos, icono) {
+    const n = fotos.length;
+    return `
+        <div class="fotos-pista">${fotos.map((src, i) => imgPlato(src, `${p.nombre} — foto ${i + 1} de ${n}`, icono)).join('')}</div>
+        <button class="foto-flecha ant" data-foto="ant" aria-label="Foto anterior"><i class="fas fa-chevron-left"></i></button>
+        <button class="foto-flecha sig" data-foto="sig" aria-label="Foto siguiente"><i class="fas fa-chevron-right"></i></button>
+        <div class="fotos-puntos">${fotos.map((_, i) =>
+            `<button data-foto="${i}" class="${i ? '' : 'activa'}" aria-label="Ver foto ${i + 1} de ${n}"></button>`).join('')}</div>`;
+}
+
+/** Lleva el carrusel a la foto pedida: 'ant', 'sig' o su número. */
+function pasarFoto(boton) {
+    const pista = boton.closest('.product-image').querySelector('.fotos-pista');
+    const total = pista.children.length;
+    const actual = Math.round(pista.scrollLeft / pista.clientWidth);
+    const pedida = boton.dataset.foto;
+    const destino = pedida === 'sig' ? (actual + 1) % total
+                  : pedida === 'ant' ? (actual - 1 + total) % total
+                  : Number(pedida);
+    pista.scrollTo({ left: destino * pista.clientWidth, behavior: 'smooth' });
+}
+
 function tarjetaPlato(p, icono) {
-    const foto = p.img
-        ? `<img src="${p.img}" alt="${p.nombre}" loading="lazy" decoding="async" data-icono="${icono || ''}">`
-        : sinFoto(icono);
+    const fotos = [p.img, ...(p.masFotos || [])].filter(Boolean);
+    const foto = fotos.length > 1 ? carruselFotos(p, fotos, icono)
+               : fotos.length     ? imgPlato(fotos[0], p.nombre, icono)
+               : sinFoto(icono);
 
     const sello = p.destacado && sePuedePedir(p)
         ? `<span class="badge-destacado"><i class="fas fa-star"></i> El más pedido</span>` : '';
@@ -492,6 +524,9 @@ function conectarEventos() {
         const add = e.target.closest('[data-add]');
         if (add) { agregarPlato(add.dataset.add); return; }
 
+        const foto = e.target.closest('[data-foto]');
+        if (foto) { pasarFoto(foto); return; }
+
         const qty = e.target.closest('[data-qty]');
         if (qty) { cambiarCantidad(qty.dataset.qty, Number(qty.dataset.delta)); return; }
 
@@ -515,6 +550,16 @@ function conectarEventos() {
         if (img.tagName === 'IMG' && img.closest('.product-image'))
             img.outerHTML = sinFoto(img.dataset.icono);
     }, true);
+
+    // El punto encendido sigue a la foto que se ve, se llegue a ella con
+    // el dedo, con la flecha o con el punto. Tampoco burbujea el scroll.
+    document.addEventListener('scroll', e => {
+        const pista = e.target;
+        if (!pista.classList || !pista.classList.contains('fotos-pista')) return;
+        const actual = Math.round(pista.scrollLeft / pista.clientWidth);
+        pista.parentElement.querySelectorAll('.fotos-puntos button')
+            .forEach((b, i) => b.classList.toggle('activa', i === actual));
+    }, { capture: true, passive: true });
 
     document.getElementById('mesa-cancelar').addEventListener('click', cerrarMesaModal);
     document.getElementById('mesa-modal').addEventListener('click', e => {
