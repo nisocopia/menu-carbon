@@ -75,10 +75,18 @@ function renderNav(menu) {
         .join('');
 }
 
-function tarjetaPlato(p) {
+/**
+ * Lo que va en lugar de la foto cuando el plato no la tiene, o cuando
+ * la foto no llegó. Lleva el icono de su categoría: un recuadro vacío
+ * en medio de fotos de platos parece un menú roto.
+ */
+const sinFoto = icono =>
+    `<div class="image-placeholder"><i class="fas ${icono || 'fa-utensils'}"></i><span>Foto próximamente</span></div>`;
+
+function tarjetaPlato(p, icono) {
     const foto = p.img
-        ? `<img src="${p.img}" alt="${p.nombre}" loading="lazy">`
-        : `<div class="image-placeholder">📷 <span>Próximamente</span></div>`;
+        ? `<img src="${p.img}" alt="${p.nombre}" loading="lazy" decoding="async" data-icono="${icono || ''}">`
+        : sinFoto(icono);
 
     const sello = p.destacado && sePuedePedir(p)
         ? `<span class="badge-destacado"><i class="fas fa-star"></i> El más pedido</span>` : '';
@@ -137,7 +145,7 @@ function renderMenu(menu) {
             ${cat.descripcion ? `<p class="section-description">${cat.descripcion}</p>` : ''}
             ${cat.estilo === 'lista'
                 ? `<div class="portion-list">${cat.platos.map(filaLista).join('')}</div>`
-                : `<div class="products-grid">${cat.platos.map(tarjetaPlato).join('')}</div>`}
+                : `<div class="products-grid">${cat.platos.map(p => tarjetaPlato(p, cat.icono)).join('')}</div>`}
         </section>`).join('');
 }
 
@@ -498,6 +506,15 @@ function conectarEventos() {
         const mesa = e.target.closest('[data-mesa]');
         if (mesa) { enviarPedido(Number(mesa.dataset.mesa)); return; }
     });
+
+    // Una foto que no llega (mal escrita, borrada, sin señal) deja en su
+    // lugar el mismo recuadro de los platos sin foto, no un icono roto.
+    // 'error' no burbujea: por eso se escucha en la captura.
+    document.addEventListener('error', e => {
+        const img = e.target;
+        if (img.tagName === 'IMG' && img.closest('.product-image'))
+            img.outerHTML = sinFoto(img.dataset.icono);
+    }, true);
 
     document.getElementById('mesa-cancelar').addEventListener('click', cerrarMesaModal);
     document.getElementById('mesa-modal').addEventListener('click', e => {

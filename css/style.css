@@ -149,6 +149,12 @@ footer {
 
     transition: 0.3s;
     cursor: pointer;
+
+    /* En columna para que el botón quede siempre abajo: en una fila de
+       tarjetas, una descripción de dos renglones no lo desalinea de las
+       vecinas. */
+    display: flex;
+    flex-direction: column;
 }
 
 .product-card:hover {
@@ -184,6 +190,7 @@ footer {
     font-size: 14px;
 
     border-bottom: 1px solid #333;
+    flex-shrink: 0;
 }
 
 .product-image img {
@@ -195,6 +202,13 @@ footer {
 
 .product-content {
     padding: 14px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.product-content .btn-agregar {
+    margin-top: auto;
 }
 
 .product-title {
@@ -377,8 +391,14 @@ footer {
     font-size: 2rem;
 }
 
+.image-placeholder i {
+    color: rgba(255,193,7,0.35);
+}
+
 .image-placeholder span {
-    font-size: 0.9rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .back-to-top {

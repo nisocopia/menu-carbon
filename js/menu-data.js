@@ -289,7 +289,7 @@ const MENU = [
             { id: 'p1', usa: 'carne', nombre: 'Carne Asada',  precio: 3.50, img: 'img/productos/carneasada.webp',    destacado: true, sigla: 'CA', atajo: 'c',  minutos: 8,  termino: true, tarrina: true },
             { id: 'p2', usa: 'chuleta', nombre: 'Chuleta',      precio: 4.00, img: 'img/productos/chuletaas.webp',                      sigla: 'CH', atajo: 'ch', minutos: 10 },
             { id: 'p3', usa: 'costilla', nombre: 'Costilla',     precio: 5.50, img: 'img/productos/costillaasada.webp',                  sigla: 'CO', atajo: 'co', minutos: 20 },
-            { id: 'p4', usa: 'matambre', nombre: 'Matambre',     precio: 5.00, img: '',                                                  sigla: 'MA', atajo: 'ma', minutos: 15 },
+            { id: 'p4', usa: 'matambre', nombre: 'Matambre',     precio: 5.00, img: 'img/productos/matambre.webp',                       sigla: 'MA', atajo: 'ma', minutos: 15 },
             { id: 'p5', usa: 'pollo', nombre: 'Pollo Asado',  precio: 3.50, img: 'img/productos/polloasado.webp',    destacado: true, sigla: 'PO', atajo: 'p',  minutos: 15, tarrina: true }
         ]
     },
@@ -305,9 +305,9 @@ const MENU = [
         // El mixto llega entero al asador ("Mixto: pollo + carne"), no
         // desarmado en proteínas sueltas: sus dos carnes salen juntas.
         platos: [
-            { id: 'm1', nombre: 'Mixto 2 Carnes',           interno: 'Mixto 2 Proteínas',          precio: 6.00,  img: '', sigla: 'X2',  atajo: 'x2',  minutos: 15, descripcion: 'Pollo + Carne o Chuleta',
+            { id: 'm1', nombre: 'Mixto 2 Carnes',           interno: 'Mixto 2 Proteínas',          precio: 6.00,  img: 'img/productos/Mixto2proteinas.webp', sigla: 'X2',  atajo: 'x2',  minutos: 15, descripcion: 'Pollo + Carne o Chuleta',
               elegir: { cuantas: 2, entre: ['p5', 'p1', 'p2'] } },
-            { id: 'm2', nombre: 'Mixto 2 Carnes Especial',  interno: 'Mixto 2 Proteínas Especial', precio: 7.00,  img: '', sigla: 'X2E', atajo: 'x2e', minutos: 20, descripcion: 'Costilla o Matambre + Pollo, Carne o Chuleta',
+            { id: 'm2', nombre: 'Mixto 2 Carnes Especial',  interno: 'Mixto 2 Proteínas Especial', precio: 7.00,  img: 'img/productos/MixtoEspecial2proteinas.webp', sigla: 'X2E', atajo: 'x2e', minutos: 20, descripcion: 'Costilla o Matambre + Pollo, Carne o Chuleta',
               elegir: { cuantas: 2, entre: ['p3', 'p4', 'p5', 'p1', 'p2'] } },
             { id: 'm3', nombre: 'Mixto 3 Carnes',           interno: 'Mixto 3 Proteínas',          precio: 8.00,  img: '', sigla: 'X3',  atajo: 'x3',  minutos: 15, descripcion: 'Pollo + Carne + Chuleta',
               elegir: { cuantas: 3, entre: ['p5', 'p1', 'p2'] } },
