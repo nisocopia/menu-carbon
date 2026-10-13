@@ -32,10 +32,10 @@ los tres puntos → *Agregar a pantalla principal*.
 > Arriba a la derecha de cada pantalla hay un **punto verde**. Si sale
 > rojo, algo anda mal con la red y hay que resolverlo antes de seguir.
 
-> **La menestra.** Un pedido con platos de parrilla no sale sin decir de
-> qué es la menestra: el botón dice *Falta la menestra*. En los pasos que
-> no son de eso, toca **Frejol** en cada fila que lo pida y sigue. La
-> prueba de verdad está en el paso 20.
+> **La menestra.** Al tocar Enviar en un pedido con platos de parrilla sale
+> la pregunta *¿Alguna con menestra de lenteja?*. En los pasos que no son de
+> eso, toca **Enviar** otra vez (todas de frejol) y sigue. La prueba de
+> verdad está en el paso 20.
 
 ---
 
@@ -337,46 +337,53 @@ Espera un minuto largo y vuelve a esa mesa.
 
 ## 20. Cada plato con lo suyo, y su menestra
 
-**El caso de la casa, en su orden.** En el mesero, mesa 3:
+**El caso de la casa.** En el mesero, mesa 3, escribe `3c` → una fila de
+**3 Carne Asada**. No sale nada de menestra: eso se pregunta al final.
 
-1. Toca **Carne Asada** → debajo de la fila salen **Lenteja** y **Frejol**, en
-   naranja. Toca **Frejol**
-2. Toca **Carne Asada** otra vez → sale en **su propia fila**, sin menestra
-3. Toca esa carne → **Para llevar** → Listo. Toca **Lenteja** en su fila
-4. Toca **Carne Asada** otra vez → tócala → **Solo patacones y ensalada** → Listo
+1. Toca la fila → la hoja dice *Cambias solo este plato. Los otros 2 siguen como
+   estaban* → **Para llevar** → Listo
+2. Toca otra de las carnes → **Solo patacones y ensalada** → Listo
 
-- [ ] Quedan tres filas: frejol · para llevar con lenteja · patacones
-- [ ] La de patacones **no** tiene fichas de menestra
+- [ ] Quedan tres filas: una carne · una con patacones · una para llevar
 - [ ] Hay **una** tarrina, no dos
-- [ ] Enviar → **Cocina:** cada carne dice la suya (*menestra de frejol*,
-      *🥡 llevar · menestra de lenteja*, *SOLO PATACONES Y ENSALADA*) y arriba
-      **1 de lenteja · 1 de frejol**
+
+Toca **Enviar**:
+
+- [ ] **No sale nada todavía**: se abre *¿Alguna con menestra de lenteja?*
+- [ ] Salen **las dos** carnes que llevan menestra; la de patacones no
+- [ ] Toca **+** en la de **para llevar** → abajo dice **1 de lenteja · 1 de frejol**
+- [ ] Toca **Enviar** → **Cocina:** cada carne dice la suya (*menestra de
+      frejol*, *🥡 llevar · menestra de lenteja*, *SOLO PATACONES Y ENSALADA*) y
+      arriba **1 de lenteja · 1 de frejol**
 - [ ] **Asador:** no dice nada de menestra; sí ve cuál es para llevar
 - [ ] **Servir:** al tocar la mesa 3, cada plato dice su menestra
 
-**Al revés:** mesa 4, escribe `3c` → una fila de **3 Carne Asada**.
+**Todas de frejol:** mesa 4, escribe `2p`, Enviar y **Enviar** otra vez sin
+marcar nada.
 
-- [ ] Tocas la fila → la hoja dice *Cambias solo este plato. Los otros 2 siguen
-      como estaban* → Para llevar → Listo: queda **2** + **1 para llevar**
-- [ ] Abres la hoja y la cierras sin cambiar nada: el plato **vuelve con los suyos**
+- [ ] Los dos pollos salen **de frejol**
 
-**Sin decirla no sale:** mesa 10, escribe `2p` y toca Enviar.
+**Dos de cuatro:** mesa 5, escribe `4p`, Enviar, toca **+** dos veces.
 
-- [ ] **No sale nada**, la fila va en naranja y dice *Menestra de los 2*
-- [ ] Toca **Frejol** → valen para los dos y ya dice **Enviar**
+- [ ] Sale **2 de frejol** y **2 de lenteja**: la fila se partió en dos
+- [ ] En la pregunta, **Todas de lenteja** las marca todas de un toque
+
+**Cerrar la pregunta:** mesa 7, escribe `1co`, Enviar, toca + y cierra con la ✕.
+
+- [ ] No sale nada y vuelves al pedido; al tocar Enviar otra vez, pregunta desde cero
 
 **Los que no la llevan:** mesa 6, escribe `1ap 1pj` (pollo apanado y pescado
 al ajillo).
 
-- [ ] No pregunta nada: dice **Enviar** de una
+- [ ] Enviar los manda **de una**, sin pregunta
 
-**Un mixto:** mesa 8, escribe `1x3`, escoge las tres carnes.
+**Un mixto:** mesa 8, escribe `1x3`, escoge las tres carnes y Enviar.
 
-- [ ] Pide **una** menestra, no tres
+- [ ] La pregunta cuenta **un** plato, no tres
 
 **Corregir:** en la mesa 3, dentro del minuto, toca **Editar** y agrega `1c`.
 
-- [ ] La carne nueva pide la suya; las de antes siguen con la que tenían
+- [ ] Al guardar, la pregunta sale con lo de antes ya marcado
 - [ ] **Cocina:** la tarjeta se actualiza sola
 
 Pasado el minuto, en esa misma mesa toca **Agregar bebida o porción**:
@@ -385,9 +392,8 @@ Pasado el minuto, en esa misma mesa toca **Agregar bebida o porción**:
 
 **Desde el celular de un cliente:** pide **dos** pollos para la mesa 9.
 
-- [ ] En el mesero, al tocar **Confirmar y enviar** se abre una hoja con **un
-      renglón por pollo**; hasta elegir los dos, no deja confirmar
-- [ ] Elige uno de cada una → la cocina recibe un pollo con lenteja y otro con frejol
+- [ ] En el mesero, al tocar **Confirmar y enviar** sale la misma pregunta
+- [ ] Toca **+** una vez → la cocina recibe un pollo con lenteja y otro con frejol
 
 ---
 

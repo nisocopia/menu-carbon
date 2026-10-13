@@ -847,26 +847,13 @@
 .editando-aviso b { color: #fff; }
 
 /* ------------------------------------------------------------
-   DE QUÉ ES LA MENESTRA, EN CADA PLATO
+   DE QUÉ ES LA MENESTRA
 
-   Dos fichas en la fila del plato, en un renglón propio a lo ancho de
-   la fila: de un toque y sin abrir nada. Mientras falte, la fila va en
-   naranja como el mixto sin sus carnes. Las mismas fichas salen en la
-   hoja de un plato y en la de confirmar un pedido del comensal.
+   Se pregunta al final, en una hoja: cada fila de platos que la lleva,
+   con cuántos de ella son de lenteja; lo demás va de frejol. Las fichas
+   de abajo son las de la hoja de un plato, para cuando la dicen al
+   principio.
    ------------------------------------------------------------ */
-
-.bitem.con-men { flex-wrap: wrap; }
-
-.bitem-men {
-    flex-basis: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.bitem-men-tit { flex: none; font-size: 0.75rem; color: #9e9e9e; min-width: 64px; }
-.bitem-men.falta .bitem-men-tit { color: #ff9800; font-weight: 600; }
-.bitem-men .ficha-men { flex: 1; }
 
 .ficha-men {
     background: #1f1f1f;
@@ -883,20 +870,26 @@
 
 .ficha-men.on { background: #8d6e63; border-color: #bcaaa4; color: #fff; font-weight: 600; }
 
-/* Un plato del comensal por renglón: su nombre y sus dos fichas */
+/* Una fila de platos por renglón: qué son y cuántos de lenteja */
 .men-plato {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 8px 0;
+    padding: 10px 0;
     border-top: 1px solid #242424;
 }
 
 .men-plato:first-of-type { border-top: none; }
-.men-plato.falta .men-nom { color: #ff9800; }
-.men-nom em { font-style: normal; font-size: 0.75rem; color: #888; }
-.men-fichas { display: flex; gap: 6px; flex: none; }
+.men-nom { font-size: 0.95rem; }
+.men-nom .bitem-det { color: #FFC107; }
+.men-cuenta { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: none; }
+.men-cuantas { font-size: 0.68rem; color: #9e9e9e; }
+.men-cuenta .bitem-cant button:disabled { opacity: 0.3; cursor: default; }
+
+.men-resumen { font-size: 0.9rem; color: #bcaaa4; text-align: center; margin: 12px 0 8px; }
+.men-resumen b { color: #fff; font-size: 1.05rem; }
+.men-todas { display: block; width: 100%; margin-bottom: 4px; }
 
 /* ---------- El pie fijo ---------- */
 
@@ -975,11 +968,6 @@
     color: #888;
     cursor: default;
 }
-
-/* Falta decir de qué es la menestra. Sigue encendido —tocarlo lleva a
-   donde se elige—, pero ya no es el verde de "listo para salir". */
-.btn-enviar.falta { background: #ff9800; color: #111; }
-.btn-enviar.falta:active { background: #f57c00; }
 
 /* ============================================================
    HOJAS QUE SUBEN DESDE ABAJO
@@ -1107,9 +1095,6 @@
     margin-top: 8px;
     cursor: pointer;
 }
-
-/* Confirmar un pedido del comensal mientras falte decir la menestra */
-.btn-listo:disabled { background: #2a2a2a; color: #888; cursor: default; }
 
 /* ============================================================
    COBRAR

@@ -576,18 +576,22 @@ Se preguntaba en la mesa —*"¿lenteja o frejol?"*— y se escribía a mano: *"
 lenteja"*. Lo que no se escribía salía de frejol, así que un olvido no se notaba
 en ningún lado: salía frejol y nadie se enteraba de que nadie había preguntado.
 
-**Es de cada plato.** Cada fila que sale con menestra trae debajo dos fichas,
-**Lenteja** y **Frejol**, que valen para los platos de esa fila; para que uno sea
-distinto se abre ese plato —la hoja también las tiene— y se separa. Mientras a
-alguno le falte, la fila va en naranja y el botón no dice Enviar: dice **Falta la
-menestra (2)**, y tocarlo lleva hasta la fila.
+**Se pregunta al final**, que es como se pregunta en la mesa: con el pedido ya
+tomado, justo antes de enviar. Mientras se toma el pedido no se pregunta nada.
+Al tocar **Enviar**, si hay platos con menestra, sale una hoja: **¿Alguna con
+menestra de lenteja?**, con cada fila de platos que la llevan y un − y + de
+lenteja. **Lo que no se marca va de frejol**, que es la de la casa: si todas son
+de frejol, es Enviar y Enviar. Hay también **Todas de lenteja**, de un toque.
 
-La primera versión la guardaba por tanda —"3 de lenteja y 2 de frejol"— y eso no
-decía cuál: con una carne para la mesa y otra para llevar, la cocina no sabía en
-cuál poner la lenteja.
+**No se puede saltar.** Sin pasar por esa hoja el pedido no sale, y las de frejol
+quedan dichas por el mesero al confirmarla, no supuestas. Si la menestra la
+dicen al principio, se le pone al plato desde su hoja y la pregunta la trae
+marcada.
 
-**Ninguna clase viene puesta.** Lo que nadie preguntó no se sabe, y la pantalla
-no lo da por frejol.
+**Es de cada plato.** Si de cuatro pollos dos son de lenteja, la fila se parte en
+dos: la cocina sabe cuál es cuál, aunque uno sea para la mesa y otro para
+llevar. La primera versión la guardaba por tanda —"3 de lenteja y 2 de
+frejol"— y eso no decía cuál.
 
 **Cuántas hacen falta no se escribe: se cuenta**, con la misma regla que el
 arroz de la cocina — por la guarnición con la que el plato *sale*:
@@ -609,13 +613,15 @@ también la ve en cada plato, para llevarlo a quien es. La parrilla no: el asado
 saca la proteína igual. El mesero la ve en sus tandas enviadas y el gerente en
 la pestaña Pedidos.
 
-**Corregir.** En el minuto de gracia se cambia todo, la menestra también. Pasado
-el minuto, lo que ya está en marcha conserva la suya escrita y no se toca; lo
-que se agrega para cocinar sale como tanda nueva y pregunta la suya.
+**Corregir.** En el minuto de gracia se cambia todo, la menestra también —desde
+la hoja del plato—. Guardar una tanda que ya tiene su menestra no vuelve a
+preguntar; si se le suma un plato que la lleva, la pregunta sale con lo de antes
+ya marcado. Pasado el minuto, lo que ya está en marcha conserva la suya y no se
+toca; lo que se agrega para cocinar sale como tanda nueva y pregunta la suya.
 
 **El pedido del comensal** no la trae —en la carta no se pregunta—, así que al
-tocar *Confirmar y enviar* se abre una hoja que la pregunta plato por plato. El
-que no lleva menestra se sigue confirmando de un toque.
+tocar *Confirmar y enviar* sale la misma pregunta. El que no lleva menestra se
+sigue confirmando de un toque.
 
 **Las tandas de antes** no traen el dato y no se les inventa: se ven como
 siempre, y lo que ya venía en ellas no se vuelve a preguntar. Las de la primera

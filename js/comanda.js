@@ -32,9 +32,9 @@ let separado    = null;      // { de, uid } si la hoja separó un plato de su fi
 let editandoTanda = null;    // { id, modo } cuando se está corrigiendo una tanda ya enviada
 let seleccion   = new Map(); // lo que se va a cobrar
 
-/* Un pedido del comensal mientras se pregunta la menestra de cada plato:
-   { llave, items, platos: [{ linea, clase }] }, un plato por unidad. */
-let entranteMenestra = null;
+/* La pregunta del final, "¿alguna con menestra de lenteja?", mientras
+   está abierta: { para, lineas: [{ nombre, detalle, cantidad, lenteja }] }. */
+let pregunta = null;
 
 /** La referencia que entiende Servicio; null mientras el pedido no tenga nombre. */
 const ref = () => (refActual && !refActual.nuevoLlevar) ? refActual : null;
@@ -278,90 +278,41 @@ function confirmarEntrante(llave, platos, boton) {
     });
 }
 
-/* ---------- La menestra de un pedido del comensal ----------
-
-   El comensal pide desde su celular y ahí no se le pregunta de qué
+/* El comensal pide desde su celular y ahí no se le pregunta de qué
    quiere la menestra. Se pregunta al confirmarlo, que es cuando el
-   mesero se acerca a la mesa: sin esto, ese pedido sería el único que
-   llegaría a la cocina sin decirlo. El que no lleva menestra se sigue
-   confirmando de un toque.
-
-   Se pregunta PLATO POR PLATO: dos pollos son dos preguntas, porque
-   pueden ser uno de cada clase. */
-
+   mesero se acerca a la mesa, con la misma pregunta del final que un
+   pedido tomado a mano (ver preguntarMenestra). El que no lleva
+   menestra se sigue confirmando de un toque. */
 function pedirConfirmar(llave, boton) {
     const e = Servicio.getEntrantes().find(x => x.llave === llave);
-    if (e && Servicio.menestrasDe(e.items)) return abrirMenestraEntrante(e);
+    if (e && Servicio.menestrasDe(e.items)) {
+        return abrirPregunta({
+            para: 'entrante', llave, mesa: e.mesa, items: e.items,
+            lineas: e.items.map((it, i) => Servicio.pideMenestra(it)
+                ? { i, nombre: it.nombre, detalle: '', cantidad: it.cantidad, lenteja: 0 } : null)
+                .filter(Boolean)
+        });
+    }
     return confirmarEntrante(llave, undefined, boton);
 }
 
-function abrirMenestraEntrante(e) {
-    const platos = [];
-    e.items.forEach((it, linea) => {
-        if (!Servicio.pideMenestra(it)) return;
-        for (let n = 0; n < (it.cantidad || 0); n++) platos.push({ linea, clase: '' });
-    });
-    entranteMenestra = { llave: e.llave, items: e.items, platos };
-    $('menestra-titulo').textContent = e.mesa ? 'Mesa ' + e.mesa : 'Pedido sin mesa';
-    pintarMenestraEntrante();
-    $('hoja-menestra').classList.add('open');
-}
-
-function pintarMenestraEntrante() {
-    if (!entranteMenestra) return;
-    const { items, platos } = entranteMenestra;
-    const faltan = platos.filter(p => !p.clase).length;
-
-    $('menestra-cuerpo').innerHTML = `
-        <p class="hoja-nota">${items.map(i => `${i.cantidad} ${i.nombre}`).join(' · ')}</p>
-        <div class="mod-bloque">
-            <h3>Menestra de cada plato</h3>
-            ${platos.map((p, i) => {
-                const it = items[p.linea];
-                const n = platos.slice(0, i + 1).filter(q => q.linea === p.linea).length;
-                return `
-                <div class="men-plato ${p.clase ? '' : 'falta'}">
-                    <span class="men-nom">${it.nombre}${it.cantidad > 1 ? ` <em>${n} de ${it.cantidad}</em>` : ''}</span>
-                    <span class="men-fichas">${fichasMenestra(p.clase, 'entrante:' + i)}</span>
-                </div>`;
-            }).join('')}
-        </div>`;
-
-    const ok = $('menestra-ok');
-    ok.disabled = faltan > 0;
-    ok.innerHTML = !faltan ? '<i class="fas fa-check"></i> Confirmar y enviar'
-                 : `${faltan === 1 ? 'Falta 1' : `Faltan ${faltan}`} por decir`;
-}
-
-function cerrarMenestraEntrante() {
-    entranteMenestra = null;
-    $('hoja-menestra').classList.remove('open');
-}
-
-function confirmarConMenestra() {
-    if (!entranteMenestra) return;
-    const { llave, items, platos } = entranteMenestra;
-    if (platos.some(p => !p.clase)) return;
-    cerrarMenestraEntrante();
-
+/** Lo que se respondió de un pedido del comensal: cada línea, partida por clase. */
+function confirmarConMenestra(p) {
     // Mientras se preguntaba, otro celular pudo habérselo llevado
-    if (!Servicio.getEntrantes().some(x => x.llave === llave)) {
+    if (!Servicio.getEntrantes().some(x => x.llave === p.llave)) {
         toast('Ese pedido ya no está en la bandeja');
         return;
     }
 
-    /* Los platos de una misma línea se juntan por clase: dos pollos, uno
-       de cada una, salen como dos líneas de un pollo. */
-    const conMenestra = [];
-    items.forEach((it, linea) => {
-        const suyos = platos.filter(p => p.linea === linea);
-        if (!suyos.length) { conMenestra.push(it); return; }
-        Servicio.clasesMenestra().forEach(clase => {
-            const n = suyos.filter(p => p.clase === clase).length;
-            if (n) conMenestra.push({ ...it, cantidad: n, menestra: clase });
-        });
+    const platos = [];
+    p.items.forEach((it, i) => {
+        const l = p.lineas.find(x => x.i === i);
+        if (!l) { platos.push(it); return; }
+        const lenteja = Math.min(l.lenteja, it.cantidad);
+        if (it.cantidad > lenteja) platos.push({ ...it, cantidad: it.cantidad - lenteja, menestra: 'frejol' });
+        if (lenteja > 0)           platos.push({ ...it, cantidad: lenteja, menestra: 'lenteja' });
     });
-    confirmarEntrante(llave, conMenestra, null);
+    confirmarEntrante(p.llave, platos, null);
 }
 
 function pintarMesas() {
@@ -931,13 +882,9 @@ function bitemHtml(it) {
     // Lo que se le suma a una tanda ya cerrada y hay que cocinar: se
     // avisa aquí, antes de enviar, no después con un código raro.
     const aparte = vaAparte(it);
-    const falta = faltaMenestra(it);
-    const conMenestra = menestraEditable(it);
 
-    /* Las fichas de la menestra van en su propio renglón, a lo ancho de
-       la fila: metidas junto al nombre no cabían y la fila se triplicaba. */
     return `
-        <div class="bitem ${faltaElegir || falta ? 'incompleto' : ''} ${aparte ? 'aparte' : ''} ${conMenestra ? 'con-men' : ''}" data-uid="${it.uid}">
+        <div class="bitem ${faltaElegir ? 'incompleto' : ''} ${aparte ? 'aparte' : ''}" data-uid="${it.uid}">
             <div class="bitem-cant">
                 <button data-menos="${it.uid}" aria-label="Quitar uno">−</button>
                 <span>${it.cantidad}</span>
@@ -949,11 +896,6 @@ function bitemHtml(it) {
                 ${detalleItem(it, faltaElegir)}
             </div>
             <span class="bitem-pre">${money(it.precio * it.cantidad)}</span>
-            ${conMenestra ? `
-                <div class="bitem-men ${falta ? 'falta' : ''}">
-                    <span class="bitem-men-tit">Menestra${it.cantidad > 1 ? ` de los ${it.cantidad}` : ''}</span>
-                    ${fichasMenestra(it.menestra, 'fila:' + it.uid)}
-                </div>` : ''}
         </div>`;
 }
 
@@ -962,12 +904,20 @@ function bitemHtml(it) {
    Se preguntaba en la mesa y se escribía a mano, y lo que no se
    escribía salía de frejol: el olvido no se notaba en ningún lado.
 
-   Cada plato dice la suya. En cada fila que sale con menestra hay dos
-   fichas, Lenteja y Frejol, que valen para los platos de esa fila; para
-   que uno sea distinto se toca ese plato y se separa de los otros. La
-   fila sin decirla va en naranja, como el mixto sin sus carnes, y el
-   botón no dice Enviar mientras falte alguna. Ninguna viene puesta: lo
-   que nadie preguntó no se sabe.
+   SE PREGUNTA AL FINAL, que es como se pregunta en la mesa: con el
+   pedido ya tomado, justo antes de enviar, "¿alguna con menestra de
+   lenteja?". Lo que no se marca va de frejol, que es la de la casa.
+   Mientras se toma el pedido no se pregunta nada y las filas quedan
+   limpias; si el comensal la dice al principio, se le pone al plato
+   desde su hoja.
+
+   Pero no se puede saltar: si hay platos con menestra que todavía no
+   la tienen, Enviar abre la pregunta antes de mandar nada. Las de
+   frejol quedan dichas al responderla, no supuestas.
+
+   Cada plato guarda la suya. Si de cuatro pollos dos son de lenteja, la
+   fila se parte en dos: la cocina sabe cuál es cuál, aunque uno sea
+   para la mesa y otro para llevar.
 
    Lo que ya venía en una tanda que no guardaba la menestra de cada
    plato —las de antes, y las de la primera versión, que la guardaban
@@ -981,65 +931,136 @@ const exentoDeMenestra = it =>
 const menestraEditable = it =>
     !it.bloqueado && !it.automatico && Servicio.pideMenestra(it) && !exentoDeMenestra(it);
 
-/** ¿Le falta decirla? */
+/** ¿Todavía nadie dijo de qué es? */
 const faltaMenestra = it =>
     menestraEditable(it) && Servicio.clasesMenestra().indexOf(it.menestra) < 0;
-
-/** Cuántos platos faltan, y la primera fila, para llevar al mesero hasta ella. */
-function menestraPendiente() {
-    const filas = borrador.filter(faltaMenestra);
-    if (!filas.length) return null;
-    return { faltan: filas.reduce((n, it) => n + it.cantidad, 0), uid: filas[0].uid };
-}
-
-const textoMenestra = m =>
-    `<i class="fas fa-triangle-exclamation"></i> Falta la menestra (${m.faltan})`;
 
 /** "falta 1", "faltan 2": la frase sigue al número. */
 const cuantasFaltan = n => `${n === 1 ? 'falta' : 'faltan'} ${n}`;
 const cuantasSobran = n => `${n === 1 ? 'sobra' : 'sobran'} ${n}`;
 
-/**
- * Las dos fichas. `destino` dice de quién son: 'fila:<uid>' (los platos
- * de esa fila), 'hoja' (el plato abierto) o 'entrante:<n>' (un plato de
- * un pedido del comensal).
- */
-const fichasMenestra = (actual, destino) => Servicio.clasesMenestra().map(clase => `
-    <button class="ficha-men ${actual === clase ? 'on' : ''}" data-men="${destino}:${clase}">
+/** Las fichas de la hoja de un plato, para cuando la dicen al principio. */
+const fichasMenestra = actual => Servicio.clasesMenestra().map(clase => `
+    <button class="ficha-men ${actual === clase ? 'on' : ''}" data-men="${clase}">
         ${Servicio.nombreMenestra(clase)}</button>`).join('');
 
-/** Una ficha tocada. Tocar la que ya está la quita. */
-function tocarMenestra(dato) {
-    const partes = String(dato).split(':');
-    const clase = partes.pop();
-    const [donde, cual] = partes;
-    const alternar = actual => (actual === clase ? '' : clase);
-
-    if (donde === 'fila') {
-        const it = borrador.find(i => i.uid === cual);
-        if (!it || !menestraEditable(it)) return;
-        it.menestra = alternar(it.menestra);
-        pintarBorrador();
-    } else if (donde === 'hoja') {
-        const it = borrador.find(i => i.uid === editando);
-        if (!it) return;
-        it.menestra = alternar(it.menestra);
-        abrirMod(editando);
-    } else if (donde === 'entrante' && entranteMenestra) {
-        const p = entranteMenestra.platos[Number(cual)];
-        if (!p) return;
-        p.clase = alternar(p.clase);
-        pintarMenestraEntrante();
-    }
+/** Una ficha de la hoja del plato abierto. Tocar la que ya está la quita. */
+function tocarMenestra(clase) {
+    const it = borrador.find(i => i.uid === editando);
+    if (!it) return;
+    it.menestra = it.menestra === clase ? '' : clase;
+    abrirMod(editando);
 }
 
-/** Se dice qué falta y se lleva al mesero hasta la fila. */
-function avisarMenestra(m) {
-    toast(m.faltan === 1 ? 'Falta decir de qué es la menestra de 1 plato'
-                         : `Falta decir de qué es la menestra de ${m.faltan} platos`);
-    const fila = typeof document.querySelector === 'function'
-        ? document.querySelector(`.bitem[data-uid="${m.uid}"]`) : null;
-    if (fila && fila.scrollIntoView) fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+/* ---------- La pregunta del final ----------
+
+   "¿Alguna con menestra de lenteja?", con cada fila de platos que la
+   llevan y cuántos de ella son de lenteja. Lo demás, frejol. Es la
+   misma hoja para un pedido tomado a mano y para uno del comensal. */
+
+function abrirPregunta(p) {
+    pregunta = p;
+    pintarPregunta();
+    $('hoja-menestra').classList.add('open');
+}
+
+/** Antes de enviar: las filas con menestra, con la que ya tengan dicha. */
+function preguntarMenestra() {
+    abrirPregunta({
+        para: 'borrador',
+        lineas: borrador.filter(menestraEditable).map(it => ({
+            uid: it.uid,
+            nombre: Servicio.nombreDeItem(it),
+            detalle: detalleItem(it, false),
+            cantidad: it.cantidad,
+            lenteja: it.menestra === 'lenteja' ? it.cantidad : 0
+        }))
+    });
+}
+
+function pintarPregunta() {
+    if (!pregunta) return;
+    const total   = pregunta.lineas.reduce((n, l) => n + l.cantidad, 0);
+    const lenteja = pregunta.lineas.reduce((n, l) => n + l.lenteja, 0);
+    const todas   = lenteja === total;
+
+    $('menestra-titulo').textContent = '¿Alguna con menestra de lenteja?';
+    $('menestra-cuerpo').innerHTML = `
+        <p class="hoja-nota">${pregunta.para === 'entrante' && pregunta.mesa
+            ? `Pedido de la mesa ${pregunta.mesa}. ` : ''}Las que no marques van de frejol.</p>
+        ${pregunta.lineas.map((l, i) => `
+            <div class="men-plato">
+                <span class="men-nom">${l.cantidad} ${l.nombre}${l.detalle}</span>
+                <span class="men-cuenta">
+                    <span class="men-cuantas">de lenteja</span>
+                    <span class="bitem-cant">
+                        <button data-lenteja="${i}:-1" aria-label="Una menos de lenteja"
+                                ${l.lenteja > 0 ? '' : 'disabled'}>−</button>
+                        <span>${l.lenteja}</span>
+                        <button data-lenteja="${i}:1" aria-label="Una más de lenteja"
+                                ${l.lenteja < l.cantidad ? '' : 'disabled'}>+</button>
+                    </span>
+                </span>
+            </div>`).join('')}
+        <p class="men-resumen"><b>${lenteja}</b> de lenteja · <b>${total - lenteja}</b> de frejol</p>
+        <button class="chip men-todas" data-lenteja-todas="${todas ? 0 : 1}">
+            ${todas ? 'Ninguna de lenteja' : 'Todas de lenteja'}</button>`;
+
+    $('menestra-ok').innerHTML = pregunta.para === 'entrante' ? '<i class="fas fa-check"></i> Confirmar y enviar'
+                               : editandoTanda ? '<i class="fas fa-check"></i> Guardar cambios'
+                               : '<i class="fas fa-paper-plane"></i> Enviar';
+}
+
+function tocarLenteja(i, cuanto) {
+    const l = pregunta && pregunta.lineas[i];
+    if (!l) return;
+    l.lenteja = Math.max(0, Math.min(l.cantidad, l.lenteja + cuanto));
+    pintarPregunta();
+}
+
+function todasDeLenteja(si) {
+    if (!pregunta) return;
+    pregunta.lineas.forEach(l => { l.lenteja = si ? l.cantidad : 0; });
+    pintarPregunta();
+}
+
+/** Volver al pedido sin mandar nada. */
+function cerrarPregunta() {
+    pregunta = null;
+    $('hoja-menestra').classList.remove('open');
+}
+
+/** Lo respondido, y se manda como siempre. */
+function responderPregunta() {
+    if (!pregunta) return;
+    const p = pregunta;
+    cerrarPregunta();
+    if (p.para === 'entrante') return confirmarConMenestra(p);
+    aplicarMenestra(p);
+    return enviar();
+}
+
+/**
+ * Cada fila queda con la suya: si de cuatro pollos dos son de lenteja,
+ * se parte en dos filas, y lo que no se marcó queda de frejol.
+ */
+function aplicarMenestra(p) {
+    const quedan = [];
+    borrador.forEach(it => {
+        const l = p.lineas.find(x => x.uid === it.uid);
+        if (!l) { quedan.push(it); return; }
+        const lenteja = Math.min(l.lenteja, it.cantidad);
+        if (lenteja >= it.cantidad) { it.menestra = 'lenteja'; quedan.push(it); return; }
+        it.menestra = 'frejol';
+        quedan.push(it);
+        if (lenteja > 0) {
+            it.cantidad -= lenteja;
+            quedan.push({ ...it, uid: Servicio.nuevoId(), cantidad: lenteja, menestra: 'lenteja',
+                          de: it.de || it.uid, sin: [...it.sin], elegidas: [...it.elegidas] });
+        }
+    });
+    borrador = quedan;
+    pintarBorrador();
 }
 
 /* ---------- El pie: el nombre del pedido y el botón ----------
@@ -1057,17 +1078,10 @@ function pintarPie() {
     const pideNombre = refActual && refActual.nuevoLlevar;
     campo.hidden = !pideNombre;
 
-    /* La menestra se pide igual en la mesa que para llevar, y tampoco
-       dice Enviar hasta que esté. Pero el botón sigue encendido: el
-       bloque donde se elige puede haber quedado arriba, fuera de la
-       vista, y tocarlo lleva hasta allí. */
-    const falta = menestraPendiente();
-
     if (!pideNombre) {
         boton.disabled = false;
-        boton.classList.toggle('falta', !!falta);
-        boton.innerHTML = falta ? textoMenestra(falta)
-            : editandoTanda ? '<i class="fas fa-check"></i> Guardar cambios'
+        boton.innerHTML = editandoTanda
+            ? '<i class="fas fa-check"></i> Guardar cambios'
             : '<i class="fas fa-paper-plane"></i> Enviar';
         return;
     }
@@ -1078,10 +1092,8 @@ function pintarPie() {
     const hayPlatos = borrador.length > 0;
 
     boton.disabled = !(hayNombre && hayPlatos);
-    boton.classList.toggle('falta', hayNombre && hayPlatos && !!falta);
     boton.innerHTML = !hayNombre ? '<i class="fas fa-user-pen"></i> Escribe el nombre'
                     : !hayPlatos ? '<i class="fas fa-utensils"></i> Agrega los platos'
-                    : falta      ? textoMenestra(falta)
                     : '<i class="fas fa-paper-plane"></i> Enviar';
 }
 
@@ -1123,8 +1135,7 @@ function detalleItem(it, faltaElegir) {
     if (it.sin.length)      partes.push(it.sin.map(g => 'sin ' + (GUARNICIONES[g] || g)).join(' · '));
     if (it.termino)         partes.push(it.termino);
     if (it.llevar)          partes.push('🥡 para llevar');
-    // La que ya no se puede cambiar se lee; la que sí, se ve en sus fichas
-    if (it.menestra && !menestraEditable(it)) partes.push('menestra de ' + Servicio.nombreMenestra(it.menestra));
+    if (it.menestra)        partes.push('menestra de ' + Servicio.nombreMenestra(it.menestra));
     if (it.nota)            partes.push(it.nota);
 
     return partes.length ? `<span class="bitem-det">${partes.join(' · ')}</span>` : '';
@@ -1225,7 +1236,7 @@ function abrirMod(uid) {
         bloques.push(`
             <div class="mod-bloque">
                 <h3>Menestra</h3>
-                <div class="mod-chips">${fichasMenestra(it.menestra, 'hoja')}</div>
+                <div class="mod-chips">${fichasMenestra(it.menestra)}</div>
             </div>`);
     }
 
@@ -1490,11 +1501,11 @@ async function enviar() {
     });
     if (incompleto) { toast('Falta escoger las carnes del ' + incompleto.nombre); abrirMod(incompleto.uid); return; }
 
-    /* Ni una menestra sin decir de qué es. Si sale así, la cocina vuelve
-       a servirla de frejol por costumbre, que es justo el olvido que
-       esto viene a tapar. Vale igual al corregir una tanda. */
-    const falta = menestraPendiente();
-    if (falta) { avisarMenestra(falta); return; }
+    /* La menestra se pregunta aquí, al final, que es cuando se pregunta
+       en la mesa: si hay platos que la llevan y todavía no la tienen, no
+       sale nada sin pasar por "¿alguna con menestra de lenteja?". Vale
+       igual al corregir una tanda. */
+    if (borrador.some(faltaMenestra)) { preguntarMenestra(); return; }
 
     if (editandoTanda) { guardarEdicion(); return; }
 
@@ -1842,10 +1853,10 @@ function conectarEventos() {
     $('bebida-close').addEventListener('click', () => $('hoja-bebida').classList.remove('open'));
     $('bebida-add').addEventListener('click', agregarBebidaNueva);
     $('bebida-costo').addEventListener('input', calcularPrecioBebida);
-    $('menestra-cerrar').addEventListener('click', cerrarMenestraEntrante);
-    $('menestra-ok').addEventListener('click', confirmarConMenestra);
+    $('menestra-cerrar').addEventListener('click', cerrarPregunta);
+    $('menestra-ok').addEventListener('click', responderPregunta);
     $('hoja-menestra').addEventListener('click', e => {
-        if (e.target.id === 'hoja-menestra') cerrarMenestraEntrante();
+        if (e.target.id === 'hoja-menestra') cerrarPregunta();
     });
 
     // Tocar el aviso rojo dice por qué no está saliendo
@@ -1898,9 +1909,18 @@ function conectarEventos() {
         const menos = t.closest('[data-menos]');
         if (menos) { cambiarCantidad(menos.dataset.menos, -1); return; }
 
-        // De qué es la menestra: en una fila, en la hoja de un plato o en un pedido del comensal
+        // La menestra de un plato, desde su hoja, para cuando la dicen al principio
         const men = t.closest('[data-men]');
         if (men) return tocarMenestra(men.dataset.men);
+
+        // La pregunta del final: cuántos de cada fila son de lenteja
+        const lent = t.closest('[data-lenteja]');
+        if (lent) {
+            const [i, cuanto] = lent.dataset.lenteja.split(':');
+            return tocarLenteja(Number(i), Number(cuanto));
+        }
+        const todas = t.closest('[data-lenteja-todas]');
+        if (todas) return todasDeLenteja(todas.dataset.lentejaTodas === '1');
 
         const mod = t.closest('[data-mod]');
         if (mod) return abrirMod(mod.dataset.mod);
