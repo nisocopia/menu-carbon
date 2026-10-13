@@ -1132,6 +1132,35 @@ function pintarPie() {
                     : '<i class="fas fa-paper-plane"></i> Enviar';
 }
 
+/**
+ * El sitio que ocupa el pie.
+ *
+ * El pie es fijo y tapa lo que quede debajo de él. La página le guarda
+ * sitio abajo —el padding de .srv-body— y para el pie de una mesa
+ * alcanza. Pero el de un pedido para llevar lleva además el campo del
+ * nombre y casi dobla su alto: lo último de la página se quedaba debajo,
+ * y lo último de la página es "Todo el menú", que no se podía tocar. El
+ * de cobrar, con el botón de fiar debajo, le hacía lo mismo a
+ * "Seleccionar todo lo que falta" en cuanto la cuenta era larga.
+ *
+ * Se le guarda el sitio que de verdad ocupa, medido cada vez que cambia:
+ * al aparecer el nombre, al partirse un texto en dos renglones, al girar
+ * el celular, al pasar de una pantalla a otra. Solo cuando no alcanza lo
+ * de siempre; si no, ni se toca.
+ */
+function guardarSitioAlPie() {
+    const pies = [...document.querySelectorAll('.srv-pie')];
+    if (!pies.length || typeof ResizeObserver === 'undefined') return;   // sin esto, queda como estaba
+
+    const deSiempre = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
+    const mirar = new ResizeObserver(() => {
+        // Se ve uno a la vez: el de la pantalla escondida mide 0
+        const alto = Math.max(...pies.map(p => p.offsetHeight));
+        document.body.style.paddingBottom = alto > deSiempre ? alto + 'px' : '';
+    });
+    pies.forEach(p => mirar.observe(p));
+}
+
 /** La línea chica de abajo: lo que se le quitó, el término, si es para llevar. */
 function detalleItem(it, faltaElegir) {
     const partes = [];
@@ -2051,6 +2080,7 @@ function cambiarCantidad(uid, delta) {
 function iniciar() {
     CFG = Store.getConfig();
     conectarEventos();
+    guardarSitioAlPie();
     pintarRed();
     setInterval(pintarRed, 4000);
 
