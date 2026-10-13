@@ -3795,8 +3795,8 @@ function probarQueElCerrojoNoSeAtasca() {
 /* ============================================================
    EL ASADOR ENTRA AL PANEL, PERO NO A TODO
 
-   Ve el menu y la contabilidad. No ve los pedidos, ni los numeros, ni
-   los datos del local.
+   Ve el menu, la contabilidad y la libreta de gastos, que escribe con
+   el gerente. No ve los pedidos, ni los numeros, ni los datos del local.
 
    LO QUE ESTA PRUEBA VIGILA DE VERDAD no es que la pestania se
    esconda: esconder un boton no guarda nada, y quien sepa la direccion
@@ -3807,7 +3807,7 @@ function probarQueElCerrojoNoSeAtasca() {
    ============================================================ */
 
 function probarElPanelDelAsador() {
-    console.log('\n--- El asador entra al panel, pero solo a dos pestanias ---');
+    console.log('\n--- El asador entra al panel, pero solo a tres pestanias ---');
 
     const src = fuente('js/panel.js');
     const bloque = (src.match(/const PESTANAS = \{([\s\S]*?)\};/) || ['', ''])[1];
@@ -3819,10 +3819,10 @@ function probarElPanelDelAsador() {
     const delGerente = listaDe('gerente');
     const delAsador  = listaDe('parrilla');
 
-    comprobar('el gerente sigue viendo las cinco',
-        delGerente, ['hoy', 'menu', 'numeros', 'platos', 'local']);
-    comprobar('el asador ve el menu y la contabilidad',
-        delAsador, ['menu', 'platos']);
+    comprobar('el gerente ve las seis',
+        delGerente, ['hoy', 'menu', 'numeros', 'platos', 'gastos', 'local']);
+    comprobar('el asador ve el menu, la contabilidad y los gastos',
+        delAsador, ['menu', 'platos', 'gastos']);
     comprobar('y NO los pedidos, los numeros ni el local',
         ['hoy', 'numeros', 'local'].filter(t => delAsador.indexOf(t) >= 0), []);
 
@@ -3881,11 +3881,11 @@ function probarElPanelDelAsador() {
 
     const gerente = puerta({ uid: uidDe('gerente'), rol: 'gerente' });
     comprobar('el gerente entra', gerente.entra, true);
-    comprobar('y ve las cinco', gerente.pestanas.length, 5);
+    comprobar('y ve las seis', gerente.pestanas.length, 6);
 
     const asador = puerta({ uid: ASADOR, rol: 'parrilla' });
     comprobar('el asador entra', asador.entra, true);
-    comprobar('y ve solo dos', asador.pestanas, ['menu', 'platos']);
+    comprobar('y ve solo tres', asador.pestanas, ['menu', 'platos', 'gastos']);
 
     const cocina = puerta({ uid: COCINA, rol: 'cocina' });
     comprobar('la cocina NO entra', cocina.entra, false);
@@ -3906,7 +3906,7 @@ function probarElPanelDelAsador() {
        ajustarPestanasSegunRol() es quien decide lo que se ve. Mirar el
        texto del archivo no dice si esconde lo que tiene que esconder. */
     const reparte = quien => {
-        const TABS = ['hoy', 'menu', 'numeros', 'platos', 'local'];
+        const TABS = ['hoy', 'menu', 'numeros', 'platos', 'gastos', 'local'];
         const clase = () => ({ add() {}, remove() {}, contains: () => false });
         const tabs = TABS.map(t => ({ dataset: { tab: t }, hidden: false, classList: clase() }));
         const volver = { hidden: false };
@@ -3940,13 +3940,13 @@ function probarElPanelDelAsador() {
 
     const vistaGerente = reparte({ uid: uidDe('gerente'), rol: 'gerente' });
     comprobar('al gerente no se le esconde ninguna pestania',
-        vistaGerente.visibles, ['hoy', 'menu', 'numeros', 'platos', 'local']);
+        vistaGerente.visibles, ['hoy', 'menu', 'numeros', 'platos', 'gastos', 'local']);
     comprobar('y no necesita volver a ninguna parrilla',
         vistaGerente.volver.hidden, true);
 
     const vistaAsador = reparte({ uid: ASADOR, rol: 'parrilla' });
-    comprobar('al asador se le esconde todo menos dos',
-        vistaAsador.visibles, ['menu', 'platos']);
+    comprobar('al asador se le esconde todo menos tres',
+        vistaAsador.visibles, ['menu', 'platos', 'gastos']);
     comprobar('y se le enseña la vuelta a la parrilla',
         vistaAsador.volver.hidden, false);
 
