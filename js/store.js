@@ -218,11 +218,27 @@ const Store = (() => {
            —las reglas sin actualizar, por ejemplo— el número que acaba
            de escribir el gerente desaparece solo a los seis segundos, sin
            un solo mensaje. Eso es peor que no dejarlo escribir. */
+        /* SOLO ESE PRODUCTO, no la nevera entera.
+
+           Mandándola entera, poner el pollo y enseguida la carne salían
+           dos copias: la primera solo con el pollo. Su eco llegaba
+           cuando la carne ya estaba escrita, se tomaba por "esto es todo
+           lo que hay" y la carne desaparecía de la pantalla. Y si la
+           segunda no salía, se perdía también en la nube. Escribiendo
+           cada uno en su sitio, un número no puede pisar a otro. */
         const salio = (typeof Sync !== 'undefined' && Sync.activo && Sync.haySesion())
-            ? Sync.guardar('menu/stock', s)
+            ? Sync.guardar('menu/stock/' + producto, s[producto] || null)
             : Promise.resolve(false);
 
         return { valor: s[producto] || null, salio };
+    }
+
+    /** Quitar todos los números de una vez: una sola escritura, no una por producto. */
+    function quitarStock() {
+        write(K.stock, {});
+        return (typeof Sync !== 'undefined' && Sync.activo && Sync.haySesion())
+            ? Sync.guardar('menu/stock', null)
+            : Promise.resolve(false);
     }
 
     function aplicarStockRemoto(s, ruta, esRetoque) {
@@ -523,7 +539,7 @@ const Store = (() => {
         getMenu, getPlatos, findPlato,
         getMenuPublico, getPlatosPublicos,
         setOverride, resetOverrides, toggleAgotado, getOverrides,
-        getStock, setStock, getEspejo, publicarEspejo,
+        getStock, setStock, quitarStock, getEspejo, publicarEspejo,
         getCarrito, saveCarrito, limpiarCarrito,
         guardarPedido, getPedidos, getPedidoActivo, cerrarPedidoActivo,
         setEstadoPedido, borrarPedidos,

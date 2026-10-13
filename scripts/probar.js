@@ -208,7 +208,14 @@ function celular(rol) {
            otro puesto, y uno de mas de media hora ya no cuenta. Sin
            esto la prueba no probaria nada: escribiria siempre. */
         todoONada: async rutas => {
+            propio.golpes = (propio.golpes || 0) + 1;   // cuántas peticiones salieron
             if (nube.caida) return { ok: false, status: 0 };
+            /* Si las reglas rechazan UNA ruta, no entra NINGUNA. Es lo que
+               hace Firebase con una escritura de varias ramas, y es lo que
+               hace que vaciar no pueda quedarse a medias. */
+            if (nube.prohibido && Object.keys(rutas).some(r => nube.prohibido(r, rutas[r], 'PATCH'))) {
+                return { ok: false, status: 401 };
+            }
             const choca = Object.keys(rutas).some(r => {
                 if (String(r).indexOf('servicio/pidiendo/') !== 0) return false;
                 const puesto = sacarDeNube(r);
@@ -2855,23 +2862,38 @@ function probarCuantasConexiones() {
     const soloGerente = (pjs.match(/puedeVer\('numeros'\)\s*&&?\s*Nube\.escuchar/g) ||
                          pjs.match(/puedeVer\('numeros'\)\)?\s*Nube\.escuchar/g) || []).length;
 
-    comprobar('el panel abre 3 por su cuenta (menú, stock y vistas)', propias, 3);
+    /* El menú y el stock van por UNA: la rama 'menu' trae los dos
+       dentro. Con dos, el panel del gerente tenía cuatro abiertas toda la
+       noche y la ronda de las mesas pide tres más cada seis segundos: el
+       número del pollo o el vaciado se quedaban esperando turno. */
+    comprobar('el panel abre 2 por su cuenta (el menú entero y las vistas)', propias, 2);
     comprobar('pero las vistas solo con la pestaña Números', soloGerente, 1);
+    comprobar('el menú se escucha de un solo tirón',
+        /Nube\.escuchar\('menu',/.test(pjs), true);
+    comprobar('y ya no por ramas sueltas',
+        /Nube\.escuchar\('menu\//.test(pjs), false);
 
-    const delGerente = panel.length + propias;          // 1 + 3
+    const delGerente = panel.length + propias;          // 1 + 2
     const delAsador  = panel.length + propias - 1;      // sin las vistas
-    comprobar('total del panel del gerente', delGerente, 4);
-    comprobar('total del panel del asador', delAsador, 3);
+    comprobar('total del panel del gerente', delGerente, 3);
+    comprobar('total del panel del asador', delAsador, 2);
 
     /* LA CUENTA QUE IMPORTA: el asador abre el panel en el mismo teléfono
        donde tiene la parrilla. Antes eran 5 + 2 = 7 y el tope son 6: una
        se quedaba colgada, el navegador no dice cuál, y podía ser el
-       timbre. Ahora son 3 + 2 = 5, y queda una libre para ENVIAR — que
-       es la que nunca puede faltar. */
+       timbre. Ahora son 2 + 2 = 4, y quedan dos libres para ENVIAR — que
+       es lo que nunca puede faltar. */
     comprobar('parrilla + panel del asador caben en el tope de 6',
         estacion.length + delAsador <= 6, true);
-    comprobar('y sobra al menos una para enviar',
-        estacion.length + delAsador <= 5, true);
+    comprobar('y sobran dos para enviar',
+        estacion.length + delAsador <= 4, true);
+
+    /* Y el gerente que toma pedidos en la comanda y tiene el panel en el
+       mismo teléfono: 2 + 3 = 5. Antes eran 6 y no quedaba NINGUNA para
+       enviar — el vaciado y el stock solo salían cuando Android cerraba
+       la otra aplicación por su cuenta. */
+    comprobar('comanda + panel del gerente dejan una para enviar',
+        comanda.length + delGerente <= 5, true);
 
     comprobar('el panel no escucha el timbre, que no pinta',
         /escuchar\('servicio\/llamadas'/.test(pjs), false);
@@ -4332,6 +4354,181 @@ function probarQueSePuedeVaciarDeVerdad() {
 }
 
 /**
+ * "Escribo BORRAR y no borra; hay que darle varias veces."
+ *
+ * Salían siete borrados a la vez y el navegador solo deja unas seis
+ * conexiones con Firebase, varias ya ocupadas escuchando. Hacían cola,
+ * a los últimos se les acababa el plazo, y se borraba la mitad. Encima
+ * el panel se limpiaba a sí mismo ANTES de saber nada, decía "se vació
+ * aquí", y lo que quedaba en la nube volvía a los pocos segundos.
+ */
+async function probarQueVaciarNoSeQuedaAMedias() {
+    console.log('\n--- Vaciar el servicio: todo de un golpe, o nada ---');
+    nubeLimpia();
+    const { corre, propio } = celular('gerente');
+
+    corre(`Servicio.enviarComanda({ mesa: 2, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1 }] })`);
+    await respirar();
+    comprobar('la comanda está en la nube',
+        Object.keys(sacarDeNube('servicio/comandas') || {}).length, 1);
+
+    // La nube no deja borrar UNA de las siete ramas
+    nube.prohibido = rama => rama === 'servicio/llamadas';
+    comprobar('si una rama no se deja, vaciar dice que no', await corre(`Servicio.vaciarTodo()`), false);
+    comprobar('y en la nube no se borró ninguna',
+        Object.keys(sacarDeNube('servicio/comandas') || {}).length, 1);
+    comprobar('ni aquí: el panel no enseña un vacío que no existe',
+        corre(`Object.keys(Servicio.getComandas()).length`), 1);
+
+    nube.prohibido = null;
+    propio.golpes = 0;
+    const antes = propio.enviado.length;
+    comprobar('al reintentar se vacía', await corre(`Servicio.vaciarTodo()`), true);
+    comprobar('en UNA sola petición, no siete', propio.golpes, 1);
+    comprobar('sin borrados sueltos por detrás',
+        propio.enviado.slice(antes).filter(e => e.metodo === 'PUT' && e.valor === null).length, 0);
+    comprobar('la nube quedó sin comandas', sacarDeNube('servicio/comandas'), null);
+    comprobar('y sin mesas', sacarDeNube('servicio/sesiones'), null);
+    comprobar('y el panel también', corre(`Object.keys(Servicio.getComandas()).length`), 0);
+}
+
+/**
+ * "Pongo el stock y no se guarda."
+ *
+ * Se mandaba la nevera entera con cada número. Poner el pollo y después
+ * la carne eran dos copias, la primera solo con el pollo; su eco llegaba
+ * cuando la carne ya estaba escrita y se la llevaba.
+ */
+async function probarQueUnNumeroNoPisaAOtro() {
+    console.log('\n--- "Lo que hay hoy": un número no pisa a otro ---');
+    nubeLimpia();
+    const { corre, propio } = celular('gerente');
+
+    await corre(`Store.setStock('pollo', 12).salio`);
+    await corre(`Store.setStock('carne', 8).salio`);
+
+    comprobar('cada número se escribe en su sitio',
+        propio.enviado.filter(e => /^menu\/stock/.test(e.rama)).map(e => e.rama),
+        ['menu/stock/pollo', 'menu/stock/carne']);
+    comprobar('y en la nube están los dos',
+        Object.keys(sacarDeNube('menu/stock') || {}).sort(), ['carne', 'pollo']);
+
+    // El eco del pollo llega cuando la carne ya está escrita
+    corre(`Store.aplicarStockRemoto(${JSON.stringify(sacarDeNube('menu/stock/pollo'))}, '/pollo', false)`);
+    comprobar('el eco del pollo no se lleva la carne',
+        [corre(`Servicio.quedanDe('pollo')`), corre(`Servicio.quedanDe('carne')`)], [12, 8]);
+
+    // Quitar uno no toca al otro, ni en la nube
+    await corre(`Store.setStock('pollo', null).salio`);
+    comprobar('quitar el pollo deja la carne en la nube',
+        Object.keys(sacarDeNube('menu/stock') || {}), ['carne']);
+
+    // Y quitar todos es UNA escritura, no una por producto
+    await corre(`Store.setStock('costilla', 4).salio`);
+    const antes = propio.enviado.length;
+    await corre(`Store.quitarStock()`);
+    comprobar('quitar todos es una sola escritura',
+        propio.enviado.slice(antes).map(e => [e.rama, e.valor]), [['menu/stock', null]]);
+    comprobar('y la nube se queda sin números', sacarDeNube('menu/stock'), null);
+    comprobar('aquí también', corre(`Object.keys(Store.getStock()).length`), 0);
+}
+
+/**
+ * El panel no le rehace la caja a quien está escribiendo.
+ *
+ * Cada eco de la nube volvía a dibujar "Lo que hay hoy" entera. Si en
+ * ese momento alguien tenía el teclado puesto en la carne, perdía lo
+ * tecleado y el teclado se cerraba: "no se guarda", y era que nunca
+ * llegó a escribirse.
+ */
+async function probarQueSePuedeEscribirEnElPanel() {
+    console.log('\n--- El panel no borra el número que se está escribiendo ---');
+    nubeLimpia();
+    const { corre, ctx } = celular('gerente');
+
+    const nuevaCaja = () => {
+        const caja = {
+            innerHTML: '', dataset: {}, oyentes: {},
+            contains: el => !!el && el.dentro === caja,
+            addEventListener(tipo, f) { caja.oyentes[tipo] = f; },
+            querySelector: () => null, prepend() {}
+        };
+        return caja;
+    };
+    const caja = nuevaCaja();
+    const editor = nuevaCaja();
+
+    ctx.document = {
+        activeElement: null,
+        addEventListener: () => {},
+        getElementById: id => (id === 'stock-hoy' ? caja : id === 'editor-menu' ? editor : null),
+        querySelector: () => null, querySelectorAll: () => []
+    };
+    ctx.sessionStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+    vm.runInContext(fuente('js/panel.js'), ctx);
+    corre(`conectarStock(); conectarEditor()`);
+
+    corre(`Store.setStock('pollo', 12); renderStock(); renderEditorMenu()`);
+    comprobar('la caja se pinta con el pollo', /value="12"\s+data-stock="pollo"/.test(caja.innerHTML), true);
+
+    // Alguien tiene el teclado puesto en la carne...
+    ctx.document.activeElement = { tagName: 'INPUT', dentro: caja };
+    const antes = caja.innerHTML;
+
+    // ...y justo llega de la nube otro número
+    corre(`aplicarMenuRemoto({ hay: 5, puesto: Date.now() }, '/stock/costilla', false);
+           renderStock(); renderEditorMenu()`);
+    comprobar('la caja NO se rehace mientras escribe', caja.innerHTML === antes, true);
+    comprobar('se queda apuntada para después', caja.dataset.porPintar, '1');
+    comprobar('pero el dato sí llegó', corre(`Servicio.quedanDe('costilla')`), 5);
+
+    // Pasa de la carne a la chuleta: el foco sigue dentro
+    caja.oyentes.focusout();
+    await respirar();
+    comprobar('pasar de un número a otro no la rehace', caja.innerHTML === antes, true);
+
+    // Suelta la caja
+    ctx.document.activeElement = null;
+    caja.oyentes.focusout();
+    await respirar();
+    comprobar('al soltar se pinta con lo nuevo', /value="5"\s+data-stock="costilla"/.test(caja.innerHTML), true);
+    comprobar('y el pollo sigue', /value="12"\s+data-stock="pollo"/.test(caja.innerHTML), true);
+    comprobar('y ya no queda nada pendiente', caja.dataset.porPintar, undefined);
+
+    // Lo mismo con un precio a medio escribir en el editor del menú
+    ctx.document.activeElement = { tagName: 'INPUT', dentro: editor };
+    const precio = editor.innerHTML;
+    corre(`aplicarMenuRemoto({ agotado: true }, '/overrides/p1', false); renderEditorMenu()`);
+    comprobar('un precio a medio escribir tampoco se pierde', editor.innerHTML === precio, true);
+    ctx.document.activeElement = null;
+    editor.oyentes.focusout();
+    await respirar();
+    comprobar('y al soltar, el agotado aparece', editor.innerHTML !== precio, true);
+
+    /* EL REPARTO DE LA RAMA 'menu'. Ahora llega todo por una conexión y
+       cada aviso tiene que caer en su sitio, como cuando eran dos. */
+    corre(`aplicarMenuRemoto({ overrides: { p3: { agotado: true } },
+                               stock: { pollo: { hay: 2, puesto: Date.now() } } }, '/', false)`);
+    comprobar('el menú entero reemplaza los dos',
+        [corre(`Object.keys(Store.getOverrides())`), corre(`Object.keys(Store.getStock())`)],
+        [['p3'], ['pollo']]);
+
+    corre(`aplicarMenuRemoto({ carne: { hay: 4, puesto: Date.now() }, pollo: null }, '/stock', true)`);
+    comprobar('un retoque cambia solo lo que trae',
+        corre(`Object.keys(Store.getStock()).sort()`), ['carne']);
+
+    corre(`aplicarMenuRemoto({ precio: 9 }, '/overrides/p1', false)`);
+    comprobar('un agotado no toca el stock', corre(`Object.keys(Store.getStock())`), ['carne']);
+    comprobar('ni a los otros platos', corre(`Object.keys(Store.getOverrides()).sort()`), ['p1', 'p3']);
+
+    corre(`aplicarMenuRemoto(null, '/stock', false)`);
+    comprobar('quitar todos los números llega bien',
+        corre(`Object.keys(Store.getStock()).length`), 0);
+    comprobar('y los agotados se quedan', corre(`Object.keys(Store.getOverrides()).sort()`), ['p1', 'p3']);
+}
+
+/**
  * Vivo NO quiere decir sin contar.
  *
  * La regla de la contabilidad —una comanda esta VIVA o esta CONTADA,
@@ -5303,6 +5500,9 @@ async function main() {
     await probarFiadoSobreviveAlVaciado();
     probarEcoDeLaNevera();
     probarQueSePuedeVaciarDeVerdad();
+    await probarQueVaciarNoSeQuedaAMedias();
+    await probarQueUnNumeroNoPisaAOtro();
+    await probarQueSePuedeEscribirEnElPanel();
     probarLaFranjaDePedir();
     await probarUnPedidoPorMesa();
     probarQueNoSePierdeElCarrito();

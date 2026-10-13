@@ -366,26 +366,53 @@ function escucharNube() {
     }, true);
 
     /* Si otro dispositivo del local cambia el menú, este panel se entera.
-
-       LA RUTA HAY QUE PASARLA. Firebase avisa del hijo que cambió, no de
-       la rama entera, y tomar un hijo por la rama entera borra todo lo
-       demás. Store.aplicarAviso sabe distinguirlos. */
-    Nube.escuchar('menu/overrides', (datos, ruta, esRetoque) => {
-        Store.aplicarOverridesRemotos(datos, ruta, esRetoque);
-        renderEditorMenu();
-    });
-
-    /* Lo que hay hoy también viaja: si el gerente lo pone desde el
+       Y lo que hay hoy también viaja: si el gerente lo pone desde el
        celular, el panel de la caja se entera sin recargar.
 
-       Aquí es donde más se notaba: el gerente escribía "quedan 3 pollos",
-       la nube le devolvía el eco de ESE hijo, y como se guardaba como si
-       fuera la nevera entera, los números desaparecían todos de golpe y
-       la pantalla decía "sin límite". */
-    Nube.escuchar('menu/stock', (datos, ruta, esRetoque) => {
-        Store.aplicarStockRemoto(datos, ruta, esRetoque);
+       LAS DOS POR UNA SOLA CONEXIÓN. La rama 'menu' trae dentro los
+       agotados y el stock, igual que la lee la comanda. Eran dos
+       conexiones abiertas toda la noche, y con el tope de seis del
+       navegador eso dejaba sin hueco a lo que hay que ENVIAR: el número
+       del pollo o el vaciado del servicio esperaban turno hasta que se
+       les acababa el plazo, y había que escribirlo dos o tres veces. */
+    Nube.escuchar('menu', (datos, ruta, esRetoque) => {
+        aplicarMenuRemoto(datos, ruta, esRetoque);
         renderStock();
         renderEditorMenu();
+    });
+}
+
+/**
+ * Reparte lo que avisa la rama 'menu' entre los agotados y el stock.
+ *
+ * LA RUTA HAY QUE PASARLA. Firebase avisa del hijo que cambió, no de la
+ * rama entera, y tomar un hijo por la rama entera borra todo lo demás.
+ * Aquí era donde más se notaba: el gerente escribía "quedan 3 pollos",
+ * la nube le devolvía el eco de ESE hijo, y como se guardaba como si
+ * fuera la nevera entera, los números desaparecían todos de golpe.
+ *
+ *   ruta "/"               todo el menú: { overrides, stock }
+ *   ruta "/stock/pollo"    solo el pollo
+ *   retoque en "/stock"    varios campos sueltos de esa rama
+ *
+ * Un retoque es lo mismo que varios avisos completos, uno por campo, y
+ * así se trata: cada campo con su ruta entera.
+ */
+function aplicarMenuRemoto(datos, ruta, esRetoque) {
+    const base = String(ruta || '/').split('/').filter(Boolean);
+    const avisos = esRetoque
+        ? Object.keys(datos || {}).map(k => [base.concat(k.split('/').filter(Boolean)), datos[k]])
+        : [[base, datos]];
+
+    avisos.forEach(([partes, dato]) => {
+        if (!partes.length) {
+            Store.aplicarOverridesRemotos(dato && dato.overrides, '/', false);
+            Store.aplicarStockRemoto(dato && dato.stock, '/', false);
+            return;
+        }
+        const resto = '/' + partes.slice(1).join('/');
+        if (partes[0] === 'overrides') Store.aplicarOverridesRemotos(dato, resto, false);
+        if (partes[0] === 'stock')     Store.aplicarStockRemoto(dato, resto, false);
     });
 }
 
@@ -1428,9 +1455,37 @@ function platosDelProducto(producto) {
         .map(p => p.nombre);
 }
 
+/**
+ * ¿Hay alguien escribiendo dentro de esta caja?
+ *
+ * Rehacer una caja entera mientras tiene el teclado puesto le borra a
+ * quien escribe lo que lleva tecleado y le cierra el teclado. En "Lo que
+ * hay hoy" pasaba en cada número: se ponía el pollo, se pasaba a la
+ * carne, y el eco del pollo llegaba de la nube y rehacía la caja con la
+ * carne a medio escribir. La carne "no se guardaba", y no se guardaba
+ * porque nunca llegó a escribirse.
+ */
+function escribiendoEn(caja) {
+    const foco = document.activeElement;
+    return !!(caja && foco && foco.tagName === 'INPUT' && caja.contains(foco));
+}
+
+/** Lo que no se pintó por estar escribiendo, se pinta al soltar la caja. */
+function pintarAlSoltar(caja, pintar) {
+    if (!caja) return;
+    caja.addEventListener('focusout', () => {
+        /* Después del cambio de foco y no durante: si el dedo pasó del
+           pollo a la carne, el foco sigue dentro y hay que esperar. */
+        setTimeout(() => { if (caja.dataset.porPintar) pintar(); }, 0);
+    });
+}
+
 function renderStock() {
     const caja = document.getElementById('stock-hoy');
     if (!caja) return;
+
+    if (escribiendoEn(caja)) { caja.dataset.porPintar = '1'; return; }
+    delete caja.dataset.porPintar;
 
     const guardado = Store.getStock();
     const productos = typeof PRODUCTOS !== 'undefined' ? PRODUCTOS : {};
@@ -1515,14 +1570,17 @@ function conectarStock() {
         if (Nube.activo && !(await r.salio)) avisarStockNoSalio();
     });
 
-    caja.addEventListener('click', e => {
+    caja.addEventListener('click', async e => {
         if (!e.target.closest('#btn-borrar-stock')) return;
         if (!confirm('¿Quitar todos los números? Todo vuelve a venderse sin límite.')) return;
-        Object.keys(Store.getStock()).forEach(k => Store.setStock(k, null));
+        const salio = Store.quitarStock();
         publicarStockDelPanel();
         renderStock();
         renderEditorMenu();
+        if (Nube.activo && !(await salio)) avisarStockNoSalio();
     });
+
+    pintarAlSoltar(caja, renderStock);
 }
 
 /** El número que ve la carta del comensal, que no puede restar sola. */
@@ -1542,13 +1600,21 @@ function avisarStockNoSalio() {
     const caja = document.getElementById('stock-hoy');
     if (!caja || caja.querySelector('.stock-alarma')) return;
 
+    /* El motivo de verdad, no uno supuesto. Antes decía siempre "las
+       reglas", y casi nunca eran las reglas: era la red o una conexión
+       que no llegó a tiempo. Mandar a alguien a tocar Firebase por un
+       wifi flojo es peor que no decirle nada. */
+    const motivo = (Nube.fallo && Nube.fallo()) || '';
+    const permiso = /Permiso denegado/.test(motivo);
+
     const aviso = document.createElement('div');
     aviso.className = 'stock-alarma';
     aviso.innerHTML = `
         <strong><i class="fas fa-triangle-exclamation"></i> El número no se guardó en la nube</strong>
-        <span>Se va a borrar solo en unos segundos. Suele ser que las reglas de
-              Firebase están sin actualizar: copia <code>firebase-rules.json</code>
-              y pégalo en Firebase → Realtime Database → Reglas.</span>`;
+        <span>${escapar(motivo || 'La nube no respondió.')}
+              ${permiso
+                ? 'Copia <code>firebase-rules.json</code> y pégalo en Firebase → Realtime Database → Reglas.'
+                : 'Los celulares del salón no lo ven todavía: vuelve a escribirlo.'}</span>`;
     caja.prepend(aviso);
 }
 
@@ -1571,9 +1637,17 @@ function pistaDeStock(p) {
 }
 
 function renderEditorMenu() {
+    const cont = document.getElementById('editor-menu');
+    if (!cont) return;
+
+    /* Lo mismo que "Lo que hay hoy": cada número de stock rehace también
+       esta lista, y un precio a medio escribir se perdía con él. */
+    if (escribiendoEn(cont)) { cont.dataset.porPintar = '1'; return; }
+    delete cont.dataset.porPintar;
+
     const menu = Store.getMenu();
 
-    document.getElementById('editor-menu').innerHTML = menu.map(cat => `
+    cont.innerHTML = menu.map(cat => `
         <div class="bloque">
             <h2><i class="fas ${cat.icono}"></i> ${cat.nombre}</h2>
             ${cat.platos.map(p => `
@@ -1634,6 +1708,8 @@ function conectarEditor() {
         }
         avisar('Cambio guardado');
     });
+
+    pintarAlSoltar(cont, renderEditorMenu);
 }
 
 function exportarArchivo() {
@@ -1840,9 +1916,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if ((prompt(aviso) || '').trim().toUpperCase() !== 'BORRAR') return;
 
+            /* Tarda unos segundos: primero se apunta la noche y después se
+               borra. Sin decir nada, la pantalla parecía no haber hecho
+               caso y se volvía a tocar el botón encima. */
+            const boton = document.getElementById('btn-limpiar-pedidos');
+            boton.disabled = true;
+            boton.textContent = 'Vaciando…';
+
             Servicio.vaciarTodo().then(ok => {
                 renderTodo();
-                avisar(ok ? 'Servicio vaciado' : 'Se vació aquí, pero la nube no respondió');
+                if (ok) { avisar('Servicio vaciado'); return; }
+
+                /* Si no salió, NO se borró nada: ni en la nube ni aquí.
+                   Decir "se vació aquí" era mentira — las comandas
+                   volvían a los pocos segundos. Y va en una ventana que
+                   hay que cerrar, no en el aviso de dos segundos con su
+                   ✓ verde, que es justo lo que no puede parecer. */
+                alert('No se borró nada.\n\n' +
+                      ((Nube.fallo && Nube.fallo()) || 'La nube no respondió.') +
+                      '\n\nRevisa la señal y vuelve a intentarlo. Reintentar no ' +
+                      'cuenta nada dos veces en la contabilidad.');
+            }).finally(() => {
+                boton.disabled = false;
+                boton.textContent = 'Vaciar el servicio';
             });
             return;
         }

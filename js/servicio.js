@@ -3162,6 +3162,40 @@ const Servicio = (() => {
            sistema que se niega a hacer su trabajo, y con razón. */
         if (!(await cerrarElDia())) return false;
 
+        if (Red.activo) {
+            /* Las reglas de Firebase solo le dejan borrar estas ramas al
+               gerente. Si lo intenta otra cuenta, la nube dice que no y
+               aquí se devuelve false para que la pantalla no mienta. */
+            /* 'pidiendo' son los cerrojos de las mesas que tienen un pedido
+               esperando en la bandeja. Si la bandeja se vacía, los cerrojos
+               no pueden quedarse puestos: dejarían mesas sin poder pedir por
+               un pedido que ya no existe. */
+            const ramas = ['servicio/comandas', 'servicio/sesiones', 'servicio/pagos',
+                           'servicio/entrantes', 'servicio/pidiendo',
+                           'servicio/tomados', 'servicio/llamadas'];
+
+            /* LAS SIETE DE UN SOLO GOLPE, Y O SE VAN TODAS O NINGUNA.
+
+               Antes salían siete peticiones a la vez. El navegador deja
+               unas seis conexiones con Firebase y el panel ya tiene varias
+               ocupadas escuchando, así que hacían cola, a las últimas se
+               les acababa el plazo esperando turno y se borraba la mitad.
+               Lo que quedaba en la nube volvía a las pantallas a los
+               pocos segundos: escribían BORRAR y "no borraba", y había
+               que insistir dos o tres veces hasta que salieran todas. */
+            const borrar = {};
+            ramas.forEach(r => { borrar[r] = null; });
+            const r = await Red.todoONada(borrar, true);
+
+            /* Y SI NO SALIÓ, AQUÍ TAMPOCO SE BORRA. Limpiar este celular
+               antes de saber si la nube obedeció dejaba el panel vacío
+               diciendo "listo" mientras la nube lo tenía todo, y a los
+               pocos segundos volvía a aparecer. Se queda como estaba, y
+               reintentar no cuenta nada dos veces: lo ya contado lo sabe
+               la contabilidad. */
+            if (!r.ok) return false;
+        }
+
         write(K.comandas, {});
         write(K.sesiones, {});
         write(K.pagos, {});
@@ -3174,21 +3208,8 @@ const Servicio = (() => {
         write(K.apartado, []);
         entrantes = {};
 
-        if (!Red.activo) { alCambiar(); return true; }
-
-        /* Las reglas de Firebase solo le dejan borrar estas ramas al
-           gerente. Si lo intenta otra cuenta, la nube dice que no y aquí
-           se devuelve false para que la pantalla no mienta. */
-        /* 'pidiendo' son los cerrojos de las mesas que tienen un pedido
-           esperando en la bandeja. Si la bandeja se vacía, los cerrojos
-           no pueden quedarse puestos: dejarían mesas sin poder pedir por
-           un pedido que ya no existe. */
-        const ramas = ['servicio/comandas', 'servicio/sesiones', 'servicio/pagos',
-                       'servicio/entrantes', 'servicio/pidiendo',
-                       'servicio/tomados', 'servicio/llamadas'];
-        const hechos = await Promise.all(ramas.map(r => Red.guardar(r, null)));
         alCambiar();
-        return hechos.every(Boolean);
+        return true;
     }
 
     /** Borra lo entregado y pagado de días anteriores para no llenar el celular. */

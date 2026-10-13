@@ -464,8 +464,13 @@ const Sync = (() => {
      * tiene login. Y devuelve el estado, no un sí o un no, porque la
      * diferencia importa — un 401 aquí no es un fallo de red, es la
      * nube diciendo "esta mesa ya tiene un pedido esperando".
+     *
+     * Con `conSesion` va firmado por la cuenta que entró. Lo usa vaciar
+     * el servicio: siete ramas en UNA petición en vez de siete, que
+     * con el tope de conexiones del navegador se quedaban haciendo cola
+     * y algunas se cortaban por el plazo — se borraba la mitad.
      */
-    const todoONada = async rutas => escribir('', rutas, 'PATCH', false);
+    const todoONada = async (rutas, conSesion) => escribir('', rutas, 'PATCH', conSesion === true);
 
     /**
      * Escribe con el detalle del fallo a la vista. Se usa para reclamar
