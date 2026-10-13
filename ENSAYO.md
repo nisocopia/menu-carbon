@@ -32,6 +32,11 @@ los tres puntos → *Agregar a pantalla principal*.
 > Arriba a la derecha de cada pantalla hay un **punto verde**. Si sale
 > rojo, algo anda mal con la red y hay que resolverlo antes de seguir.
 
+> **La menestra.** Un pedido con platos de parrilla no sale sin decir de
+> qué es la menestra: el botón dice *Falta la menestra*. En los pasos que
+> no son de eso, toca **Todas** en frejol y sigue. La prueba de verdad
+> está en el paso 20.
+
 ---
 
 ## 1. Un pedido simple
@@ -329,6 +334,56 @@ Espera un minuto largo y vuelve a esa mesa.
 - [ ] Solo salen las mesas **libres**
 - [ ] Escoges la 9 → la 5 queda libre y la 9 tiene la cuenta entera
 - [ ] **Asador:** el codigo paso de `M5` a `M9`
+
+## 20. De qué es la menestra
+
+> Antes de esto, las reglas nuevas de `firebase-rules.json` tienen que
+> estar publicadas en la consola de Firebase.
+
+**En el mesero:** mesa 3, escribe `2p 1co 2c`.
+
+- [ ] Debajo de los platos sale **Menestra · 5 porciones**, en naranja
+- [ ] El botón de abajo dice **Falta la menestra (5)**, no Enviar
+- [ ] Tócalo así → **no sale nada**, y te lleva hasta donde se elige
+- [ ] Toca **+** tres veces en Lenteja → dice **faltan 2**
+- [ ] Toca **El resto** en Frejol → se pone verde y el botón dice **Enviar**
+- [ ] Enviar → **Cocina:** junto a los cubiertos, **3 de lenteja · 2 de frejol**
+- [ ] **Asador:** no dice nada de menestra
+- [ ] **Mesero:** la tanda enviada dice *Menestra: 3 de lenteja · 2 de frejol*
+
+**Los que no la llevan:** mesa 6, escribe `1ap 1pj` (pollo apanado y pescado
+al ajillo).
+
+- [ ] No pregunta nada: dice **Enviar** de una
+
+**Solo patacones y ensalada:** mesa 7, escribe `2co`, toca el renglón y marca
+**Solo patacones y ensalada**.
+
+- [ ] No pregunta menestra. Agregas `1p` → pregunta por **1**
+
+**Un mixto:** mesa 8, escribe `1x3`, escoge las tres carnes.
+
+- [ ] Pregunta por **1**, no por 3
+
+**De más:** mesa 10, escribe `4p`, toca **Todas** en Frejol y después **+** en
+Lenteja.
+
+- [ ] Se pone en rojo, dice **sobra 1**, y no deja enviar hasta quitarla
+
+**Corregir:** en la mesa 3, dentro del minuto, toca **Editar** y agrega `1c`.
+
+- [ ] Vuelve a decir **Falta la menestra (1)**; la eliges y Guardar cambios
+- [ ] **Cocina:** la tarjeta se actualiza sola con los números nuevos
+
+Pasado el minuto, en una mesa que pidió una **porción de menestra**, tócale +:
+
+- [ ] Pregunta **solo por esa**; lo que ya estaba **no se puede bajar**
+
+**Desde el celular de un cliente:** pide un pollo para la mesa 9.
+
+- [ ] En el mesero, al tocar **Confirmar y enviar** se abre una hoja que
+      pregunta la menestra; sin elegirla, el botón de la hoja está apagado
+- [ ] Al elegirla, sale a la cocina con lo que dijiste
 
 ---
 

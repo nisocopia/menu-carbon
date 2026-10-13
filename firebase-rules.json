@@ -72,6 +72,13 @@
           "items": {
             ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')"
           },
+          "menestra": {
+            ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
+            ".validate": "newData.hasChildren()",
+            "$clase": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999"
+            }
+          },
           "cubiertos": {
             ".write": "auth != null && (auth.uid == 'fbdIzi6tOwhwJwQR6xY0MLUz4UE3' || auth.uid == 'YHeMmcUbMFdsPQrIcvT561FDunt1' || auth.uid == '0elTDMQYcHSZYZHHyZ4i3RFPQEo1')",
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99"

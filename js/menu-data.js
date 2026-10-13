@@ -189,6 +189,30 @@ const CAMBIOS = [
 ];
 
 /* ------------------------------------------------------------
+   DE QUÉ ES LA MENESTRA
+
+   Se pregunta en la mesa: "¿las menestras de lenteja o de frejol?".
+   Antes se escribía a mano —"3 de lenteja"— y lo que no se escribía
+   se servía de frejol. Así un olvido no se notaba: salía frejol y ya.
+
+   Ahora el mesero pone cuántas de cada una, y mientras falte alguna
+   el pedido no sale. NINGUNA ES LA DE SIEMPRE: si nadie lo dijo, no
+   se sabe, y la pantalla no lo da por hecho.
+
+   Cuántas hacen falta no se escribe en ningún lado: son los platos
+   que salen con menestra según su `guarnicion` (un mixto es una, el
+   "sin menestra" y "solo patacones y ensalada" no cuentan).
+
+   Un local sin esta pregunta deja la lista vacía —o con una sola— y
+   no se le pide nada a nadie.
+   ------------------------------------------------------------ */
+
+const MENESTRAS = {
+    lenteja: 'lenteja',
+    frejol:  'frejol'
+};
+
+/* ------------------------------------------------------------
    LO QUE HAY EN LA NEVERA
 
    El stock NO se cuenta por plato, se cuenta por producto. Es la

@@ -696,6 +696,105 @@ const Servicio = (() => {
     }
 
     /* ------------------------------------------------------------
+       DE QUÉ ES LA MENESTRA
+
+       Se preguntaba en la mesa y se escribía a mano —"3 de lenteja"—,
+       y lo que no se escribía se servía de frejol. Así el olvido no se
+       notaba en ningún lado: salía frejol y nadie se enteraba de que
+       nadie había preguntado.
+
+       Ahora la tanda guarda cuántas de cada clase: { frejol: 2,
+       lenteja: 3 }. Es de la TANDA y no de cada plato, porque así se
+       pregunta en la mesa y así lo lee la cocina al emplatar.
+
+       Cuántas hacen falta no se guarda: se cuenta, con la misma regla
+       que el arroz. Por la guarnición con la que el plato SALE, así que
+       un mixto es una sola —trae dos o tres carnes, pero un solo plato
+       de acompañantes— y lo pedido "sin menestra" o "solo patacones y
+       ensalada" no cuenta. La porción suelta de menestra sí: también es
+       de una clase o de la otra.
+
+       Una tanda SIN el campo es de antes de esto. No se le inventa
+       nada: se ve como siempre se vio. Las nuevas que llevan menestra
+       siempre lo traen, aunque sea a medias, para que lo que falta se
+       vea como falta y no como frejol.
+       ------------------------------------------------------------ */
+
+    /** Las clases que se preguntan. Con menos de dos no hay nada que preguntar. */
+    function clasesMenestra() {
+        const m = (typeof MENESTRAS !== 'undefined' && MENESTRAS) || {};
+        const ids = Object.keys(m);
+        return ids.length >= 2 ? ids : [];
+    }
+
+    const nombreMenestra = clase =>
+        ((typeof MENESTRAS !== 'undefined' && MENESTRAS) || {})[clase] || clase;
+
+    const llevaMenestra = it => guarnicionFinal(it).includes('menestra');
+
+    /** Cuántas porciones de menestra lleva esta lista de platos. */
+    function menestrasDe(items) {
+        if (!clasesMenestra().length) return 0;
+        return (items || []).reduce((n, it) => n + (llevaMenestra(it) ? (it.cantidad || 0) : 0), 0);
+    }
+
+    /**
+     * La elección como se guarda: cada clase con su número entero, y
+     * las claves en orden alfabético. El orden no es manía: la nube las
+     * devuelve así, y si aquí fueran en otro orden la misma elección
+     * parecería distinta — y corregir sin cambiar nada volvería a
+     * hacer sonar la cocina.
+     */
+    function limpiarMenestra(sel) {
+        const fuera = {};
+        clasesMenestra().slice().sort().forEach(k => {
+            fuera[k] = Math.max(0, Math.floor(Number((sel || {})[k]) || 0));
+        });
+        return fuera;
+    }
+
+    /**
+     * Cómo va la elección contra lo que pide el pedido. `lista` es que
+     * no queda nada por decidir: o el pedido no lleva menestra, o las
+     * elegidas son justo las que hacen falta. Ni una menos ni una más.
+     */
+    function estadoMenestra(items, sel) {
+        const requeridas = menestrasDe(items);
+        const limpia = limpiarMenestra(sel);
+        const elegidas = requeridas
+            ? Object.keys(limpia).reduce((n, k) => n + limpia[k], 0) : 0;
+        return {
+            requeridas, elegidas,
+            faltan: Math.max(0, requeridas - elegidas),
+            sobran: Math.max(0, elegidas - requeridas),
+            lista: elegidas === requeridas
+        };
+    }
+
+    /**
+     * Lo que hay que enseñar de la menestra de una tanda ya mandada:
+     * las clases que llevan algo, en el orden de menu-data.js, y lo que
+     * falte o sobre. null si no hay nada que decir — la tanda no lleva
+     * menestra o es de antes de que se preguntara.
+     */
+    function menestraDeComanda(c) {
+        if (!c || !c.menestra || typeof c.menestra !== 'object') return null;
+        const requeridas = menestrasDe(c.items);
+        if (!requeridas) return null;
+
+        const e = estadoMenestra(c.items, c.menestra);
+        const limpia = limpiarMenestra(c.menestra);
+        return {
+            requeridas,
+            partes: clasesMenestra()
+                .filter(k => limpia[k] > 0)
+                .map(k => ({ clase: k, nombre: nombreMenestra(k), cantidad: limpia[k] })),
+            faltan: e.faltan,
+            sobran: e.sobran
+        };
+    }
+
+    /* ------------------------------------------------------------
        LO QUE EL ASADOR TIENE QUE SACAR
 
        Lo mismo que el arroz le hace a la cocina, pero para la parrilla:
@@ -1118,7 +1217,7 @@ const Servicio = (() => {
         automatico: !!it.automatico      // la tarrina, que se puso sola
     }));
 
-    function enviarComanda({ mesa, nombre, items, nota, origen, sesion: sesionId }) {
+    function enviarComanda({ mesa, nombre, items, nota, origen, sesion: sesionId, menestra }) {
         if (!items || !items.length) return null;
 
         /* Lo que se agrega a una tanda ya servida se pega a la cuenta de
@@ -1153,6 +1252,11 @@ const Servicio = (() => {
 
         comanda.codigo    = codigoDe(comanda);
         comanda.cubiertos = cubiertosDe(comanda.items);
+
+        /* Si lleva menestra, sale dicha de qué es — o con lo que falte
+           a la vista. Sin el campo, la cocina la tomaría por una tanda
+           de antes y la serviría de frejol sin preguntar. */
+        if (menestrasDe(copia)) comanda.menestra = limpiarMenestra(menestra);
 
         const todas = getComandas();
         todas[comanda.id] = comanda;
@@ -1672,8 +1776,11 @@ const Servicio = (() => {
      * Guarda una tanda editada. Conserva el identificador y el número de
      * tanda: para la cocina sigue siendo el mismo pedido, corregido, no
      * uno nuevo que aparece de la nada mientras el otro desaparece.
+     *
+     * `menestra` sin pasar deja la que tenía: es lo que hace la pantalla
+     * cuando la corrección no tocó ningún plato con menestra.
      */
-    function editarComanda(id, items, nota) {
+    function editarComanda(id, items, nota, menestra) {
         const c = getComandas()[id];
         if (!c || !items || !items.length) return null;
 
@@ -1685,6 +1792,15 @@ const Servicio = (() => {
             cubiertos: cubiertosDe(copia),
             codigo: codigoDe({ ...c, items: copia })
         };
+
+        /* Si ya no lleva menestra se borra la que tenía (null), pero solo
+           si tenía: mandar un null porque sí cuenta como cambio, y
+           abrir una tanda y cerrarla sin tocar nada volvería a sonar en
+           la cocina. */
+        if (menestra !== undefined) {
+            const nueva = menestrasDe(copia) ? limpiarMenestra(menestra) : null;
+            if (nueva || c.menestra != null) patch.menestra = nueva;
+        }
 
         /* La nota solo va si de verdad se escribió algo distinto. La
            pantalla llama sin nota cuando solo se corrigen platos, y
@@ -2569,8 +2685,11 @@ const Servicio = (() => {
      *
      * Devuelve la comanda creada, `{ ocupado: true }` si otro celular se
      * le adelantó, o null si ya no había nada que confirmar.
+     *
+     * `menestra` es la que el mesero preguntó al confirmar: el comensal
+     * pide desde su celular y ahí no se le pregunta de qué la quiere.
      */
-    async function confirmarEntrante(llave, mesa) {
+    async function confirmarEntrante(llave, mesa, menestra) {
         const e = entrantes[llave];
         if (!e || yaTomado(llave)) return null;
 
@@ -2602,7 +2721,8 @@ const Servicio = (() => {
             mesa: mesa != null ? mesa : e.mesa,
             items: e.items,
             nota: e.nota,
-            origen: 'cliente'
+            origen: 'cliente',
+            menestra
         });
 
         /* El cerrojo se suelta con la mesa QUE PIDIÓ, no con la mesa a la
@@ -2956,6 +3076,7 @@ const Servicio = (() => {
                 origen: c.origen,
                 nota: c.nota,
                 cubiertos: c.cubiertos,
+                menestra: menestraDeComanda(c),
                 // El panel espera 'id' donde la comanda guarda 'platoId'
                 items: (c.items || []).map(it => ({
                     id: it.platoId, nombre: it.nombre, precio: it.precio,
@@ -3062,6 +3183,8 @@ const Servicio = (() => {
         cubiertosDeSesion, turnosDeSesion,
         estacionDe, guarnicionDe, arrozPendiente, porSacar, categoriaDe, codigoDe, etiquetaDe,
         cambiosDe, guarnicionFinal, comoSeSirve,
+        // de qué es la menestra
+        clasesMenestra, nombreMenestra, menestrasDe, estadoMenestra, menestraDeComanda,
         productoDe, nombreProducto, consumoDe, quedanDe, quedanDePlato,
         sePuedePedir, quedanTodos, revisarStock,
         cubiertosDe, nombreCorto, resumirItems, nombreInterno, nombreDeItem,

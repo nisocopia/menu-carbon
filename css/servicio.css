@@ -390,6 +390,11 @@
 .previa-estado { font-size: 0.7rem; color: #888; }
 .previa-items { font-size: 0.8rem; color: #aaa; }
 
+/* La menestra con la que salió la tanda, para repetírsela a la mesa. Lo
+   que falte o sobre va en naranja: hay que volver a preguntar. */
+.previa-menestra { font-size: 0.78rem; color: #bcaaa4; margin-top: 3px; }
+.previa-menestra b { color: #ff9800; font-weight: 600; margin-left: 4px; }
+
 .previa-anular {
     background: none;
     border: none;
@@ -837,6 +842,71 @@
 
 .editando-aviso b { color: #fff; }
 
+/* ------------------------------------------------------------
+   DE QUÉ ES LA MENESTRA
+
+   Al final del borrador, nunca encima de los platos: aparecer arriba
+   los movería de sitio mientras el dedo baja. Naranja mientras falte
+   alguna, rojo si sobran, verde cuando cuadra. Los botones son los
+   mismos de la cantidad de un plato: no hay nada nuevo que aprender.
+   ------------------------------------------------------------ */
+
+.menestra {
+    background: #1d1710;
+    border: 2px solid #ff9800;
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+
+.menestra.sobra { border-color: #ff5252; }
+.menestra.lista { border-color: #4caf50; border-width: 1px; }
+
+.menestra-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.menestra-tit {
+    font-size: 0.75rem;
+    color: #bcaaa4;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.menestra-estado { font-size: 0.85rem; font-weight: 700; color: #ff9800; white-space: nowrap; }
+.menestra.sobra .menestra-estado { color: #ff5252; }
+.menestra.lista .menestra-estado { color: #7fd88a; }
+
+.menestra-clase {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+}
+
+.menestra-nom { flex: 1; font-size: 1rem; text-transform: capitalize; }
+
+.menestra .bitem-cant button:disabled { opacity: 0.3; cursor: default; }
+
+/* "Todas" de un toque. Va al lado del + y más chico que él, para que el
+   dedo que suma de una en una no lo toque sin querer. */
+.menestra-resto {
+    background: #2a2216;
+    border: 1px solid #6d4c22;
+    border-radius: 8px;
+    color: #ffcc80;
+    font-family: inherit;
+    font-size: 0.78rem;
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.menestra-nota { font-size: 0.72rem; color: #8d7b6d; margin-top: 6px; }
+
 /* ---------- El pie fijo ---------- */
 
 .srv-pie {
@@ -914,6 +984,11 @@
     color: #888;
     cursor: default;
 }
+
+/* Falta decir de qué es la menestra. Sigue encendido —tocarlo lleva a
+   donde se elige—, pero ya no es el verde de "listo para salir". */
+.btn-enviar.falta { background: #ff9800; color: #111; }
+.btn-enviar.falta:active { background: #f57c00; }
 
 /* ============================================================
    HOJAS QUE SUBEN DESDE ABAJO
@@ -1041,6 +1116,9 @@
     margin-top: 8px;
     cursor: pointer;
 }
+
+/* Confirmar un pedido del comensal mientras falte decir la menestra */
+.btn-listo:disabled { background: #2a2a2a; color: #888; cursor: default; }
 
 /* ============================================================
    COBRAR
@@ -1247,6 +1325,42 @@
     font-weight: 700;
     padding: 8px 14px;
     margin-bottom: 12px;
+}
+
+/* De qué es la menestra. Al lado de los cubiertos y del mismo tamaño:
+   también se lee de pasada, al emplatar. Si el mesero dejó alguna sin
+   decir, va en rojo y lo dice — nunca sale de frejol por costumbre. */
+.ticket-menestra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+    background: #2b2113;
+    border: 1px solid #6d4c22;
+    border-radius: 10px;
+    color: #ffe0b2;
+    font-size: 1.05rem;
+    padding: 8px 14px;
+    margin-bottom: 12px;
+}
+
+.tmen-tit {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #bcaaa4;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.tmen-clase b { font-size: 1.25rem; color: #fff; margin-right: 2px; }
+
+.ticket-menestra.pendiente { background: #3a1414; border-color: #c62828; }
+
+.tmen-aviso {
+    flex-basis: 100%;
+    color: #ff8a80;
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
 .ticket-items { list-style: none; }

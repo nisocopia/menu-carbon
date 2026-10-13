@@ -479,6 +479,15 @@ function renderResumenDia() {
         <div class="mini-kpi"><span>${platos}</span><small>platos servidos</small></div>`;
 }
 
+/** De qué fue la menestra de esa tanda. Nada si no llevaba, o si es de antes de preguntarse. */
+function menestraDelPedido(m) {
+    if (!m) return '';
+    const dicho = m.partes.map(x => `${x.cantidad} de ${x.nombre}`).join(' · ') || 'sin decir';
+    const aviso = m.faltan ? ` · ${m.faltan === 1 ? 'falta' : 'faltan'} ${m.faltan}`
+                : m.sobran ? ` · ${m.sobran === 1 ? 'sobra' : 'sobran'} ${m.sobran}` : '';
+    return `<div class="pedido-menestra">Menestra: ${dicho}${aviso}</div>`;
+}
+
 function renderPedidos() {
     const lista = pedidosParaMostrar();
     const cont = document.getElementById('lista-pedidos');
@@ -520,6 +529,7 @@ function renderPedidos() {
                         ${(i.sin && i.sin.length) ? `<em>sin ${i.sin.map(g => GUARNICIONES[g] || g).join(', ')}</em>` : ''}
                     </li>`).join('')}
             </ul>
+            ${menestraDelPedido(p.menestra)}
             ${p.nota ? `<div class="pedido-nota"><i class="fas fa-note-sticky"></i> ${p.nota}</div>` : ''}
             <div class="pedido-total">
                 ${dinero(p.total)}

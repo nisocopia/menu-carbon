@@ -20,9 +20,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Comanda">
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202610121412">
-    <link rel="stylesheet" href="css/iconos.css?v=202610121412">
-    <link rel="stylesheet" href="css/servicio.css?v=202610121412">
+    <link rel="stylesheet" href="css/fuentes.css?v=202610130106">
+    <link rel="stylesheet" href="css/iconos.css?v=202610130106">
+    <link rel="stylesheet" href="css/servicio.css?v=202610130106">
 </head>
 
 <body class="srv-body">
@@ -228,6 +228,20 @@
         </div>
     </div>
 
+    <!-- ============ HOJA: LA MENESTRA DE UN PEDIDO DEL COMENSAL ============
+         El comensal pide desde su celular y ahí no se le pregunta de qué
+         quiere la menestra. Se pregunta al confirmarlo. -->
+    <div class="hoja-overlay" id="hoja-menestra">
+        <div class="hoja">
+            <div class="hoja-head">
+                <h2 id="menestra-titulo">Menestra</h2>
+                <button class="hoja-close" id="menestra-cerrar" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="hoja-cuerpo" id="menestra-cuerpo"></div>
+            <button class="btn-listo" id="menestra-ok" disabled>Confirmar y enviar</button>
+        </div>
+    </div>
+
     <!-- OTRO SE LES ADELANTÓ.
          No es un aviso que se va solo: el mesero tiene que ir a la mesa
          a decirlo, así que hay que obligarlo a leerlo y a tocar. -->
@@ -243,14 +257,14 @@
 
     <div class="srv-toast" id="toast"></div>
 
-    <script src="js/menu-data.js?v=202610121412"></script>
-    <script src="js/sync.js?v=202610121412"></script>
-    <script src="js/store.js?v=202610121412"></script>
-    <script src="js/servicio.js?v=202610121412"></script>
-    <script src="js/llamada.js?v=202610121412"></script>
-    <script src="js/comanda.js?v=202610121412"></script>
-    <script src="js/pwa.js?v=202610121412"></script>
-    <script src="js/aviso.js?v=202610121412"></script>
+    <script src="js/menu-data.js?v=202610130106"></script>
+    <script src="js/sync.js?v=202610130106"></script>
+    <script src="js/store.js?v=202610130106"></script>
+    <script src="js/servicio.js?v=202610130106"></script>
+    <script src="js/llamada.js?v=202610130106"></script>
+    <script src="js/comanda.js?v=202610130106"></script>
+    <script src="js/pwa.js?v=202610130106"></script>
+    <script src="js/aviso.js?v=202610130106"></script>
 
 </body>
 

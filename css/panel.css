@@ -393,6 +393,14 @@
     margin-top: 10px;
 }
 
+/* De qué fue la menestra de la tanda: un dato del pedido, como lo que
+   se le quitó a un plato, no un aviso. */
+.pedido-menestra {
+    color: #bcaaa4;
+    font-size: 0.83rem;
+    margin-top: 8px;
+}
+
 .pedido-total {
     text-align: right;
     color: #FFC107;

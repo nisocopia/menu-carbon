@@ -828,6 +828,8 @@ function tarjeta(c, turno) {
                    <i class="fas fa-utensils"></i> ${c.cubiertos} cubierto${c.cubiertos > 1 ? 's' : ''}
                </div>` : ''}
 
+        ${ESTACION === 'cocina' ? menestraHtml(c) : ''}
+
         <ul class="ticket-items">
             ${itemsDeLaVista(c).map(it => itemHtml(it, c)).join('')}
         </ul>
@@ -836,6 +838,33 @@ function tarjeta(c, turno) {
 
         ${PUEDE ? botonDe(c) : ''}
     </article>`;
+}
+
+/**
+ * De qué es la menestra de esta tanda, en palabras y en grande.
+ *
+ * Antes llegaba como una nota —"3 de lenteja"— o no llegaba, y entonces
+ * se servía de frejol. Ahora se lee aquí cuántas de cada una, y si al
+ * mesero se le quedó algo sin decir, se dice que falta en vez de dejar
+ * que salga de frejol por costumbre.
+ *
+ * Solo en la cocina: el asador saca la proteína igual, lleve la
+ * menestra que lleve.
+ */
+function menestraHtml(c) {
+    const m = Servicio.menestraDeComanda(c);
+    if (!m) return '';
+
+    const aviso = m.faltan ? `${m.faltan} sin decir de qué — pregunta al mesero`
+                : m.sobran ? `${m.sobran} de más — pregunta al mesero`
+                : '';
+
+    return `
+        <div class="ticket-menestra ${aviso ? 'pendiente' : ''}">
+            <span class="tmen-tit">Menestra</span>
+            ${m.partes.map(p => `<span class="tmen-clase"><b>${p.cantidad}</b> de ${p.nombre}</span>`).join('')}
+            ${aviso ? `<span class="tmen-aviso"><i class="fas fa-triangle-exclamation"></i> ${aviso}</span>` : ''}
+        </div>`;
 }
 
 /**
