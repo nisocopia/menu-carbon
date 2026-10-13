@@ -1971,11 +1971,12 @@ function pantallaComanda() {
 }
 
 /* Desde que se pregunta de qué es la menestra, un pedido con platos que
-   la llevan no sale sin pasar por "¿alguna con menestra de lenteja?".
+   la llevan no sale sin pasar por "¿cuántos con menestra de lenteja?".
    Las pruebas de otras cosas la contestan antes de enviar como lo haría
-   el mesero —"ninguna", o "todas"—, con la misma hoja de la pantalla. */
+   el mesero —"ninguna", o "todas"—, con la misma hoja de la pantalla. Lo
+   contestado vale para el enviar() que va justo detrás. */
 const todasDe = (corre, clase) => corre(`(() => {
-    if (!borrador.some(faltaMenestra)) return;
+    if (!borrador.some(menestraContada) && !borrador.some(faltaMenestra)) return;
     preguntarMenestra();
     todasDeLenteja(${clase === 'lenteja'});
     const p = pregunta;
@@ -2561,7 +2562,7 @@ function probarStock() {
         /async function revisarStock[\s\S]{0,900}Red\.leer\('servicio\/comandas'/.test(srv), true);
     comprobar('y la comanda se manda ya recortada',
         /const revisado = await Servicio\.revisarStock\(borrador\)/.test(com) &&
-        /items: aMandar/.test(com), true);
+        /items: sinLaDeLaMesa\(aMandar\)/.test(com), true);
     comprobar('con un aviso que no se va solo',
         /avisarRecorte\(recortes, true[,)]/.test(com), true);
 
@@ -4516,23 +4517,27 @@ async function probarCuentaQueNoSaleNoSeMarca() {
    DE QUÉ ES LA MENESTRA, Y CADA PLATO CON LO SUYO
 
    El mesero preguntaba "¿lenteja o frejol?" y lo escribía a mano, o se
-   le olvidaba — y lo que no se escribía salía de frejol. Ahora cada
-   plato guarda la suya y la tanda no sale sin decirlo.
+   le olvidaba — y lo que no se escribía salía de frejol. Ahora la tanda
+   no sale sin decirlo.
+
+   En la mesa se cuenta: el arroz con la menestra va en su plato y
+   cualquiera le sirve a cualquiera, así que la tanda guarda "1 de
+   lenteja y 2 de frejol" sin decir cuál. Lo que se llevan, lo que va
+   sin arroz y la porción suelta dicen la suya, plato por plato.
 
    Y cada plato es UNO. En la misma mesa piden una carne para servirse
-   con frejol, otra para llevar con lenteja y otra con patacones, en el
-   orden que quieran. Antes dos carnes iguales se juntaban en una fila,
-   lo que se le marcaba a la fila se lo llevaban las dos, y la menestra
-   se guardaba por tanda: la cocina no sabía en cuál poner la lenteja.
+   ahí, otra para llevar con lenteja y otra con patacones, en el orden
+   que quieran: lo que se le marca a una no se lo lleva la otra.
    ============================================================ */
 
 function probarMenestraCuantas() {
-    console.log('\n--- Cuántas menestras lleva un pedido, y de quién es cada una ---');
+    console.log('\n--- Cuántas menestras lleva un pedido, y quién dice la suya ---');
     nubeLimpia();
     const { corre } = celular('mesero');
 
     const it = (platoId, cantidad, extra) => Object.assign({ platoId, cantidad }, extra || {});
     const cuantas = items => corre(`Servicio.menestrasDe(${JSON.stringify(items)})`);
+    const leer = partes => partes.map(p => p.cantidad + ' de ' + p.nombre);
 
     comprobar('tres pollos asados son tres', cuantas([it('p5', 3)]), 3);
     comprobar('sin platos que la lleven, ninguna',
@@ -4551,35 +4556,63 @@ function probarMenestraCuantas() {
         cuantas([it('r2', 2), it('r3', 1)]), 3);
     comprobar('para llevar la lleva igual', cuantas([it('p1', 1, { llevar: true })]), 1);
 
-    /* SE GUARDA EN CADA PLATO, y solo en el que la lleva. El de patacones
-       la pierde aunque alguien se la haya dejado puesta. */
-    const c = corre(`Servicio.enviarComanda({ mesa: 2, items: [
-        { platoId: 'p1', nombre: 'Carne Asada', precio: 3.5, cantidad: 1, menestra: 'frejol' },
+    /* QUIÉN SE CUENTA. El plato que se come en la mesa con su arroz va en
+       la cuenta: cualquiera le sirve a cualquiera. Lo de llevar, lo que va
+       sin arroz y la porción suelta dicen la suya. */
+    const contada = x => corre(`Servicio.menestraContada(${JSON.stringify(x)})`);
+    comprobar('el plato de la mesa va en la cuenta, y el mixto también',
+        [contada(it('p5', 1)), contada(it('m1', 1, { elegidas: ['p5', 'p1'] }))], [true, true]);
+    comprobar('el de llevar dice la suya', contada(it('p5', 1, { llevar: true })), false);
+    comprobar('el que va sin arroz también: su menestra sale sola',
+        contada(it('p5', 1, { sin: ['arroz'] })), false);
+    comprobar('y la porción suelta, de menestra o de arroz con menestra',
+        [contada(it('r2', 1)), contada(it('r3', 1))], [false, false]);
+    comprobar('el de patacones no lleva, ni se cuenta', contada(it('p3', 1, { cambio: 'pat' })), false);
+
+    /* SE GUARDA ASÍ: la tanda con la cuenta de la mesa, y lo que dice la
+       suya, en su plato. El de patacones la pierde aunque alguien se la
+       haya dejado puesta. */
+    const c = corre(`Servicio.enviarComanda({ mesa: 2, menestra: { lenteja: 1, frejol: 2 }, items: [
+        { platoId: 'p1', nombre: 'Carne Asada', precio: 3.5, cantidad: 3 },
         { platoId: 'p1', nombre: 'Carne Asada', precio: 3.5, cantidad: 1, llevar: true, menestra: 'lenteja' },
         { platoId: 'p1', nombre: 'Carne Asada', precio: 3.5, cantidad: 1, cambio: 'pat', menestra: 'lenteja' },
         { platoId: 'b3', nombre: 'Cola personal', precio: 0.5, cantidad: 1, menestra: '' }] })`);
-    comprobar('cada plato guarda la suya; el de patacones y la cola, ninguna',
-        c.items.filter(i => !i.automatico).map(i => i.menestra), ['frejol', 'lenteja', undefined, undefined]);
-    comprobar('la tanda no guarda una aparte', 'menestra' in c, false);
-    comprobar('lo de la tanda se cuenta de los platos',
-        corre(`Servicio.menestraDeComanda(Servicio.getComandas()['${c.id}']).partes.map(p => p.cantidad + ' de ' + p.nombre)`),
-        ['1 de lenteja', '1 de frejol']);
+    comprobar('la tanda guarda la cuenta de la mesa, con las claves como las devuelve la nube',
+        JSON.stringify(c.menestra), '{"frejol":2,"lenteja":1}');
+    comprobar('los de la mesa no dicen cuál; el de llevar sí; el de patacones y la cola, ninguna',
+        c.items.filter(i => !i.automatico).map(i => i.menestra), [undefined, 'lenteja', undefined, undefined]);
+    const m = corre(`Servicio.menestraDeComanda(Servicio.getComandas()['${c.id}'])`);
+    comprobar('en total, 2 de lenteja y 2 de frejol, sin faltar ni sobrar',
+        [leer(m.partes), m.faltan, m.sobran], [['2 de lenteja', '2 de frejol'], 0, 0]);
+    comprobar('y la de la mesa, aparte y con su nombre',
+        [m.mesa.titulo, leer(m.mesa.partes)], ['Menestra en la mesa', ['1 de lenteja', '2 de frejol']]);
+    comprobar('sin platos de la mesa, la tanda no guarda cuenta',
+        'menestra' in corre(`Servicio.enviarComanda({ mesa: 5, menestra: { lenteja: 1, frejol: 0 }, items: [
+            { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1, llevar: true, menestra: 'lenteja' }] })`),
+        false);
     comprobar('una clase que no existe no entra',
         corre(`Servicio.enviarComanda({ mesa: 4, items: [{ platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5,
-            cantidad: 1, menestra: 'garbanzo' }] }).items[0].menestra`), '');
+            cantidad: 1, llevar: true, menestra: 'garbanzo' }] }).items[0].menestra`), '');
+    comprobar('una cuenta que no cuadra se dice: una de más',
+        corre(`Servicio.menestraDeComanda({ mesa: 1, items: [{ platoId: 'p5', cantidad: 2 }],
+            menestra: { frejol: 2, lenteja: 1 } }).sobran`), 1);
 
     /* H. LO DE ANTES. Un plato que nunca tuvo el dato no lo recibe
-       inventado, y la tanda de la primera versión —que la guardaba por
-       tanda— se sigue leyendo como se guardó. */
+       inventado, y las formas de antes se siguen leyendo como se
+       guardaron: la cuenta de toda la tanda de la primera versión, y
+       cada plato con la suya de la segunda. */
     const vieja = corre(`Servicio.enviarComanda({ mesa: 3, items: [
         { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 3 }] })`);
     comprobar('H. un plato de antes no recibe una menestra inventada', 'menestra' in vieja.items[0], false);
     comprobar('H. y la tanda no dice nada de menestra',
         corre(`Servicio.menestraDeComanda(Servicio.getComandas()['${vieja.id}'])`), null);
     comprobar('H. la de por tanda de la primera versión se sigue leyendo',
-        corre(`Servicio.menestraDeComanda({ items: [{ platoId: 'p5', cantidad: 3 }],
-            menestra: { frejol: 1, lenteja: 2 } }).partes.map(p => p.cantidad + ' de ' + p.nombre)`),
-        ['2 de lenteja', '1 de frejol']);
+        leer(corre(`Servicio.menestraDeComanda({ items: [{ platoId: 'p5', cantidad: 3 }],
+            menestra: { frejol: 1, lenteja: 2 } }).partes`)), ['2 de lenteja', '1 de frejol']);
+    comprobar('H. y la de cada plato con la suya, también',
+        leer(corre(`Servicio.menestraDeComanda({ mesa: 3, items: [
+            { platoId: 'p5', cantidad: 2, menestra: 'frejol' },
+            { platoId: 'p5', cantidad: 1, menestra: 'lenteja' }] }).partes`)), ['1 de lenteja', '2 de frejol']);
 }
 
 async function probarCadaPlatoConLoSuyo() {
@@ -4602,13 +4635,18 @@ async function probarCadaPlatoConLoSuyo() {
     const hoja     = () => nodo('menestra-cuerpo').innerHTML.replace(/\s+/g, ' ');
     const ultima   = () => corre(`Object.values(Servicio.getComandas()).pop()`);
     const cuantas  = () => corre(`Object.keys(Servicio.getComandas()).length`);
-    const preguntado = () => corre(`pregunta && pregunta.lineas.map(l => l.cantidad + ' ' + l.nombre + ': ' + l.lenteja)`);
-    const lenteja  = (i, n) => corre(`tocarLenteja(${i}, ${n})`);
+    /* Lo que pregunta la hoja: "mesa N: L" para los de la mesa, contados,
+       y una fila por cada cosa que dice la suya. */
+    const preguntado = () => corre(`pregunta && [].concat(
+        pregunta.contadas ? ['mesa ' + pregunta.contadas.cantidad + ': ' + pregunta.contadas.lenteja] : [],
+        pregunta.lineas.map(l => l.cantidad + ' ' + l.nombre + ': ' + l.lenteja))`);
+    const lenteja  = (cual, n) => corre(`tocarLenteja(${JSON.stringify(cual)}, ${n})`);
     const responder = () => corre.esperando(`responderPregunta()`);
     const platos = c => c.items.filter(i => !i.automatico)
         .map(i => `${i.cantidad} ${i.platoId}${i.llevar ? ' llevar' : ''}${i.cambio ? ' ' + i.cambio : ''}` +
                   `${i.sin && i.sin.length ? ' sin ' + i.sin.join(',') : ''}${i.menestra ? ' ' + i.menestra : ''}`);
     const tarrinas = c => (c.items.find(i => i.platoId === 't1') || { cantidad: 0 }).cantidad;
+    const cuenta   = c => JSON.stringify(c.menestra || null);
 
     /* A. El caso de la casa: tres carnes, una para llevar y otra con
        patacones, en el orden en que las pidan. Mientras se toma el pedido
@@ -4629,17 +4667,24 @@ async function probarCadaPlatoConLoSuyo() {
 
     await corre.esperando(`enviar()`);
     comprobar('A. al enviar no sale nada todavía: primero la pregunta', cuantas(), 0);
-    comprobar('A. "¿alguna con menestra de lenteja?"',
-        nodo('menestra-titulo').textContent, '¿Alguna con menestra de lenteja?');
-    comprobar('A. con las dos carnes que la llevan; la de patacones no',
-        preguntado(), ['1 Carne Asada: 0', '1 Carne Asada: 0']);
+    comprobar('A. "¿cuántos con menestra de lenteja?"',
+        nodo('menestra-titulo').textContent, '¿Cuántos con menestra de lenteja?');
+    comprobar('A. la de la mesa se cuenta y la de llevar va aparte; la de patacones, nada',
+        preguntado(), ['mesa 1: 0', '1 Carne Asada: 0']);
+    comprobar('A. los de la mesa no dicen cuál', /1 plato en la mesa/.test(hoja()), true);
     comprobar('A. se ve cuál es la de llevar', /1 Carne Asada.*para llevar/.test(hoja()), true);
     comprobar('A. lo que no se marca va de frejol', /<b>0<\/b> de lenteja · <b>2<\/b> de frejol/.test(hoja()), true);
-    lenteja(1, 1);                                          // la que se llevan
+    lenteja(0, 1);                                          // la que se llevan
     comprobar('A. una de lenteja, la otra de frejol', /<b>1<\/b> de lenteja · <b>1<\/b> de frejol/.test(hoja()), true);
     await responder();
     const a = ultima();
-    comprobar('A. así llega a la comanda', platos(a), ['1 p1 frejol', '1 p1 pat', '1 p1 llevar lenteja']);
+    comprobar('A. así llega a la comanda: la de llevar con la suya',
+        platos(a), ['1 p1', '1 p1 pat', '1 p1 llevar lenteja']);
+    comprobar('A. y la de la mesa, en la cuenta de la tanda', cuenta(a), '{"frejol":1,"lenteja":0}');
+    comprobar('A. la carne de la mesa no lleva campo de menestra; la de llevar sí',
+        a.items.filter(i => !i.automatico).map(i => 'menestra' in i), [false, false, true]);
+    const ma = corre(`Servicio.menestraDeComanda(Servicio.getComandas()['${a.id}'])`);
+    comprobar('A. y la tanda cuadra: ni falta ni sobra', [ma.faltan, ma.sobran], [0, 0]);
     comprobar('A. con una sola tarrina: la de la carne que se llevan', tarrinas(a), 1);
     comprobar('A. y se cobra lo de siempre', corre(`Servicio.cuentaDe({ mesa: 3 }).total`), 3 * 3.5 + 0.25);
     comprobar('A. la hoja se cierra', corre(`pregunta`), null);
@@ -4648,53 +4693,64 @@ async function probarCadaPlatoConLoSuyo() {
     corre(`verMesa(4)`);
     corre(`agregarAlBorrador(Store.findPlato('p5'), 2)`);
     await corre.esperando(`enviar()`);
+    comprobar('dos pollos en la mesa: un solo número', preguntado(), ['mesa 2: 0']);
     await responder();
-    comprobar('todas de frejol: sin marcar nada', platos(ultima()), ['2 p5 frejol']);
+    comprobar('todas de frejol: sin marcar nada', [platos(ultima()), cuenta(ultima())],
+        [['2 p5'], '{"frejol":2,"lenteja":0}']);
 
-    // "Dos de los cuatro pollos": la fila se parte en dos
+    // "Dos de los cuatro pollos": se dice cuántos y la fila sigue entera
     corre(`verMesa(5)`);
     corre(`agregarAlBorrador(Store.findPlato('p5'), 4)`);
     await corre.esperando(`enviar()`);
-    [1, 1, 1, 1, 1].forEach(() => lenteja(0, 1));
-    comprobar('no se pueden marcar más de las que hay', preguntado(), ['4 Pollo Asado: 4']);
-    lenteja(0, -1); lenteja(0, -1);
+    [1, 1, 1, 1, 1].forEach(() => lenteja('mesa', 1));
+    comprobar('no se pueden contar más de los que hay', preguntado(), ['mesa 4: 4']);
+    lenteja('mesa', -1); lenteja('mesa', -1);
     await responder();
-    comprobar('dos de cuatro: la fila se parte, cada plato con la suya', platos(ultima()), ['2 p5 frejol', '2 p5 lenteja']);
+    comprobar('dos de cuatro: la fila no se parte y la tanda dice cuántos',
+        [platos(ultima()), cuenta(ultima())], [['4 p5'], '{"frejol":2,"lenteja":2}']);
 
     // "Todas de lenteja" de un toque, y se puede deshacer
     corre(`verMesa(6)`);
     corre(`agregarAlBorrador(Store.findPlato('p1'), 2)`);
     corre(`agregarAlBorrador(Store.findPlato('p2'), 1)`);
     await corre.esperando(`enviar()`);
+    comprobar('carnes y chuleta van en la misma cuenta', preguntado(), ['mesa 3: 0']);
     corre(`todasDeLenteja(true)`);
     comprobar('"Todas de lenteja" las marca todas', /<b>3<\/b> de lenteja · <b>0<\/b> de frejol/.test(hoja()), true);
     comprobar('y el botón pasa a "Ninguna"', /Ninguna de lenteja/.test(hoja()), true);
     await responder();
-    comprobar('todas salen de lenteja', platos(ultima()), ['2 p1 lenteja', '1 p2 lenteja']);
+    comprobar('todas salen de lenteja', cuenta(ultima()), '{"frejol":0,"lenteja":3}');
 
     // Cerrar la pregunta vuelve al pedido sin mandar ni dejar nada puesto
     corre(`verMesa(7)`);
     corre(`agregarAlBorrador(Store.findPlato('p5'), 1)`);
     const antes = cuantas();
     await corre.esperando(`enviar()`);
-    lenteja(0, 1);
+    lenteja('mesa', 1);
     corre(`cerrarPregunta()`);
     comprobar('cerrarla no manda nada', cuantas(), antes);
     comprobar('ni deja la lenteja puesta', filas(), ['1 Pollo Asado']);
     await corre.esperando(`enviar()`);
-    comprobar('y al volver a enviar, pregunta otra vez desde cero', preguntado(), ['1 Pollo Asado: 0']);
+    comprobar('y al volver a enviar, pregunta otra vez desde cero', preguntado(), ['mesa 1: 0']);
     corre(`cerrarPregunta(); borrador = []; pintarBorrador()`);
 
-    // Si la dijeron al principio, se pone en la hoja del plato y la pregunta la trae marcada
+    /* Si la dijeron al principio: la del que se llevan se pone en su hoja
+       y la pregunta la trae marcada. Al de la mesa la hoja no se la pide:
+       va en la cuenta del final. */
     corre(`verMesa(8)`);
     corre(`agregarAlBorrador(Store.findPlato('p5'), 2)`);
-    enHoja(0, `tocarMenestra('lenteja')`);
-    comprobar('la hoja de un plato también la tiene, y solo para él',
-        filas(), ['1 Pollo Asado', '1 Pollo Asado [lenteja]']);
+    corre(`abrirMod(borrador[0].uid)`);
+    comprobar('la hoja de un plato de la mesa no pide la menestra',
+        /data-men=/.test(nodo('hoja-cuerpo').innerHTML), false);
+    corre(`(() => { borrador.find(i => i.uid === editando).llevar = true; abrirMod(editando); })()`);
+    comprobar('la de uno para llevar, sí', /data-men="lenteja"/.test(nodo('hoja-cuerpo').innerHTML), true);
+    corre(`tocarMenestra('lenteja'); cerrarMod()`);
+    comprobar('y se queda solo en él', filas(), ['1 Pollo Asado', '1 Pollo Asado [llevar] [lenteja]']);
     await corre.esperando(`enviar()`);
-    comprobar('la pregunta la trae marcada', preguntado(), ['1 Pollo Asado: 0', '1 Pollo Asado: 1']);
+    comprobar('la pregunta la trae marcada', preguntado(), ['mesa 1: 0', '1 Pollo Asado: 1']);
     await responder();
-    comprobar('y sale así', platos(ultima()), ['1 p5 frejol', '1 p5 lenteja']);
+    comprobar('y sale así', [platos(ultima()), cuenta(ultima())],
+        [['1 p5', '1 p5 llevar lenteja'], '{"frejol":1,"lenteja":0}']);
 
     /* B. Una carne para llevar con lenteja: se marca lenteja y se queda en
        lenteja. */
@@ -4702,7 +4758,7 @@ async function probarCadaPlatoConLoSuyo() {
     corre(`agregarAlBorrador(Store.findPlato('p1'), 1)`);
     corre(`nombreLlevar = 'Rosa'; pintarPie()`);
     await corre.esperando(`enviar()`);
-    comprobar('B. para llevar también pregunta', preguntado(), ['1 Carne Asada: 0']);
+    comprobar('B. para llevar se pregunta plato por plato', preguntado(), ['1 Carne Asada: 0']);
     lenteja(0, 1);
     await responder();
     const b = ultima();
@@ -4710,6 +4766,7 @@ async function probarCadaPlatoConLoSuyo() {
         [b.nombre, b.items[0].llevar, b.items[0].menestra], ['Rosa', true, 'lenteja']);
     comprobar('B. la cocina lee lenteja, no frejol',
         corre(`Servicio.menestraDeComanda(Servicio.getComandas()['${b.id}']).partes.map(p => p.nombre)`), ['lenteja']);
+    comprobar('B. y la tanda no guarda cuenta de mesa', 'menestra' in b, false);
 
     // C. Dos platos de la misma mesa: cambiar uno no toca el otro
     corre(`verMesa(9)`);
@@ -4720,9 +4777,11 @@ async function probarCadaPlatoConLoSuyo() {
     comprobar('C. devolver el de llevar a la mesa no toca al otro', filas(), ['1 Pollo Asado', '1 Pollo Asado']);
     enHoja(1, `it.llevar = true`);
     await corre.esperando(`enviar()`);
-    lenteja(0, 1);                                          // el de la mesa
+    comprobar('C. el de la mesa en la cuenta, el de llevar en su fila', preguntado(), ['mesa 1: 0', '1 Pollo Asado: 0']);
+    lenteja('mesa', 1);                                     // el de la mesa
     await responder();
-    comprobar('C. la lenteja va en el que se dijo', platos(ultima()), ['1 p5 lenteja', '1 p5 llevar frejol']);
+    comprobar('C. la lenteja va donde se dijo', [platos(ultima()), cuenta(ultima())],
+        [['1 p5', '1 p5 llevar frejol'], '{"frejol":0,"lenteja":1}']);
 
     // D. Solo patacones y ensalada: no pregunta nada y sale directo
     corre(`verMesa(10)`);
@@ -4730,12 +4789,12 @@ async function probarCadaPlatoConLoSuyo() {
     enHoja(0, `it.cambio = 'pat'`);
     await corre.esperando(`enviar()`);
     comprobar('D. con patacones no hay pregunta', corre(`pregunta`), null);
-    comprobar('D. sale directo y sin menestra', 'menestra' in ultima().items[0], false);
-    // ...y si la habían dicho en la hoja, al elegir patacones se va
+    comprobar('D. sale directo y sin menestra', ['menestra' in ultima().items[0], 'menestra' in ultima()], [false, false]);
+    // ...y si habían dicho la del que se llevan, al elegir patacones se va
     corre(`verMesa(11)`);
     corre(`agregarAlBorrador(Store.findPlato('p3'), 1)`);
-    enHoja(0, `tocarMenestra('lenteja'); it.cambio = 'pat'`);
-    comprobar('D. la lenteja dicha antes se va con los patacones', filas(), ['1 Costilla [pat]']);
+    enHoja(0, `it.llevar = true; tocarMenestra('lenteja'); it.cambio = 'pat'`);
+    comprobar('D. la lenteja dicha antes se va con los patacones', filas(), ['1 Costilla [llevar] [pat]']);
 
     /* E. Cuatro pollos iguales y cada uno distinto: uno normal, uno sin
        arroz, uno para llevar y uno con patacones. */
@@ -4749,14 +4808,16 @@ async function probarCadaPlatoConLoSuyo() {
     corre(`cambiarCantidad(borrador[2].uid, 1)`);
     comprobar('E. el + suma otro plato igual al de su fila', filas()[2], '2 Pollo Asado [llevar]');
     await corre.esperando(`enviar()`);
-    comprobar('E. la pregunta trae cada fila con menestra; la de patacones no',
-        preguntado(), ['1 Pollo Asado: 0', '2 Pollo Asado: 0', '1 Pollo Asado: 0']);
-    lenteja(1, 1);                                          // uno de los que se llevan
-    lenteja(2, 1);                                          // el sin arroz
+    comprobar('E. el normal se cuenta; los que se llevan y el sin arroz dicen la suya; el de patacones, nada',
+        preguntado(), ['mesa 1: 0', '2 Pollo Asado: 0', '1 Pollo Asado: 0']);
+    comprobar('E. se ve cuál va sin arroz', /1 Pollo Asado.*sin arroz/.test(hoja()), true);
+    lenteja(0, 1);                                          // uno de los que se llevan
+    lenteja(1, 1);                                          // el sin arroz
     await responder();
     const e = ultima();
     comprobar('E. cada uno llega con lo suyo', platos(e),
-        ['1 p5 frejol', '1 p5 pat', '1 p5 llevar frejol', '1 p5 llevar lenteja', '1 p5 sin arroz lenteja']);
+        ['1 p5', '1 p5 pat', '1 p5 llevar frejol', '1 p5 llevar lenteja', '1 p5 sin arroz lenteja']);
+    comprobar('E. y el de la mesa, en la cuenta', cuenta(e), '{"frejol":1,"lenteja":0}');
 
     // F. La tarrina: una por plato que se llevan y la necesita; ni una de más
     comprobar('F. dos pollos para llevar, dos tarrinas', tarrinas(e), 2);
@@ -4771,80 +4832,115 @@ async function probarCadaPlatoConLoSuyo() {
     comprobar('F. la chuleta para llevar no cobra tarrina; el junior sí', tarrinas(f), 1);
     corre(`abrirEdicion('${f.id}')`);
     await corre.esperando(`enviar()`);
-    comprobar('F. corregir una tanda que ya la tiene no vuelve a preguntar', corre(`pregunta`), null);
+    comprobar('F. corregir una tanda para llevar que ya la dijo no vuelve a preguntar', corre(`pregunta`), null);
     comprobar('F. ni duplica la tarrina', tarrinas(corre(`Servicio.getComandas()['${f.id}']`)), 1);
 
     // La tanda enviada la enseña
     corre(`verMesa(3)`);
     comprobar('la tanda enviada dice cuántas de cada una',
         /Menestra: 1 de lenteja · 1 de frejol/.test(nodo('tandas-previas').innerHTML), true);
+
+    /* Si otro celular se llevó la última costilla mientras se escribía, la
+       cuenta se hizo con ella y queda una de más: no se adivina cuál
+       quitar, se le dice al mesero, que de todas formas va a la mesa. */
+    corre(`verMesa(7)`);
+    corre(`agregarAlBorrador(Store.findPlato('p5'), 1)`);
+    corre(`agregarAlBorrador(Store.findPlato('p3'), 1)`);
+    corre(`Servicio.revisarStock = async items => ({ items: items.filter(i => i.platoId !== 'p3'),
+        recortes: [{ producto: 'Costilla', nombre: 'Costilla', pedidos: 1, entraron: 0 }] })`);
+    await corre.esperando(`enviar()`);
+    lenteja('mesa', 1);
+    await responder();
+    comprobar('si otro se llevó un plato de la mesa, la cuenta queda de más y se le dice al mesero',
+        [cuenta(ultima()), /La menestra quedó descuadrada \(sobra 1\)/.test(nodo('recorte-cuerpo').innerHTML.replace(/\s+/g, ' '))],
+        ['{"frejol":1,"lenteja":1}', true]);
 }
 
 async function probarMenestraAlCorregir() {
-    console.log('\n--- Corregir una tanda: cada plato conserva lo suyo ---');
+    console.log('\n--- Corregir una tanda: la menestra sale con lo que tenía ---');
     const { nodo, corre } = pantallaComanda();
 
     const filas = () => corre(`borrador.map(i => i.cantidad + ' ' + i.nombre + (i.llevar ? ' [llevar]' : '') +
         (i.menestra ? ' [' + i.menestra + ']' : '') + (i.bloqueado ? ' [en marcha]' : ''))`);
     const comanda = id => corre(`Servicio.getComandas()['${id}']`);
-    const preguntado = () => corre(`pregunta && pregunta.lineas.map(l => l.cantidad + ' ' + l.nombre + ': ' + l.lenteja)`);
+    const preguntado = () => corre(`pregunta && [].concat(
+        pregunta.contadas ? ['mesa ' + pregunta.contadas.cantidad + ': ' + pregunta.contadas.lenteja] : [],
+        pregunta.lineas.map(l => l.cantidad + ' ' + l.nombre + ': ' + l.lenteja))`);
     const envejecer = id => corre(`(() => { const t = Servicio.getComandas();
         t['${id}'].creado = Date.now() - 120000; localStorage.setItem('srv_comandas', JSON.stringify(t)); })()`);
+    const cuenta = id => JSON.stringify(comanda(id).menestra || null);
+    const tandas = () => corre(`Object.keys(Servicio.getComandas()).length`);
 
-    // Dentro del minuto se toca todo, plato por plato
+    // Dentro del minuto se toca todo
     corre(`verMesa(3)`);
     corre(`agregarAlBorrador(Store.findPlato('p5'), 2)`);
-    todasDe(corre, 'frejol');
     await corre.esperando(`enviar()`);
+    corre(`tocarLenteja('mesa', 1)`);
+    await corre.esperando(`responderPregunta()`);
     const id = corre(`Object.keys(Servicio.getComandas())[0]`);
+    comprobar('sale con su cuenta: 1 de lenteja y 1 de frejol', cuenta(id), '{"frejol":1,"lenteja":1}');
 
     corre(`abrirEdicion('${id}')`);
-    comprobar('al abrirla, cada plato trae su menestra', filas(), ['2 Pollo Asado [frejol]']);
-    corre(`abrirMod(borrador[0].uid); tocarMenestra('lenteja'); cerrarMod()`);
-    await corre.esperando(`enviar()`);
-    comprobar('cambiar uno en el minuto lo separa y lo guarda, sin volver a preguntar',
-        comanda(id).items.map(i => i.cantidad + ' ' + i.menestra), ['1 frejol', '1 lenteja']);
-    comprobar('en la misma tanda', corre(`Object.keys(Servicio.getComandas()).length`), 1);
-
+    comprobar('al abrirla, los de la mesa no dicen cuál', filas(), ['2 Pollo Asado']);
     const antes = comanda(id).editado;
+    await corre.esperando(`enviar()`);
+    comprobar('al guardar, la pregunta sale con lo que ya tenía', preguntado(), ['mesa 2: 1']);
+    await corre.esperando(`responderPregunta()`);
+    comprobar('confirmarla sin cambiar nada no la corrige', comanda(id).editado, antes);
+
     corre(`abrirEdicion('${id}')`);
     await corre.esperando(`enviar()`);
-    comprobar('abrirla y cerrarla sin tocar nada no la corrige', comanda(id).editado, antes);
+    corre(`tocarLenteja('mesa', 1)`);
+    await corre.esperando(`responderPregunta()`);
+    comprobar('en el minuto se puede cambiar la cuenta', cuenta(id), '{"frejol":0,"lenteja":2}');
+    comprobar('en la misma tanda, y sin partir la fila',
+        [tandas(), comanda(id).items.map(i => i.cantidad + ' ' + i.platoId)], [1, ['2 p5']]);
 
     corre(`abrirEdicion('${id}')`);
     corre(`agregarAlBorrador(Store.findPlato('p1'), 1)`);
     await corre.esperando(`enviar()`);
-    comprobar('un plato nuevo en el minuto pregunta, con lo de antes ya marcado',
-        preguntado(), ['1 Pollo Asado: 0', '1 Pollo Asado: 1', '1 Carne Asada: 0']);
+    comprobar('un plato más en el minuto entra en la cuenta, con lo de antes ya marcado',
+        preguntado(), ['mesa 3: 2']);
     await corre.esperando(`responderPregunta()`);
-    comprobar('y se guarda con la de cada uno',
-        comanda(id).items.filter(i => !i.automatico).map(i => i.platoId + ' ' + i.menestra),
-        ['p5 frejol', 'p5 lenteja', 'p1 frejol']);
+    comprobar('y se guarda la cuenta nueva', cuenta(id), '{"frejol":1,"lenteja":2}');
 
-    /* Pasado el minuto, lo que está en marcha no se toca y lleva su
-       menestra escrita; lo nuevo pregunta la suya y sale como tanda nueva. */
+    // Pasar uno a llevar en el minuto: sale de la cuenta y dice la suya
+    corre(`abrirEdicion('${id}')`);
+    corre(`abrirMod(borrador[1].uid); borrador.find(i => i.uid === editando).llevar = true; cerrarMod()`);
+    await corre.esperando(`enviar()`);
+    comprobar('el que pasa a llevar sale de la cuenta y se pregunta aparte',
+        preguntado(), ['mesa 2: 2', '1 Carne Asada: 0']);
+    corre(`tocarLenteja('mesa', -1); tocarLenteja(0, 1)`);
+    await corre.esperando(`responderPregunta()`);
+    comprobar('la mesa con su cuenta y la carne con la suya',
+        [cuenta(id), comanda(id).items.filter(i => !i.automatico)
+            .map(i => i.platoId + (i.llevar ? ' llevar' : '') + ' ' + (i.menestra || '-'))],
+        ['{"frejol":1,"lenteja":1}', ['p5 -', 'p1 llevar lenteja']]);
+
+    /* Pasado el minuto, lo que está en marcha no se toca, ni su cuenta;
+       lo nuevo se pregunta solo y sale como tanda nueva con la suya. */
     envejecer(id);
     corre(`abrirEdicion('${id}')`);
-    comprobar('pasado el minuto, lo que está en marcha conserva la suya', filas(),
-        ['1 Pollo Asado [frejol] [en marcha]', '1 Pollo Asado [lenteja] [en marcha]', '1 Carne Asada [frejol] [en marcha]']);
-    comprobar('y se lee en su fila', /menestra de lenteja/.test(nodo('borrador').innerHTML), true);
+    comprobar('pasado el minuto, lo que está en marcha se ve como está', filas(),
+        ['2 Pollo Asado [en marcha]', '1 Carne Asada [llevar] [lenteja] [en marcha]']);
+    comprobar('y la del que se llevan se lee en su fila', /menestra de lenteja/.test(nodo('borrador').innerHTML), true);
     corre(`agregarAlBorrador(Store.findPlato('p5'), 1)`);
     await corre.esperando(`enviar()`);
-    comprobar('un pollo más pregunta solo por él', preguntado(), ['1 Pollo Asado: 0']);
-    corre(`tocarLenteja(0, 1)`);
+    comprobar('un pollo más se cuenta solo, desde cero', preguntado(), ['mesa 1: 0']);
+    corre(`tocarLenteja('mesa', 1)`);
     await corre.esperando(`responderPregunta()`);
-    comprobar('y sale como tanda nueva con la suya, sin tocar la de antes',
-        corre(`Servicio.tandasDe({ mesa: 3 }).map(c => c.codigo.split(' ')[0] + ': ' +
-            c.items.filter(i => !i.automatico).map(i => i.cantidad + ' ' + i.menestra).join(', '))`),
-        ['M3: 1 frejol, 1 lenteja, 1 frejol', 'M3b: 1 lenteja']);
+    comprobar('y sale como tanda nueva con su cuenta, sin tocar la de antes',
+        corre(`Servicio.tandasDe({ mesa: 3 }).map(c => c.codigo.split(' ')[0] + ': ' + JSON.stringify(c.menestra))`),
+        ['M3: {"frejol":1,"lenteja":1}', 'M3b: {"frejol":0,"lenteja":1}']);
 
-    /* Una porción de menestra en una tanda en marcha se sigue pudiendo
-       tocar. Separar una para cambiarle la clase no la manda a otra tanda:
-       sigue siendo de la suya. */
+    /* Una porción de menestra dice la suya, y en una tanda en marcha se
+       sigue pudiendo tocar. Separar una para cambiarle la clase no la
+       manda a otra tanda: sigue siendo de la suya. */
     corre(`verMesa(4)`);
     corre(`agregarAlBorrador(Store.findPlato('r2'), 2)`);
-    todasDe(corre, 'frejol');
     await corre.esperando(`enviar()`);
+    comprobar('la porción no va en la cuenta: dice la suya', preguntado(), ['2 Menestra: 0']);
+    await corre.esperando(`responderPregunta()`);
     const id4 = corre(`Servicio.tandasDe({ mesa: 4 })[0].id`);
     envejecer(id4);
     corre(`abrirEdicion('${id4}')`);
@@ -4855,9 +4951,9 @@ async function probarMenestraAlCorregir() {
         corre(`Servicio.tandasDe({ mesa: 4 }).map(c => c.items.map(i => i.cantidad + ' ' + i.menestra).join(', '))`),
         ['1 frejol, 1 lenteja']);
 
-    /* H. Una tanda que no guardó la menestra por plato —de antes, o de la
-       primera versión, por tanda— no tiene de dónde sacarla: lo que ya
-       venía no se pregunta ni se inventa. */
+    /* H. Una tanda de antes —aquí, de la primera versión, que contaba toda
+       la tanda junta— no tiene de dónde sacar la de cada porción: lo que
+       ya venía no se pregunta ni se inventa. */
     corre(`(() => { const t = Servicio.getComandas();
         t.vieja = { id: 'vieja', sesion: Servicio.tandasDe({ mesa: 4 })[0].sesion, mesa: 4, tanda: 1,
             creado: Date.now() - 300000, estado: 'nuevo', sacado: false, codigo: 'M4b · 2PO 1 Menestra',
@@ -4878,43 +4974,61 @@ async function probarMenestraAlCorregir() {
 }
 
 function probarMenestraEnLaCocina() {
-    console.log('\n--- La cocina lee la menestra de cada plato ---');
+    console.log('\n--- La cocina lee la cuenta de la mesa, y la del que se llevan en su plato ---');
 
     const comanda = extra => JSON.stringify(Object.assign({
         id: 'm1', sesion: 's1', mesa: 3, tanda: 0, creado: Date.now(), estado: 'nuevo', sacado: false,
-        codigo: 'M3 · 3CA', cubiertos: 2, items: [
+        codigo: 'M3 · 3CA', cubiertos: 2, menestra: { frejol: 1, lenteja: 0 }, items: [
             { uid: 'a', platoId: 'p1', nombre: 'Carne Asada', cantidad: 1, precio: 3.5, estacion: 'asador',
-              sin: [], elegidas: [], menestra: 'frejol' },
+              sin: [], elegidas: [] },
             { uid: 'b', platoId: 'p1', nombre: 'Carne Asada', cantidad: 1, precio: 3.5, estacion: 'asador',
               sin: [], elegidas: [], llevar: true, menestra: 'lenteja' },
             { uid: 'c', platoId: 'p1', nombre: 'Carne Asada', cantidad: 1, precio: 3.5, estacion: 'asador',
               sin: [], elegidas: [], cambio: 'pat' }
         ] }, extra || {}));
     const ticket = (p, extra) => p.corre(`tarjeta(${comanda(extra)}, 1)`).replace(/\s+/g, ' ');
+    const arriba = t => (t.match(/<div class="ticket-menestra[\s\S]*?<\/div>/) || [''])[0];
+    const pollos = (n, extra) => [Object.assign({ uid: 'a', platoId: 'p5', nombre: 'Pollo Asado', cantidad: n,
+        precio: 3.5, estacion: 'asador', sin: [], elegidas: [] }, extra || {})];
 
     const cocina = pantallaEstacion('cocina');
     const t = ticket(cocina);
     const renglones = t.split('<li').slice(1);
-    comprobar('G. la cocina ve el frejol en la carne de la mesa',
-        /Carne Asada/.test(renglones[0]) && /menestra de frejol/.test(renglones[0]) && !/llevar/.test(renglones[0]), true);
-    comprobar('G. y la lenteja en la que se llevan',
+    comprobar('G. la carne de la mesa no dice cuál: va en la cuenta',
+        /Carne Asada/.test(renglones[0]) && !/menestra de/.test(renglones[0]) && !/llevar/.test(renglones[0]), true);
+    comprobar('G. la que se llevan dice la suya en su renglón',
         /🥡 llevar/.test(renglones[1]) && /menestra de lenteja/.test(renglones[1]), true);
     comprobar('G. la de patacones, sin menestra',
         /SOLO PATACONES Y ENSALADA/.test(renglones[2]) && !/menestra de/.test(renglones[2]), true);
-    comprobar('G. y arriba, cuántas de cada una', /<b>1<\/b> de lenteja/.test(t) && /<b>1<\/b> de frejol/.test(t), true);
+    comprobar('G. y arriba, la de la mesa con su nombre, sin sumarle la del que se llevan',
+        [/Menestra en la mesa/.test(arriba(t)), /<b>1<\/b> de frejol/.test(arriba(t)), /lenteja/.test(arriba(t))],
+        [true, true, false]);
 
-    comprobar('un plato nuevo sin decirla avisa en vez de darla por frejol',
-        /1 sin decir de qué — pregunta al mesero/.test(ticket(cocina, { items: [
-            { uid: 'a', platoId: 'p5', nombre: 'Pollo Asado', cantidad: 1, precio: 3.5, estacion: 'asador', menestra: '' }] })), true);
+    const soloMesa = ticket(cocina, { menestra: { frejol: 1, lenteja: 2 }, items: pollos(3) });
+    comprobar('G. una mesa sin nada para llevar dice "Menestra" y cuántas de cada una',
+        [/>Menestra</.test(arriba(soloMesa)), /<b>2<\/b> de lenteja/.test(soloMesa), /<b>1<\/b> de frejol/.test(soloMesa)],
+        [true, true, true]);
+    comprobar('G. y ningún pollo dice cuál', /menestra de/.test(soloMesa), false);
 
-    // H. Las tandas de antes, sin el dato, no inventan nada
-    const vieja = ticket(cocina, { items: [
-        { uid: 'a', platoId: 'p5', nombre: 'Pollo Asado', cantidad: 2, precio: 3.5, estacion: 'asador', sin: [], elegidas: [] }] });
+    comprobar('una cuenta que no cuadra avisa en vez de dar nada por supuesto',
+        /1 de más — pregunta al mesero/.test(ticket(cocina, { menestra: { frejol: 2, lenteja: 0 }, items: pollos(1) })), true);
+    comprobar('uno para llevar sin decirla avisa en vez de darla por frejol',
+        /1 sin decir de qué — pregunta al mesero/.test(ticket(cocina, { menestra: undefined,
+            items: pollos(1, { llevar: true, menestra: '' }) })), true);
+
+    // H. Las tandas de antes, sin el dato, no inventan nada; las de después se leen como se guardaron
+    const vieja = ticket(cocina, { menestra: undefined, items: pollos(2) });
     comprobar('H. una tanda de antes no inventa menestra', /menestra/i.test(vieja), false);
     comprobar('H. y se sigue viendo entera', /Pollo Asado/.test(vieja), true);
     comprobar('H. la de la primera versión enseña sus totales',
-        /<b>2<\/b> de frejol/.test(ticket(cocina, { menestra: { frejol: 2, lenteja: 0 }, items: [
-            { uid: 'a', platoId: 'p5', nombre: 'Pollo Asado', cantidad: 2, precio: 3.5, estacion: 'asador' }] })), true);
+        /<b>2<\/b> de frejol/.test(ticket(cocina, { menestra: { frejol: 2, lenteja: 0 }, items: pollos(2) })), true);
+    const segunda = ticket(cocina, { menestra: undefined, items: [
+        { uid: 'a', platoId: 'p1', nombre: 'Carne Asada', cantidad: 1, precio: 3.5, estacion: 'asador', menestra: 'frejol' },
+        { uid: 'b', platoId: 'p1', nombre: 'Carne Asada', cantidad: 1, precio: 3.5, estacion: 'asador', llevar: true,
+          menestra: 'lenteja' }] });
+    comprobar('H. la de cuando cada plato decía la suya se sigue leyendo en cada uno',
+        [/menestra de frejol/.test(segunda), /menestra de lenteja/.test(segunda), />Menestra</.test(arriba(segunda))],
+        [true, true, true]);
 
     const parrilla = pantallaEstacion('asador');
     comprobar('G. la parrilla no ve la menestra: saca la proteína igual',
@@ -4924,26 +5038,30 @@ function probarMenestraEnLaCocina() {
         ['2', '1 llevar']);
 
     /* G. EL QUE SIRVE. Su pantalla se levanta de verdad y se le pregunta
-       qué pidió la mesa: cada plato con lo suyo. */
+       qué pidió la mesa: la del que se llevan en su plato, y la cuenta de
+       la mesa debajo, porque no está en ningún plato. */
     const servir = pantallaServir();
     servir.sembrar(JSON.parse(comanda()));
     servir.corre(`verCuenta('s1', 'Mesa 3')`);
     const hoja = servir.nodo('hoja-cuerpo').innerHTML.replace(/\s+/g, ' ');
-    const enServir = hoja.split('<li').slice(1);
-    comprobar('G. servir ve la menestra de cada plato',
-        [/menestra de frejol/.test(enServir[0]), /para llevar.*menestra de lenteja/.test(enServir[1]),
-         /Solo patacones/.test(enServir[2]) && !/menestra/.test(enServir[2])], [true, true, true]);
+    const enServir = hoja.split('<li').slice(1).map(r => r.split('</li>')[0]);
+    comprobar('G. servir ve la del que se llevan en su plato, y ningún otro dice cuál',
+        [/menestra de/.test(enServir[0]), /para llevar.*menestra de lenteja/.test(enServir[1]),
+         /Solo patacones/.test(enServir[2]) && !/menestra/.test(enServir[2])], [false, true, true]);
+    comprobar('G. y debajo, la cuenta de la mesa', /Menestra en la mesa: <b>1<\/b> de frejol/.test(hoja), true);
     comprobar('G. y sigue sin escribir nada', servir.escrito(), []);
 
-    // El panel del gerente la enseña con cada plato
+    // El panel del gerente: la del que se llevan con su plato, y la de la tanda sumada
     nubeLimpia();
     const g = celular('gerente');
-    g.corre(`Servicio.enviarComanda({ mesa: 2, items: [
-        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1, menestra: 'lenteja' },
+    g.corre(`Servicio.enviarComanda({ mesa: 2, menestra: { lenteja: 1, frejol: 0 }, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1 },
         { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1, menestra: 'frejol', llevar: true }] })`);
-    comprobar('el panel recibe la menestra de cada plato',
-        g.corre(`Servicio.comandasComoPedidos()[0].items.filter(i => i.id !== 't1').map(i => i.menestra)`),
-        ['lenteja', 'frejol']);
+    const pedido = g.corre(`Servicio.comandasComoPedidos()[0]`);
+    comprobar('el panel recibe la del que se llevan con su plato',
+        pedido.items.filter(i => i.id !== 't1').map(i => i.menestra || '-'), ['-', 'frejol']);
+    comprobar('y la de la tanda, sumada', pedido.menestra.partes.map(p => p.cantidad + ' de ' + p.nombre),
+        ['1 de lenteja', '1 de frejol']);
     comprobar('y la dibuja con el plato', /i\.menestra \? `<em>menestra de/.test(fuente('js/panel.js')), true);
 }
 
@@ -4984,77 +5102,108 @@ function pantallaServir() {
 }
 
 async function probarMenestraEnLaNube() {
-    console.log('\n--- La menestra de cada plato viaja a la cocina y no se duplica ---');
+    console.log('\n--- La menestra viaja a la cocina y no se duplica ---');
     nubeLimpia();
     const mesero = celular('mesero');
     const cocina = celular('cocina');
     cocina.corre(`Servicio.iniciar(() => {}, 'estacion')`);
 
-    const platos = `[
-        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2, menestra: 'lenteja' },
-        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1, llevar: true, menestra: 'frejol' }]`;
-    const c = mesero.corre(`Servicio.enviarComanda({ mesa: 3, items: ${platos} })`);
+    const pollos = (mesa, llevar) => `[
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: ${mesa} }${llevar ? `,
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1, llevar: true, menestra: 'frejol' }` : ''}]`;
+    const c = mesero.corre(`Servicio.enviarComanda({ mesa: 3, menestra: { lenteja: 2, frejol: 0 }, items: ${pollos(2, true)} })`);
     await respirar();
 
-    comprobar('sale a la nube dentro de cada plato',
-        sacarDeNube('servicio/comandas/' + c.id).items.filter(i => !i.automatico).map(i => i.menestra), ['lenteja', 'frejol']);
+    const enNube = sacarDeNube('servicio/comandas/' + c.id);
+    comprobar('sale a la nube: la cuenta en la tanda, y la del que se llevan en su plato',
+        [JSON.stringify(enNube.menestra), enNube.items.filter(i => !i.automatico).map(i => i.menestra || '-')],
+        ['{"frejol":0,"lenteja":2}', ['-', 'frejol']]);
     comprobar('en el mismo envío que crea la tanda',
         mesero.propio.enviado.filter(e => e.rama.indexOf('servicio/comandas') === 0).map(e => e.metodo), ['PUT']);
 
-    const enCocina = cel => (cel || cocina).corre(`(Servicio.getComandas()['${c.id}'] || { items: [] }).items
-        .filter(i => !i.automatico).map(i => i.cantidad + (i.llevar ? ' llevar ' : ' ') + i.menestra)`);
+    const enCocina = cel => (cel || cocina).corre(`(() => {
+        const c = Servicio.getComandas()['${c.id}'] || { items: [] };
+        return [JSON.stringify(c.menestra || null)].concat(c.items.filter(i => !i.automatico)
+            .map(i => i.cantidad + (i.llevar ? ' llevar ' : ' ') + (i.menestra || '-')));
+    })()`);
+    const esperado = ['{"frejol":0,"lenteja":2}', '2 -', '1 llevar frejol'];
 
     cocina.eco('/', sacarDeNube('servicio/comandas'), false);
-    comprobar('G. la cocina recibe cada plato con la suya', enCocina(), ['2 lenteja', '1 llevar frejol']);
+    comprobar('G. la cocina recibe la cuenta y cada plato con lo suyo', enCocina(), esperado);
     cocina.eco('/', sacarDeNube('servicio/comandas'), false);
     cocina.eco('/' + c.id, sacarDeNube('servicio/comandas/' + c.id), false);
-    comprobar('recibirla dos veces no la duplica', enCocina(), ['2 lenteja', '1 llevar frejol']);
+    comprobar('recibirla dos veces no la duplica', enCocina(), esperado);
 
     const recargada = celular('cocina');
     recargada.corre(`Servicio.iniciar(() => {}, 'estacion')`);
     recargada.eco('/', sacarDeNube('servicio/comandas'), false);
-    comprobar('una pantalla recién abierta la ve igual', enCocina(recargada), ['2 lenteja', '1 llevar frejol']);
+    comprobar('una pantalla recién abierta la ve igual', enCocina(recargada), esperado);
 
-    // Corregir: viaja con los platos, y la cocina lo pone encima
-    mesero.propio.enviado.length = 0;
-    mesero.corre(`Servicio.editarComanda('${c.id}', [
-        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1, menestra: 'lenteja' },
-        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1, menestra: 'frejol' },
-        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1, llevar: true, menestra: 'frejol' }])`);
-    await respirar();
-    const parche = mesero.propio.enviado[0] || { valor: {} };
-    comprobar('corregirla va como PATCH de los platos', [parche.metodo, 'items' in parche.valor], ['PATCH', true]);
-    comprobar('y no manda una menestra de tanda', 'menestra' in parche.valor, false);
+    // Corregir: los platos y la cuenta van en un PATCH, y la cocina lo pone encima
+    const corregir = (items, menestra) => {
+        mesero.propio.enviado.length = 0;
+        mesero.corre(`Servicio.editarComanda('${c.id}', ${items}, undefined, ${JSON.stringify(menestra)})`);
+        return respirar().then(() => mesero.propio.enviado[0] || { metodo: '', valor: {} });
+    };
+    const parche = await corregir(pollos(3, true), { lenteja: 2, frejol: 1 });
+    comprobar('corregirla va como un PATCH con los platos y la cuenta',
+        [parche.metodo, 'items' in parche.valor, JSON.stringify(parche.valor.menestra)],
+        ['PATCH', true, '{"frejol":1,"lenteja":2}']);
     cocina.eco('/' + c.id, parche.valor, true);
     cocina.eco('/' + c.id, parche.valor, true);
     comprobar('la cocina la ve corregida, sin sumarla a la de antes',
-        enCocina(), ['1 lenteja', '1 frejol', '1 llevar frejol']);
+        enCocina(), ['{"frejol":1,"lenteja":2}', '3 -', '1 llevar frejol']);
 
-    // H. Las reglas: los platos los escribe quien toma pedidos, y la cocina no
+    /* La misma cuenta escrita al revés no es un cambio. Se mira en una
+       tanda sin nada para llevar: volver a guardar una con tarrina ya
+       contaba como corrección antes de esto, porque la tarrina se rehace. */
+    const m6 = mesero.corre(`Servicio.enviarComanda({ mesa: 6, menestra: { frejol: 1, lenteja: 1 }, items: ${pollos(2)} })`);
+    await respirar();
+    mesero.propio.enviado.length = 0;
+    mesero.corre(`Servicio.editarComanda('${m6.id}', Servicio.getComandas()['${m6.id}'].items, undefined,
+        { lenteja: 1, frejol: 1 })`);
+    await respirar();
+    comprobar('la misma cuenta escrita al revés no se manda ni vuelve a sonar', mesero.propio.enviado.length, 0);
+    const conCola = await corregir(pollos(3, true).replace(/]$/,
+        `, { platoId: 'b3', nombre: 'Cola personal', precio: 0.5, cantidad: 1 }]`));
+    comprobar('sin pasarla, la cuenta se queda como estaba',
+        ['items' in conCola.valor, 'menestra' in conCola.valor, JSON.stringify(mesero.corre(`Servicio.getComandas()['${c.id}'].menestra`))],
+        [true, false, '{"frejol":1,"lenteja":2}']);
+    const sinMesa = await corregir(`[{ platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1,
+        llevar: true, menestra: 'frejol' }]`, null);
+    comprobar('si ya no quedan platos de la mesa, la cuenta se borra', sinMesa.valor.menestra, null);
+
+    // H. Las reglas: los platos y la cuenta los escribe quien toma pedidos, y la cocina no
     const puede = llavesDeComanda();
-    comprobar('H. los platos —y con ellos su menestra— los corrigen el mesero y el asador',
-        [puede('items', 'mesero'), puede('items', 'parrilla')], [true, true]);
-    comprobar('H. la cocina y el que sirve no', [puede('items', 'cocina'), puede('items', 'servir')], [false, false]);
+    comprobar('H. los platos y la cuenta de la menestra los escriben el mesero y el asador',
+        [puede('items', 'mesero'), puede('items', 'parrilla'), puede('menestra', 'mesero'), puede('menestra', 'parrilla')],
+        [true, true, true, true]);
+    comprobar('H. la cocina y el que sirve no',
+        [puede('items', 'cocina'), puede('items', 'servir'), puede('menestra', 'cocina'), puede('menestra', 'servir')],
+        [false, false, false, false]);
 
-    // G. Por tandas y de mesa en mesa
+    // G. Por tandas y de mesa en mesa: cada tanda se lleva su cuenta
     nubeLimpia();
     const { corre } = celular('mesero');
-    const t1 = corre(`Servicio.enviarComanda({ mesa: 5, items: [
-        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2, menestra: 'lenteja' }] })`);
-    const t2 = corre(`Servicio.enviarComanda({ mesa: 5, items: [
-        { platoId: 'p2', nombre: 'Chuleta', precio: 4, cantidad: 1, menestra: 'frejol' },
+    const t1 = corre(`Servicio.enviarComanda({ mesa: 5, menestra: { lenteja: 2, frejol: 0 }, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 }] })`);
+    const t2 = corre(`Servicio.enviarComanda({ mesa: 5, menestra: { lenteja: 0, frejol: 1 }, items: [
+        { platoId: 'p2', nombre: 'Chuleta', precio: 4, cantidad: 1 },
         { platoId: 'b3', nombre: 'Cola personal', precio: 0.5, cantidad: 1 }] })`);
     comprobar('cada tanda con sus platos', [t1.codigo, t2.codigo], ['M5 · 2PO', 'M5b · 1CH 1 Cola personal']);
     comprobar('y la cuenta es la de siempre', corre(`Servicio.cuentaDe({ mesa: 5 }).total`), 11.5);
 
     comprobar('se cambian a la mesa 8', corre(`Servicio.moverMesa(5, 8).ok`), true);
-    const de = r => corre(`Servicio.tandasDe(${r}).map(c => c.codigo.split(' ')[0] + ': ' +
-        c.items.filter(i => !i.automatico).map(i => i.cantidad + ' ' + (i.menestra || '-')).join(', '))`);
-    comprobar('cada plato se lleva su menestra', de(`{ mesa: 8 }`), ['M8: 2 lenteja', 'M8b: 1 frejol, 1 -']);
+    const de = r => corre(`Servicio.tandasDe(${r}).map(c => {
+        const m = Servicio.menestraDeComanda(c);
+        return c.codigo.split(' ')[0] + ': ' + m.partes.map(p => p.cantidad + ' de ' + p.nombre).join(', ') +
+            (m.faltan || m.sobran ? ' (descuadrada)' : '');
+    })`);
+    comprobar('cada tanda se lleva su cuenta', de(`{ mesa: 8 }`), ['M8: 2 de lenteja', 'M8b: 1 de frejol']);
 
     comprobar('y pasan a llevar', corre(`Servicio.moverCuenta({ mesa: 8 }, { llevar: true, nombre: 'Ana' }).ok`), true);
     const ana = `{ sesion: Servicio.llevarPorNombre('Ana').id }`;
-    comprobar('con la misma menestra cada uno', de(ana), ['LL: 2 lenteja', 'LLb: 1 frejol, 1 -']);
+    comprobar('con la misma menestra cada una, y sin descuadrarse', de(ana), ['LL: 2 de lenteja', 'LLb: 1 de frejol']);
     comprobar('F. y las tarrinas de los pollos se cobran como siempre', corre(`Servicio.cuentaDe(${ana}).total`), 12);
 }
 
@@ -5065,6 +5214,7 @@ async function probarMenestraDelComensal() {
     const bandeja = {
         k1: { mesa: 4, creado: Date.now(), nota: '', items: [
             { platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 },
+            { platoId: 'r2', nombre: 'Menestra', precio: 1, cantidad: 1 },
             { platoId: 'b3', nombre: 'Cola personal', precio: 0.5, cantidad: 2 }] },
         k2: { mesa: 6, creado: Date.now(), nota: '', items: [
             { platoId: 'a1', nombre: 'Pollo Apanado', precio: 5, cantidad: 1 }] }
@@ -5075,22 +5225,26 @@ async function probarMenestraDelComensal() {
     comprobar('los dos pedidos están en la bandeja', corre(`Servicio.getEntrantes().length`), 2);
 
     const comandas = () => corre(`Object.values(Servicio.getComandas())`);
-    const preguntado = () => corre(`pregunta && pregunta.lineas.map(l => l.cantidad + ' ' + l.nombre + ': ' + l.lenteja)`);
+    const preguntado = () => corre(`pregunta && [].concat(
+        pregunta.contadas ? ['mesa ' + pregunta.contadas.cantidad + ': ' + pregunta.contadas.lenteja] : [],
+        pregunta.lineas.map(l => l.cantidad + ' ' + l.nombre + ': ' + l.lenteja))`);
 
     corre(`pedirConfirmar('k1', null)`);
     await respirar();
     comprobar('el de los pollos no sale de un toque', comandas().length, 0);
-    comprobar('hace la misma pregunta del final, con los pollos y sin la cola', preguntado(), ['2 Pollo Asado: 0']);
+    comprobar('hace la misma pregunta del final: los pollos contados, la porción aparte, la cola nada',
+        preguntado(), ['mesa 2: 0', '1 Menestra: 0']);
     comprobar('dice de qué mesa es', /Pedido de la mesa 4/.test(nodo('menestra-cuerpo').innerHTML), true);
     comprobar('y su botón confirma', /Confirmar y enviar/.test(nodo('menestra-ok').innerHTML), true);
 
-    corre(`tocarLenteja(0, 1)`);
+    corre(`tocarLenteja('mesa', 1); tocarLenteja(0, 1)`);
     await corre.esperando(`responderPregunta()`);
     const c = comandas()[0] || { items: [] };
-    comprobar('sale un pollo de cada una, y la cola sin ninguna',
-        c.items.map(i => i.cantidad + ' ' + i.platoId + ' ' + (i.menestra || '-')), ['1 p5 frejol', '1 p5 lenteja', '2 b3 -']);
+    comprobar('los pollos salen enteros con su cuenta; la porción con la suya; la cola sin nada',
+        [c.items.map(i => i.cantidad + ' ' + i.platoId + ' ' + (i.menestra || '-')), JSON.stringify(c.menestra)],
+        [['2 p5 -', '1 r2 lenteja', '2 b3 -'], '{"frejol":1,"lenteja":1}']);
     comprobar('sigue siendo del comensal', c.origen, 'cliente');
-    comprobar('y se cobra lo que pidió', corre(`Servicio.cuentaDe({ mesa: 4 }).total`), 8);
+    comprobar('y se cobra lo que pidió', corre(`Servicio.cuentaDe({ mesa: 4 }).total`), 9);
     comprobar('la hoja se cierra', corre(`pregunta`), null);
 
     corre(`pedirConfirmar('k2', null)`);

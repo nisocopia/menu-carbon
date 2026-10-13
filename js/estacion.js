@@ -848,6 +848,11 @@ function tarjeta(c, turno) {
  * mesero se le quedó algo sin decir, se dice que falta en vez de dejar
  * que salga de frejol por costumbre.
  *
+ * Los platos de la mesa vienen contados y no dicen cuál: cualquiera le
+ * sirve al que la pidió. El que dice la suya —el que se llevan— la tiene
+ * en su renglón, y entonces aquí va solo la de la mesa, con su nombre:
+ * sumarlas hacía contar dos veces la misma lenteja.
+ *
  * Solo en la cocina: el asador saca la proteína igual, lleve la
  * menestra que lleve.
  */
@@ -858,11 +863,12 @@ function menestraHtml(c) {
     const aviso = m.faltan ? `${m.faltan} sin decir de qué — pregunta al mesero`
                 : m.sobran ? `${m.sobran} de más — pregunta al mesero`
                 : '';
+    const ver = m.mesa || { titulo: 'Menestra', partes: m.partes };
 
     return `
         <div class="ticket-menestra ${aviso ? 'pendiente' : ''}">
-            <span class="tmen-tit">Menestra</span>
-            ${m.partes.map(p => `<span class="tmen-clase"><b>${p.cantidad}</b> de ${p.nombre}</span>`).join('')}
+            <span class="tmen-tit">${ver.titulo}</span>
+            ${ver.partes.map(p => `<span class="tmen-clase"><b>${p.cantidad}</b> de ${p.nombre}</span>`).join('')}
             ${aviso ? `<span class="tmen-aviso"><i class="fas fa-triangle-exclamation"></i> ${aviso}</span>` : ''}
         </div>`;
 }

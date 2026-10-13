@@ -440,11 +440,27 @@ function verCuenta(sesionId, titulo) {
                         </span>
                     </li>`).join('')}
             </ul>
+            ${menestraDeLaMesa(c)}
             ${c.nota ? `<div class="vmesa-nota">${c.nota}</div>` : ''}
         </div>`).join('')
         : '<p class="hoja-nota">Todavía no ha pedido nada.</p>';
 
     $('hoja-mesa').classList.add('open');
+}
+
+/**
+ * La menestra de los platos de la mesa. Se dice contada —"1 de lenteja,
+ * 2 de frejol"— y no está en ningún plato, así que va debajo, aparte.
+ * Lo que dice la suya, el que se llevan, la tiene en su renglón.
+ */
+function menestraDeLaMesa(c) {
+    const m = c.menestra ? Servicio.menestraDeComanda(c) : null;
+    if (!m) return '';
+    const ver = m.mesa || { titulo: 'Menestra', partes: m.partes };
+    const aviso = m.faltan ? ` · ${m.faltan === 1 ? 'falta' : 'faltan'} ${m.faltan}`
+                : m.sobran ? ` · ${m.sobran === 1 ? 'sobra' : 'sobran'} ${m.sobran}` : '';
+    return `<div class="vmesa-menestra ${aviso ? 'pendiente' : ''}">${ver.titulo}:
+        ${ver.partes.map(p => `<b>${p.cantidad}</b> de ${p.nombre}`).join(' · ') || 'sin decir'}${aviso}</div>`;
 }
 
 const cerrarMesa = () => $('hoja-mesa').classList.remove('open');

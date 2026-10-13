@@ -849,9 +849,11 @@
 /* ------------------------------------------------------------
    DE QUÉ ES LA MENESTRA
 
-   Se pregunta al final, en una hoja: cada fila de platos que la lleva,
-   con cuántos de ella son de lenteja; lo demás va de frejol. Las fichas
-   de abajo son las de la hoja de un plato, para cuando la dicen al
+   Se pregunta al final, en una hoja: cuántos de los platos de la mesa
+   son de lenteja, juntos, y aparte cada fila que dice la suya —lo para
+   llevar, lo que va sin arroz, la porción suelta—; lo demás va de
+   frejol. Las fichas de
+   abajo son las de la hoja de un plato, para cuando la dicen al
    principio.
    ------------------------------------------------------------ */
 
@@ -870,7 +872,7 @@
 
 .ficha-men.on { background: #8d6e63; border-color: #bcaaa4; color: #fff; font-weight: 600; }
 
-/* Una fila de platos por renglón: qué son y cuántos de lenteja */
+/* Un renglón por cosa que se cuenta: qué es y cuántos de lenteja */
 .men-plato {
     display: flex;
     align-items: center;
@@ -883,6 +885,7 @@
 .men-plato:first-of-type { border-top: none; }
 .men-nom { font-size: 0.95rem; }
 .men-nom .bitem-det { color: #FFC107; }
+.men-mesa .men-nom { font-size: 1.05rem; font-weight: 600; }
 .men-cuenta { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: none; }
 .men-cuantas { font-size: 0.68rem; color: #9e9e9e; }
 .men-cuenta .bitem-cant button:disabled { opacity: 0.3; cursor: default; }
@@ -2248,6 +2251,11 @@ body.hay-nuevo::after {
     font-weight: 700;
     text-align: center;
 }
+
+/* La cuenta de la menestra de la mesa: no está en ningún plato */
+.vmesa-menestra { font-size: 0.85rem; color: #bcaaa4; margin-top: 6px; }
+.vmesa-menestra b { color: #fff; }
+.vmesa-menestra.pendiente { color: #ff9800; }
 
 .vmesa-nota {
     background: #221d0d;

@@ -703,11 +703,20 @@ const Servicio = (() => {
        notaba en ningún lado: salía frejol y nadie se enteraba de que
        nadie había preguntado.
 
-       ES DE CADA PLATO. La primera vez se guardó por tanda —"3 de
-       lenteja y 2 de frejol"—, y eso no decía cuál: con una carne para
-       la mesa y otra para llevar, la cocina no sabía en cuál poner la
-       lenteja. Ahora cada plato lleva la suya, it.menestra = 'lenteja'
-       o 'frejol', y lo de la tanda se cuenta de los platos.
+       EN LA MESA SE CUENTA. El arroz con la menestra va en su plato y la
+       proteína en otro, y lo de una mesa sale junto: cualquier plato de
+       lenteja le sirve al que la pidió. Por eso se pregunta "¿cuántos de
+       lenteja?" y nada más, y la tanda guarda la cuenta —menestra =
+       { frejol: 2, lenteja: 1 }— sin que ningún plato diga cuál es.
+       Decir cuál era trabajo de más, y confundía.
+
+       LO DEMÁS DICE LA SUYA, it.menestra = 'lenteja' o 'frejol':
+       - lo para llevar, que sale armado en su tarrina: con una carne
+         para la mesa y otra para llevar, la lenteja tiene que ir en la
+         que se llevan;
+       - la porción suelta, que se pide como "una menestra" y además se
+         puede seguir cambiando pasado el minuto, cuando la cuenta de la
+         tanda ya está en la cocina.
 
        Solo la lleva el plato que sale con menestra, con la misma regla
        que el arroz: por la guarnición con la que SALE. Un mixto es un
@@ -715,8 +724,12 @@ const Servicio = (() => {
        acompañantes—, y lo pedido "sin menestra" o "solo patacones y
        ensalada" no la lleva. La porción suelta de menestra sí.
 
-       '' es "nadie lo ha dicho". Un plato SIN el campo es de antes de
-       esto: no se le inventa nada, se ve como siempre se vio.
+       '' es "nadie lo ha dicho". Un plato sin el campo en una tanda sin
+       cuenta es de antes de esto: no se le inventa nada, se ve como
+       siempre se vio. Entre medias hubo dos formas más —la cuenta de
+       toda la tanda, con lo de llevar adentro, y cada plato con la
+       suya, también los de la mesa— y se siguen leyendo como se
+       guardaron.
        ------------------------------------------------------------ */
 
     /** Las clases que se preguntan. Con menos de dos no hay nada que preguntar. */
@@ -736,16 +749,32 @@ const Servicio = (() => {
     /** ¿A este plato hay que decirle de qué es su menestra? */
     const pideMenestra = it => clasesMenestra().length > 0 && llevaMenestra(it);
 
+    /**
+     * ¿Su menestra va en la cuenta de la mesa, o dice la suya? Se cuenta
+     * la del plato que se come ahí con su arroz: esos platos son todos
+     * iguales y cualquiera le sirve a cualquiera. Van una por una la de
+     * llevar, la del que se pidió sin arroz —su menestra sale sola, en un
+     * plato que ya no es como los otros— y la de la porción suelta, que
+     * además se sigue pudiendo tocar pasado el minuto.
+     */
+    const menestraContada = it => pideMenestra(it) && !it.llevar && !editableSiempre(it.platoId) && llevaArroz(it);
+
     /** Cuántas porciones de menestra lleva esta lista de platos. */
     function menestrasDe(items) {
         if (!clasesMenestra().length) return 0;
         return (items || []).reduce((n, it) => n + (llevaMenestra(it) ? (it.cantidad || 0) : 0), 0);
     }
 
-    /** La de por tanda de la primera versión, para poder leerla como se guardó. */
+    /**
+     * La cuenta como se guarda: cada clase con su número entero, y las
+     * claves en orden alfabético. El orden no es manía: la nube las
+     * devuelve así, y si aquí fueran en otro orden la misma cuenta
+     * parecería distinta — y corregir sin cambiar nada volvería a hacer
+     * sonar la cocina.
+     */
     function limpiarMenestra(sel) {
         const fuera = {};
-        clasesMenestra().forEach(k => {
+        clasesMenestra().slice().sort().forEach(k => {
             fuera[k] = Math.max(0, Math.floor(Number((sel || {})[k]) || 0));
         });
         return fuera;
@@ -754,38 +783,52 @@ const Servicio = (() => {
     /**
      * Lo que hay que enseñar de la menestra de una tanda ya mandada:
      * cuántas de cada clase, en el orden de menu-data.js, y las que nadie
-     * dijo. Sale de los platos. Las tandas de la primera versión, que la
-     * guardaban por tanda, se leen tal como se guardaron. null si no hay
-     * nada que decir: no lleva menestra, o es de antes de preguntarse.
+     * dijo o sobran. Suma la cuenta de la mesa y lo que dijo cada plato.
+     *
+     * `mesa` es la cuenta sola, con su título, cuando además hay platos
+     * que dicen la suya: la cocina la lee aparte, para no contar dos
+     * veces la lenteja del que se llevan. null si no hay nada que decir:
+     * no lleva menestra, o es de antes de preguntarse.
      */
     function menestraDeComanda(c) {
         if (!c) return null;
         const conMenestra = (c.items || []).filter(pideMenestra);
         if (!conMenestra.length) return null;
-        const requeridas = conMenestra.reduce((n, it) => n + (it.cantidad || 0), 0);
+        const suma = lista => lista.reduce((n, it) => n + (it.cantidad || 0), 0);
 
-        let cuenta, faltan = 0, sobran = 0;
-        if (conMenestra.some(it => it.menestra !== undefined)) {
-            cuenta = {};
-            conMenestra.forEach(it => {
-                if (claseValida(it.menestra)) cuenta[it.menestra] = (cuenta[it.menestra] || 0) + (it.cantidad || 0);
-                else if (it.menestra !== undefined) faltan += it.cantidad || 0;
-            });
-        } else if (c.menestra && typeof c.menestra === 'object') {
-            cuenta = limpiarMenestra(c.menestra);
-            const elegidas = Object.keys(cuenta).reduce((n, k) => n + cuenta[k], 0);
-            faltan = Math.max(0, requeridas - elegidas);
-            sobran = Math.max(0, elegidas - requeridas);
-        } else {
-            return null;
+        const propias = conMenestra.filter(it => it.menestra !== undefined);
+        const tanda = c.menestra && typeof c.menestra === 'object' ? limpiarMenestra(c.menestra) : null;
+        if (!propias.length && !tanda) return null;
+
+        const cuenta = {};
+        const sumar = (k, n) => { cuenta[k] = (cuenta[k] || 0) + n; };
+        let faltan = 0, sobran = 0;
+        propias.forEach(it => {
+            if (claseValida(it.menestra)) sumar(it.menestra, it.cantidad || 0);
+            else faltan += it.cantidad || 0;
+        });
+
+        if (tanda) {
+            Object.keys(tanda).forEach(k => sumar(k, tanda[k]));
+            /* Lo que cubre la cuenta: los platos que no dicen la suya.
+               Son los de la mesa, y en la primera versión, todos. */
+            const cubre = suma(conMenestra.filter(it => it.menestra === undefined));
+            const dichas = Object.keys(tanda).reduce((n, k) => n + tanda[k], 0);
+            faltan += Math.max(0, cubre - dichas);
+            sobran += Math.max(0, dichas - cubre);
         }
 
+        const partesDe = cuantas => clasesMenestra()
+            .filter(k => cuantas[k] > 0)
+            .map(k => ({ clase: k, nombre: nombreMenestra(k), cantidad: cuantas[k] }));
         return {
-            requeridas,
-            partes: clasesMenestra()
-                .filter(k => cuenta[k] > 0)
-                .map(k => ({ clase: k, nombre: nombreMenestra(k), cantidad: cuenta[k] })),
-            faltan, sobran
+            requeridas: suma(conMenestra),
+            partes: partesDe(cuenta),
+            faltan, sobran,
+            mesa: tanda && propias.length ? {
+                partes: partesDe(tanda),
+                titulo: c.mesa && propias.some(it => it.llevar) ? 'Menestra en la mesa' : 'Menestra de los demás'
+            } : null
         };
     }
 
@@ -1223,7 +1266,7 @@ const Servicio = (() => {
         return limpio;
     });
 
-    function enviarComanda({ mesa, nombre, items, nota, origen, sesion: sesionId }) {
+    function enviarComanda({ mesa, nombre, items, nota, origen, sesion: sesionId, menestra }) {
         if (!items || !items.length) return null;
 
         /* Lo que se agrega a una tanda ya servida se pega a la cuenta de
@@ -1255,6 +1298,10 @@ const Servicio = (() => {
             estado: 'nuevo',
             sacado: false                    // el asador ya la sacó de la parrilla
         };
+
+        /* La cuenta de la menestra de la mesa, si se preguntó: "1 de
+           lenteja y 2 de frejol", sin decir cuál (ver menestraContada). */
+        if (menestra && copia.some(menestraContada)) comanda.menestra = limpiarMenestra(menestra);
 
         comanda.codigo    = codigoDe(comanda);
         comanda.cubiertos = cubiertosDe(comanda.items);
@@ -1778,7 +1825,7 @@ const Servicio = (() => {
      * tanda: para la cocina sigue siendo el mismo pedido, corregido, no
      * uno nuevo que aparece de la nada mientras el otro desaparece.
      */
-    function editarComanda(id, items, nota) {
+    function editarComanda(id, items, nota, menestra) {
         const c = getComandas()[id];
         if (!c || !items || !items.length) return null;
 
@@ -1797,6 +1844,16 @@ const Servicio = (() => {
            corrección no necesitaba. */
         const notaNueva = nota != null ? nota : (c.nota || '');
         if (notaNueva !== (c.nota || '')) patch.nota = notaNueva;
+
+        /* La cuenta de la menestra de la mesa. Sin pasar se queda la que
+           tenía: es lo que hace la pantalla cuando no se volvió a
+           preguntar. Si ya no hay platos de la mesa que la lleven se
+           borra (null), pero solo si tenía: mandar un null porque sí
+           cuenta como cambio y volvería a sonar en la cocina. */
+        if (menestra !== undefined) {
+            const nueva = menestra && copia.some(menestraContada) ? limpiarMenestra(menestra) : null;
+            if (nueva || c.menestra != null) patch.menestra = nueva;
+        }
 
         /* Abrir una tanda, mirarla y cerrarla no es corregirla. Sin esto
            la hora de "editado" cambiaba sola y se mandaba un aviso a
@@ -2675,11 +2732,11 @@ const Servicio = (() => {
      * Devuelve la comanda creada, `{ ocupado: true }` si otro celular se
      * le adelantó, o null si ya no había nada que confirmar.
      *
-     * `platos` son los mismos del pedido con la menestra de cada uno, que
-     * el mesero preguntó al confirmar: el comensal pide desde su celular
-     * y ahí no se le pregunta de qué la quiere.
+     * `platos` y `menestra` son lo que el mesero preguntó al confirmar
+     * —la de lo que dice la suya y la cuenta de la mesa—: el comensal
+     * pide desde su celular y ahí no se le pregunta de qué la quiere.
      */
-    async function confirmarEntrante(llave, mesa, platos) {
+    async function confirmarEntrante(llave, mesa, platos, menestra) {
         const e = entrantes[llave];
         if (!e || yaTomado(llave)) return null;
 
@@ -2711,7 +2768,8 @@ const Servicio = (() => {
             mesa: mesa != null ? mesa : e.mesa,
             items: platos || e.items,
             nota: e.nota,
-            origen: 'cliente'
+            origen: 'cliente',
+            menestra
         });
 
         /* El cerrojo se suelta con la mesa QUE PIDIÓ, no con la mesa a la
@@ -3173,7 +3231,7 @@ const Servicio = (() => {
         estacionDe, guarnicionDe, arrozPendiente, porSacar, categoriaDe, codigoDe, etiquetaDe,
         cambiosDe, guarnicionFinal, comoSeSirve,
         // de qué es la menestra
-        clasesMenestra, nombreMenestra, pideMenestra, menestrasDe, menestraDeComanda,
+        clasesMenestra, nombreMenestra, pideMenestra, menestraContada, menestrasDe, menestraDeComanda,
         productoDe, nombreProducto, consumoDe, quedanDe, quedanDePlato,
         sePuedePedir, quedanTodos, revisarStock,
         cubiertosDe, nombreCorto, resumirItems, nombreInterno, nombreDeItem,

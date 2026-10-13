@@ -32,9 +32,14 @@ let separado    = null;      // { de, uid } si la hoja separó un plato de su fi
 let editandoTanda = null;    // { id, modo } cuando se está corrigiendo una tanda ya enviada
 let seleccion   = new Map(); // lo que se va a cobrar
 
-/* La pregunta del final, "¿alguna con menestra de lenteja?", mientras
-   está abierta: { para, lineas: [{ nombre, detalle, cantidad, lenteja }] }. */
+/* La pregunta del final, "¿cuántos con menestra de lenteja?", mientras
+   está abierta: { para, contadas: { cantidad, lenteja } | null,
+   lineas: [{ nombre, detalle, cantidad, lenteja }] }. Los platos de la
+   mesa se cuentan juntos; cada línea es algo que dice la suya. */
 let pregunta = null;
+/* Lo que se acaba de contestar, para el envío que va justo detrás. La
+   cuenta de la mesa no queda escrita en ningún plato: viaja aquí. */
+let respondida = null;
 
 /** La referencia que entiende Servicio; null mientras el pedido no tenga nombre. */
 const ref = () => (refActual && !refActual.nuevoLlevar) ? refActual : null;
@@ -266,9 +271,9 @@ function pintarEntrantes() {
  * nube antes de crear nada, y ese viaje deja una rendija para tocar dos
  * veces — que es justo lo que se está evitando.
  */
-function confirmarEntrante(llave, platos, boton) {
+function confirmarEntrante(llave, platos, boton, menestra) {
     if (boton) boton.disabled = true;
-    Servicio.confirmarEntrante(llave, undefined, platos).then(c => {
+    Servicio.confirmarEntrante(llave, undefined, platos, menestra).then(c => {
         if (!c) return;
         if (c.ocupado) { toast('Ese pedido ya lo confirmó otro celular'); return; }
         avisarEnviada(c);
@@ -288,7 +293,8 @@ function pedirConfirmar(llave, boton) {
     if (e && Servicio.menestrasDe(e.items)) {
         return abrirPregunta({
             para: 'entrante', llave, mesa: e.mesa, items: e.items,
-            lineas: e.items.map((it, i) => Servicio.pideMenestra(it)
+            contadas: contadasDe(e.items.filter(Servicio.menestraContada), 0),
+            lineas: e.items.map((it, i) => Servicio.pideMenestra(it) && !Servicio.menestraContada(it)
                 ? { i, nombre: it.nombre, detalle: '', cantidad: it.cantidad, lenteja: 0 } : null)
                 .filter(Boolean)
         });
@@ -296,7 +302,10 @@ function pedirConfirmar(llave, boton) {
     return confirmarEntrante(llave, undefined, boton);
 }
 
-/** Lo que se respondió de un pedido del comensal: cada línea, partida por clase. */
+/**
+ * Lo que se respondió de un pedido del comensal: la cuenta de la mesa,
+ * y cada línea que dice la suya partida por clase.
+ */
 function confirmarConMenestra(p) {
     // Mientras se preguntaba, otro celular pudo habérselo llevado
     if (!Servicio.getEntrantes().some(x => x.llave === p.llave)) {
@@ -312,7 +321,7 @@ function confirmarConMenestra(p) {
         if (it.cantidad > lenteja) platos.push({ ...it, cantidad: it.cantidad - lenteja, menestra: 'frejol' });
         if (lenteja > 0)           platos.push({ ...it, cantidad: lenteja, menestra: 'lenteja' });
     });
-    confirmarEntrante(p.llave, platos, null);
+    confirmarEntrante(p.llave, platos, null, cuentaDicha(p.contadas));
 }
 
 function pintarMesas() {
@@ -905,35 +914,55 @@ function bitemHtml(it) {
    escribía salía de frejol: el olvido no se notaba en ningún lado.
 
    SE PREGUNTA AL FINAL, que es como se pregunta en la mesa: con el
-   pedido ya tomado, justo antes de enviar, "¿alguna con menestra de
-   lenteja?". Lo que no se marca va de frejol, que es la de la casa.
-   Mientras se toma el pedido no se pregunta nada y las filas quedan
-   limpias; si el comensal la dice al principio, se le pone al plato
-   desde su hoja.
+   pedido ya tomado, justo antes de enviar, "¿cuántos con menestra de
+   lenteja?". Lo demás va de frejol, que es la de la casa. Mientras se
+   toma el pedido no se pregunta nada y las filas quedan limpias.
 
-   Pero no se puede saltar: si hay platos con menestra que todavía no
-   la tienen, Enviar abre la pregunta antes de mandar nada. Las de
-   frejol quedan dichas al responderla, no supuestas.
+   EN LA MESA SE CUENTA, NO SE SEÑALA. El arroz con la menestra se
+   sirve en su plato y la proteína en otro, y todo lo de la mesa sale
+   junto: cualquier plato de lenteja le sirve al que la pidió. Por eso a
+   los platos de la mesa se les pregunta cuántos, y nada más. Señalar
+   cuál era trabajo de más, y confundía.
 
-   Cada plato guarda la suya. Si de cuatro pollos dos son de lenteja, la
-   fila se parte en dos: la cocina sabe cuál es cuál, aunque uno sea
-   para la mesa y otro para llevar.
+   LO PARA LLEVAR SÍ VA UNO POR UNO: sale armado en su tarrina, y la
+   lenteja tiene que ir en la que es. Igual el que se pidió sin arroz y
+   la porción suelta de menestra (ver Servicio.menestraContada). Si la
+   dicen al principio, se les pone desde la hoja del plato y la
+   pregunta la trae marcada.
 
-   Lo que ya venía en una tanda que no guardaba la menestra de cada
-   plato —las de antes, y las de la primera versión, que la guardaban
-   por tanda— no se vuelve a preguntar: se queda como se guardó. */
+   No se puede saltar: si hay platos con menestra, Enviar abre la
+   pregunta antes de mandar nada. Las de frejol quedan dichas al
+   responderla, no supuestas.
 
-/** Lo que ya venía en una tanda que no guardaba la menestra por plato. */
+   Lo que ya venía en una tanda de antes y dice la suya —lo de llevar,
+   la porción— pero nunca la guardó, no se vuelve a preguntar: se queda
+   como se guardó. */
+
+/** Lo que ya venía en la tanda y nunca guardó la suya: es de antes de preguntarse. */
 const exentoDeMenestra = it =>
-    !!(editandoTanda && editandoTanda.sinPorPlato && yaVenia(it));
+    !!editandoTanda && yaVenia(it) && it.menestra === undefined;
 
 /** ¿Se le puede decir aquí de qué es su menestra? */
 const menestraEditable = it =>
-    !it.bloqueado && !it.automatico && Servicio.pideMenestra(it) && !exentoDeMenestra(it);
+    !it.bloqueado && !it.automatico && Servicio.pideMenestra(it);
 
-/** ¿Todavía nadie dijo de qué es? */
+/** Va en la cuenta de la mesa: se dice cuántos, no cuál. */
+const menestraContada = it => menestraEditable(it) && Servicio.menestraContada(it);
+
+/** Dice la suya: lo para llevar, lo que va sin arroz y la porción suelta. */
+const menestraPropia = it =>
+    menestraEditable(it) && !Servicio.menestraContada(it) && !exentoDeMenestra(it);
+
+/** ¿Todavía nadie dijo de qué es la suya? */
 const faltaMenestra = it =>
-    menestraEditable(it) && Servicio.clasesMenestra().indexOf(it.menestra) < 0;
+    menestraPropia(it) && Servicio.clasesMenestra().indexOf(it.menestra) < 0;
+
+/** Lo que se manda: los platos de la mesa no llevan la suya, la lleva la cuenta de la tanda. */
+const sinLaDeLaMesa = items => items.map(it => {
+    if (!menestraContada(it)) return it;
+    const { menestra, ...resto } = it;
+    return resto;
+});
 
 /** "falta 1", "faltan 2": la frase sigue al número. */
 const cuantasFaltan = n => `${n === 1 ? 'falta' : 'faltan'} ${n}`;
@@ -954,9 +983,9 @@ function tocarMenestra(clase) {
 
 /* ---------- La pregunta del final ----------
 
-   "¿Alguna con menestra de lenteja?", con cada fila de platos que la
-   llevan y cuántos de ella son de lenteja. Lo demás, frejol. Es la
-   misma hoja para un pedido tomado a mano y para uno del comensal. */
+   "¿Cuántos con menestra de lenteja?": un número para los platos de la
+   mesa, y una fila por cada cosa que dice la suya. Lo demás, frejol. Es
+   la misma hoja para un pedido tomado a mano y para uno del comensal. */
 
 function abrirPregunta(p) {
     pregunta = p;
@@ -964,11 +993,33 @@ function abrirPregunta(p) {
     $('hoja-menestra').classList.add('open');
 }
 
-/** Antes de enviar: las filas con menestra, con la que ya tengan dicha. */
+/** Cuántos platos van en la cuenta, y cuántos de ellos ya se sabe que son de lenteja. */
+function contadasDe(platos, lenteja) {
+    const cantidad = platos.reduce((n, it) => n + it.cantidad, 0);
+    return cantidad ? { cantidad, lenteja: Math.min(lenteja || 0, cantidad) } : null;
+}
+
+/** La cuenta como se guarda: lo que no es de lenteja es de frejol. */
+const cuentaDicha = contadas => contadas
+    ? { lenteja: contadas.lenteja, frejol: contadas.cantidad - contadas.lenteja } : null;
+
+/**
+ * Lo que una tanda ya decía de los de la mesa que eran de lenteja: su
+ * cuenta, o lo que decía cada plato cuando cada uno decía la suya. Es
+ * con lo que sale la pregunta al corregirla.
+ */
+function lentejaGuardada(c) {
+    if (c.menestra && typeof c.menestra === 'object') return Number(c.menestra.lenteja) || 0;
+    return c.items.filter(it => Servicio.menestraContada(it) && it.menestra === 'lenteja')
+        .reduce((n, it) => n + it.cantidad, 0);
+}
+
+/** Antes de enviar: los platos de la mesa y las filas que dicen la suya, con lo que ya se sepa. */
 function preguntarMenestra() {
     abrirPregunta({
         para: 'borrador',
-        lineas: borrador.filter(menestraEditable).map(it => ({
+        contadas: contadasDe(borrador.filter(menestraContada), editandoTanda ? editandoTanda.lenteja : 0),
+        lineas: borrador.filter(menestraPropia).map(it => ({
             uid: it.uid,
             nombre: Servicio.nombreDeItem(it),
             detalle: detalleItem(it, false),
@@ -978,29 +1029,43 @@ function preguntarMenestra() {
     });
 }
 
+/** Todo lo que se cuenta en la pregunta: los de la mesa primero, después cada fila. */
+const contadores = () => (pregunta.contadas ? [pregunta.contadas] : []).concat(pregunta.lineas);
+
+/** El "− 1 +" de lenteja de los de la mesa o de una fila. */
+const contadorLenteja = (l, cual) => `
+    <span class="men-cuenta">
+        <span class="men-cuantas">de lenteja</span>
+        <span class="bitem-cant">
+            <button data-lenteja="${cual}:-1" aria-label="Una menos de lenteja"
+                    ${l.lenteja > 0 ? '' : 'disabled'}>−</button>
+            <span>${l.lenteja}</span>
+            <button data-lenteja="${cual}:1" aria-label="Una más de lenteja"
+                    ${l.lenteja < l.cantidad ? '' : 'disabled'}>+</button>
+        </span>
+    </span>`;
+
 function pintarPregunta() {
     if (!pregunta) return;
-    const total   = pregunta.lineas.reduce((n, l) => n + l.cantidad, 0);
-    const lenteja = pregunta.lineas.reduce((n, l) => n + l.lenteja, 0);
+    const todos   = contadores();
+    const total   = todos.reduce((n, l) => n + l.cantidad, 0);
+    const lenteja = todos.reduce((n, l) => n + l.lenteja, 0);
     const todas   = lenteja === total;
+    const mesa    = pregunta.contadas;
 
-    $('menestra-titulo').textContent = '¿Alguna con menestra de lenteja?';
+    $('menestra-titulo').textContent = '¿Cuántos con menestra de lenteja?';
     $('menestra-cuerpo').innerHTML = `
         <p class="hoja-nota">${pregunta.para === 'entrante' && pregunta.mesa
-            ? `Pedido de la mesa ${pregunta.mesa}. ` : ''}Las que no marques van de frejol.</p>
+            ? `Pedido de la mesa ${pregunta.mesa}. ` : ''}Los demás van de frejol.</p>
+        ${mesa ? `
+            <div class="men-plato men-mesa">
+                <span class="men-nom">${mesa.cantidad} ${mesa.cantidad === 1 ? 'plato' : 'platos'} en la mesa</span>
+                ${contadorLenteja(mesa, 'mesa')}
+            </div>` : ''}
         ${pregunta.lineas.map((l, i) => `
             <div class="men-plato">
                 <span class="men-nom">${l.cantidad} ${l.nombre}${l.detalle}</span>
-                <span class="men-cuenta">
-                    <span class="men-cuantas">de lenteja</span>
-                    <span class="bitem-cant">
-                        <button data-lenteja="${i}:-1" aria-label="Una menos de lenteja"
-                                ${l.lenteja > 0 ? '' : 'disabled'}>−</button>
-                        <span>${l.lenteja}</span>
-                        <button data-lenteja="${i}:1" aria-label="Una más de lenteja"
-                                ${l.lenteja < l.cantidad ? '' : 'disabled'}>+</button>
-                    </span>
-                </span>
+                ${contadorLenteja(l, i)}
             </div>`).join('')}
         <p class="men-resumen"><b>${lenteja}</b> de lenteja · <b>${total - lenteja}</b> de frejol</p>
         <button class="chip men-todas" data-lenteja-todas="${todas ? 0 : 1}">
@@ -1011,8 +1076,9 @@ function pintarPregunta() {
                                : '<i class="fas fa-paper-plane"></i> Enviar';
 }
 
-function tocarLenteja(i, cuanto) {
-    const l = pregunta && pregunta.lineas[i];
+/** `cual` es 'mesa' para los de la mesa, o el número de la fila. */
+function tocarLenteja(cual, cuanto) {
+    const l = pregunta && (cual === 'mesa' ? pregunta.contadas : pregunta.lineas[cual]);
     if (!l) return;
     l.lenteja = Math.max(0, Math.min(l.cantidad, l.lenteja + cuanto));
     pintarPregunta();
@@ -1020,7 +1086,7 @@ function tocarLenteja(i, cuanto) {
 
 function todasDeLenteja(si) {
     if (!pregunta) return;
-    pregunta.lineas.forEach(l => { l.lenteja = si ? l.cantidad : 0; });
+    contadores().forEach(l => { l.lenteja = si ? l.cantidad : 0; });
     pintarPregunta();
 }
 
@@ -1041,8 +1107,10 @@ function responderPregunta() {
 }
 
 /**
- * Cada fila queda con la suya: si de cuatro pollos dos son de lenteja,
- * se parte en dos filas, y lo que no se marcó queda de frejol.
+ * Cada fila que dice la suya queda con ella: si de dos pollos para
+ * llevar uno es de lenteja, se parte en dos filas, y lo que no se marcó
+ * queda de frejol. La cuenta de la mesa no se le pone a ningún plato:
+ * va con el envío que viene detrás.
  */
 function aplicarMenestra(p) {
     const quedan = [];
@@ -1060,6 +1128,7 @@ function aplicarMenestra(p) {
         }
     });
     borrador = quedan;
+    respondida = { mesa: cuentaDicha(p.contadas) };
     pintarBorrador();
 }
 
@@ -1231,15 +1300,6 @@ function abrirMod(uid) {
             </div>`);
     }
 
-    // Solo si este plato sale con menestra: con patacones o "sin menestra", no se pregunta
-    if (menestraEditable(it)) {
-        bloques.push(`
-            <div class="mod-bloque">
-                <h3>Menestra</h3>
-                <div class="mod-chips">${fichasMenestra(it.menestra)}</div>
-            </div>`);
-    }
-
     if (plato && plato.termino) {
         bloques.push(`
             <div class="mod-bloque">
@@ -1260,6 +1320,11 @@ function abrirMod(uid) {
             </div>
             <p class="mod-nota">El asador lo deja para el final, para que salga caliente.</p>
         </div>
+        ${menestraPropia(it) ? `
+        <div class="mod-bloque">
+            <h3>Menestra</h3>
+            <div class="mod-chips">${fichasMenestra(it.menestra)}</div>
+        </div>` : ''}
         <label class="campo-srv">
             <span>Nota para la cocina</span>
             <input type="text" id="mod-nota" value="${(it.nota || '').replace(/"/g, '&quot;')}"
@@ -1371,11 +1436,10 @@ function abrirEdicion(id) {
         mesa: c.mesa,
         entregado: c.estado === 'entregado',
         previos: c.items.map(it => it.uid),
-        /* Una tanda que lleva menestra pero no la guardó plato por plato
-           es de antes —o de la primera versión, que la guardaba por
-           tanda—: lo que ya venía no tiene de dónde sacarla y no se
-           vuelve a preguntar. Lo que se agregue, sí. */
-        sinPorPlato: Servicio.menestrasDe(c.items) > 0 && !c.items.some(it => it.menestra !== undefined)
+        /* Los de la mesa que ya eran de lenteja, para que la pregunta
+           salga con ellos. Solo en el minuto: pasado, lo de la mesa que
+           ya venía está en marcha y lo que se pregunta es lo nuevo. */
+        lenteja: modo === 'todo' ? lentejaGuardada(c) : 0
     };
     borrador = c.items
         .filter(it => !it.automatico)          // la tarrina se recalcula sola
@@ -1384,6 +1448,8 @@ function abrirEdicion(id) {
             sin: it.sin || [], cambio: it.cambio || '', elegidas: it.elegidas || [],
             bloqueado: modo === 'agregados' && !Servicio.editableSiempre(it.platoId)
         }));
+    // Lo de la mesa va en la cuenta: lo que alguno decía por su lado ya está en ella
+    borrador.forEach(it => { if (menestraContada(it)) it.menestra = ''; });
 
     pintarBorrador();
     window.scrollTo(0, 0);
@@ -1423,7 +1489,7 @@ const vaAparte = it => saleAparte(it.platoId) && !yaVenia(it);
  * Guarda lo que se corrigió. Puede salir en dos partes: la corrección
  * encima de la tanda de siempre, y lo agregado como tanda nueva.
  */
-function guardarEdicion() {
+function guardarEdicion(laDeLaMesa) {
     const aparte = borrador.filter(vaAparte);
     const encima = borrador.filter(it => !aparte.includes(it));
 
@@ -1432,7 +1498,13 @@ function guardarEdicion() {
     if (encima.length) {
         // Si no cambió nada, editarComanda no manda nada y no hay qué anunciar
         const antes = (Servicio.getComandas()[editandoTanda.id] || {}).editado;
-        const c = Servicio.editarComanda(editandoTanda.id, encima);
+        /* La cuenta de la mesa es de la tanda donde quedan sus platos. En
+           el minuto todo se queda en la de siempre. Pasado, lo de la mesa
+           que ya venía está en marcha y su cuenta no se toca (undefined),
+           y lo nuevo sale aparte con la suya. */
+        const cuenta = encima.some(menestraContada) ? laDeLaMesa
+                     : editandoTanda.modo === 'todo' ? null : undefined;
+        const c = Servicio.editarComanda(editandoTanda.id, sinLaDeLaMesa(encima), undefined, cuenta);
         if (c && c.editado !== antes) dicho.push((c.codigo || '') + ' corregido');
     }
 
@@ -1440,8 +1512,9 @@ function guardarEdicion() {
         const nueva = Servicio.enviarComanda({
             mesa: editandoTanda.mesa || 0,
             sesion: editandoTanda.sesion,
-            items: aparte,
-            origen: 'mesero'
+            items: sinLaDeLaMesa(aparte),
+            origen: 'mesero',
+            menestra: aparte.some(menestraContada) ? laDeLaMesa : null
         });
         if (nueva) dicho.push((nueva.codigo || '') + ' a la cola');
     }
@@ -1462,9 +1535,16 @@ function guardarEdicion() {
  * separado —lo que SÍ salió y lo que no— porque lo primero que va a
  * preguntar el cliente es "¿entonces qué me van a traer?".
  */
-function avisarRecorte(recortes, quedoAlgo) {
+function avisarRecorte(recortes, quedoAlgo, comanda) {
     const nada  = recortes.filter(r => r.entraron === 0);
     const medio = recortes.filter(r => r.entraron > 0);
+
+    /* La menestra de la mesa se contó para el pedido entero. Si lo que
+       no salió era de la mesa, la cuenta quedó con alguna de más: no se
+       adivina cuál quitar, se le dice al mesero, que de todas formas va
+       a la mesa. La cocina también lo ve. */
+    const m = comanda ? Servicio.menestraDeComanda(comanda) : null;
+    const descuadre = m && (m.faltan || m.sobran);
 
     $('recorte-cuerpo').innerHTML = `
         <p class="recorte-por">
@@ -1485,12 +1565,19 @@ function avisarRecorte(recortes, quedoAlgo) {
             ? `<p class="recorte-nota">El resto del pedido ya salió a la cocina.</p>`
             : `<p class="recorte-nota">No salió nada: era lo único que llevaba el pedido.</p>`}
 
+        ${descuadre ? `<p class="recorte-nota">La menestra quedó descuadrada
+            (${m.sobran ? cuantasSobran(m.sobran) : cuantasFaltan(m.faltan)}): pregúntala en la mesa
+            y corrígela con <b>Editar</b> en la tanda.</p>` : ''}
+
         <p class="recorte-nota fuerte">Anda a la mesa y diles antes de que lo esperen.</p>`;
 
     $('hoja-recorte').classList.add('open');
 }
 
 async function enviar() {
+    // Lo contestado vale para este envío y para ninguno más
+    const dicha = respondida;
+    respondida = null;
     if (!borrador.length) return;
 
     // Un mixto sin carnes escogidas no se puede mandar: el asador no
@@ -1502,12 +1589,18 @@ async function enviar() {
     if (incompleto) { toast('Falta escoger las carnes del ' + incompleto.nombre); abrirMod(incompleto.uid); return; }
 
     /* La menestra se pregunta aquí, al final, que es cuando se pregunta
-       en la mesa: si hay platos que la llevan y todavía no la tienen, no
-       sale nada sin pasar por "¿alguna con menestra de lenteja?". Vale
-       igual al corregir una tanda. */
-    if (borrador.some(faltaMenestra)) { preguntarMenestra(); return; }
+       en la mesa: si hay platos de la mesa, o alguno que dice la suya y
+       todavía no la dijo, no sale nada sin pasar por "¿cuántos con
+       menestra de lenteja?". La cuenta de la mesa no queda en ningún
+       plato, así que se pregunta cada vez, también al corregir una
+       tanda: sale con lo que ya tenía. */
+    if (!dicha && (borrador.some(menestraContada) || borrador.some(faltaMenestra))) {
+        preguntarMenestra();
+        return;
+    }
+    const laDeLaMesa = dicha ? dicha.mesa : null;
 
-    if (editandoTanda) { guardarEdicion(); return; }
+    if (editandoTanda) { guardarEdicion(laDeLaMesa); return; }
 
     if (refActual.nuevoLlevar && !nombreLlevar.trim()) {
         toast('Escribe a nombre de quién va el pedido');
@@ -1542,8 +1635,9 @@ async function enviar() {
     const comanda = Servicio.enviarComanda({
         mesa: refActual.mesa || 0,
         nombre: refActual.mesa ? '' : (nombreLlevar || Servicio.nombreDeCuenta(refActual)),
-        items: aMandar,
-        origen: 'mesero'
+        items: sinLaDeLaMesa(aMandar),
+        origen: 'mesero',
+        menestra: laDeLaMesa
     });
 
     // El pedido para llevar ya tiene cuenta propia: se sigue trabajando
@@ -1558,7 +1652,7 @@ async function enviar() {
 
     /* Si hubo recorte manda el aviso grande, no el "enviado" de siempre:
        lo segundo lo dejaría tranquilo justo cuando tiene que moverse. */
-    if (recortes.length) avisarRecorte(recortes, true);
+    if (recortes.length) avisarRecorte(recortes, true, comanda);
     else avisarEnviada(comanda);
 }
 
@@ -1913,11 +2007,11 @@ function conectarEventos() {
         const men = t.closest('[data-men]');
         if (men) return tocarMenestra(men.dataset.men);
 
-        // La pregunta del final: cuántos de cada fila son de lenteja
+        // La pregunta del final: cuántos de la mesa, y de cada fila, son de lenteja
         const lent = t.closest('[data-lenteja]');
         if (lent) {
-            const [i, cuanto] = lent.dataset.lenteja.split(':');
-            return tocarLenteja(Number(i), Number(cuanto));
+            const [cual, cuanto] = lent.dataset.lenteja.split(':');
+            return tocarLenteja(cual === 'mesa' ? cual : Number(cual), Number(cuanto));
         }
         const todas = t.closest('[data-lenteja-todas]');
         if (todas) return todasDeLenteja(todas.dataset.lentejaTodas === '1');
@@ -2006,7 +2100,12 @@ function conectarEventos() {
             return;
         }
 
-        if (t.closest('[data-llevar]') && it) { it.llevar = !it.llevar; abrirMod(editando); return; }
+        if (t.closest('[data-llevar]') && it) {
+            it.llevar = !it.llevar;
+            if (Servicio.menestraContada(it)) it.menestra = '';   // en la mesa va en la cuenta, no en el plato
+            abrirMod(editando);
+            return;
+        }
 
         const eleg = t.closest('[data-elegir]');
         if (eleg && it) {

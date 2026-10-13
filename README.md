@@ -578,20 +578,36 @@ en ningún lado: salía frejol y nadie se enteraba de que nadie había preguntad
 
 **Se pregunta al final**, que es como se pregunta en la mesa: con el pedido ya
 tomado, justo antes de enviar. Mientras se toma el pedido no se pregunta nada.
-Al tocar **Enviar**, si hay platos con menestra, sale una hoja: **¿Alguna con
-menestra de lenteja?**, con cada fila de platos que la llevan y un − y + de
-lenteja. **Lo que no se marca va de frejol**, que es la de la casa: si todas son
-de frejol, es Enviar y Enviar. Hay también **Todas de lenteja**, de un toque.
+Al tocar **Enviar**, si hay platos con menestra, sale una hoja: **¿Cuántos con
+menestra de lenteja?** **Lo que no se marca va de frejol**, que es la de la
+casa: si todas son de frejol, es Enviar y Enviar. Hay también **Todas de
+lenteja**, de un toque.
+
+**En la mesa se cuenta, no se señala.** El arroz con la menestra va en su plato
+y la proteína en otro, y todo lo de la mesa sale junto: cualquier plato de
+lenteja le sirve al que la pidió. Por eso a los platos de la mesa se les
+pregunta un solo número —*4 platos en la mesa: 2 de lenteja*— y no cuál es
+cuál. La tanda guarda la cuenta, `menestra: { frejol: 2, lenteja: 2 }`, y
+ninguno de esos platos dice la suya.
+
+**Lo que no es igual a los demás dice la suya**, en su propio renglón de la
+misma hoja:
+
+| Plato | Cómo se pregunta |
+|---|---|
+| De la mesa, con su arroz | En la cuenta de la mesa: cuántos, no cuál |
+| Para llevar | Uno por uno: sale armado en su tarrina |
+| Sin arroz | Uno por uno: su menestra sale sola, en otro plato |
+| Porción de menestra, o de arroz y menestra | Una por una |
+| Con patacones, o "sin menestra" | No se pregunta: no lleva |
+
+Si de dos pollos para llevar uno es de lenteja, la fila se parte en dos y cada
+tarrina sale con la suya. Si la del que se llevan la dicen al principio, se
+pone en la hoja del plato —sale debajo de **Para llevar** al marcarlo— y la
+pregunta la trae marcada. Al plato de la mesa la hoja no se la pide.
 
 **No se puede saltar.** Sin pasar por esa hoja el pedido no sale, y las de frejol
-quedan dichas por el mesero al confirmarla, no supuestas. Si la menestra la
-dicen al principio, se le pone al plato desde su hoja y la pregunta la trae
-marcada.
-
-**Es de cada plato.** Si de cuatro pollos dos son de lenteja, la fila se parte en
-dos: la cocina sabe cuál es cuál, aunque uno sea para la mesa y otro para
-llevar. La primera versión la guardaba por tanda —"3 de lenteja y 2 de
-frejol"— y eso no decía cuál.
+quedan dichas por el mesero al confirmarla, no supuestas.
 
 **Cuántas hacen falta no se escribe: se cuenta**, con la misma regla que el
 arroz de la cocina — por la guarnición con la que el plato *sale*:
@@ -605,33 +621,43 @@ arroz de la cocina — por la guarnición con la que el plato *sale*:
 | Apanados, camarones, pescados, hornada, espaguetis | 0 |
 | Porción de menestra, o de arroz y menestra | 1 cada una |
 
-Se guarda en cada plato —`menestra: 'lenteja'` dentro de su línea— y viaja con
-él: a la cocina, al cambiar de mesa, al pasar a llevar. La cocina la lee en cada
-plato (*Carne Asada 🥡 llevar · menestra de lenteja*) y arriba, junto a los
-cubiertos, cuántas de cada una: **1 de lenteja · 1 de frejol**. El que sirve
-también la ve en cada plato, para llevarlo a quien es. La parrilla no: el asador
-saca la proteína igual. El mesero la ve en sus tandas enviadas y el gerente en
-la pestaña Pedidos.
+**Lo que lee cada uno.** La cocina ve arriba, junto a los cubiertos, la cuenta
+de la mesa: **Menestra · 2 de lenteja · 2 de frejol**. Si además hay algo para
+llevar, ese renglón dice **Menestra en la mesa** y la del que se llevan va en su
+plato (*Carne Asada 🥡 llevar · menestra de lenteja*): no se suman, para no
+contar dos veces la misma lenteja. El que sirve ve lo mismo: la del que se
+llevan en su plato y la cuenta de la mesa debajo de cada tanda. La parrilla no:
+el asador saca la proteína igual. El mesero la ve en sus tandas enviadas y el
+gerente en la pestaña Pedidos. La cuenta y la de cada plato viajan con la
+tanda: a la cocina, al cambiar de mesa, al pasar a llevar.
 
-**Corregir.** En el minuto de gracia se cambia todo, la menestra también —desde
-la hoja del plato—. Guardar una tanda que ya tiene su menestra no vuelve a
-preguntar; si se le suma un plato que la lleva, la pregunta sale con lo de antes
-ya marcado. Pasado el minuto, lo que ya está en marcha conserva la suya y no se
-toca; lo que se agrega para cocinar sale como tanda nueva y pregunta la suya.
+**Corregir.** En el minuto de gracia, al guardar, la pregunta vuelve a salir
+con lo que la tanda ya tenía: se confirma de un toque o se cambia. Es la única
+forma de cambiar la cuenta, porque no está en ningún plato. Pasado el minuto,
+lo que ya está en marcha conserva lo suyo —su cuenta también— y no se toca; lo
+que se agrega para cocinar sale como tanda nueva y se pregunta solo.
+
+**Si otro celular se lleva un plato** mientras se escribía el pedido, la cuenta
+se hizo contándolo y queda una de más. No se adivina cuál quitar: el aviso de lo
+que no salió lo dice, y la cocina ve *1 de más — pregunta al mesero*.
 
 **El pedido del comensal** no la trae —en la carta no se pregunta—, así que al
 tocar *Confirmar y enviar* sale la misma pregunta. El que no lleva menestra se
 sigue confirmando de un toque.
 
 **Las tandas de antes** no traen el dato y no se les inventa: se ven como
-siempre, y lo que ya venía en ellas no se vuelve a preguntar. Las de la primera
-versión, que la guardaban por tanda, siguen enseñando sus totales.
+siempre, y lo que ya venía en ellas no se vuelve a preguntar. Las dos formas que
+hubo antes de esta —la cuenta de toda la tanda junta, con lo de llevar adentro,
+y cada plato con la suya, también los de la mesa— se siguen leyendo como se
+guardaron.
 
 Las clases se declaran en `menu-data.js`, lista `MENESTRAS`. Un local que no
 pregunta esto la deja vacía y no se le pide nada a nadie.
 
-> No hace falta tocar las reglas de Firebase: la menestra va dentro de los
-> platos, y los platos ya los escriben solo el mesero, el asador y el gerente.
+> No hace falta tocar las reglas de Firebase: la cuenta de la mesa va en el
+> campo `menestra` de la comanda, que ya está en las reglas, y la de cada plato
+> va dentro de los platos. Los dos los escriben solo el mesero, el asador y el
+> gerente.
 
 ### Llamar al salón
 
