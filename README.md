@@ -548,17 +548,43 @@ que el arroz y la menestra que reemplazan.
 En la parrilla no se muestra. Al asador no le cambia nada — él saca la
 proteína igual. La que necesita leerlo es la cocina, que es la que emplata.
 
+### Cada plato con lo suyo
+
+En la misma mesa piden, en el orden que quieran, una carne para servirse con
+frejol, otra para llevar con lenteja y otra con patacones y ensalada. Cada una
+es un plato distinto y así tiene que llegar a la cocina.
+
+Antes no se podía sin un orden. Dos carnes iguales se juntaban en una fila
+—"2 Carne Asada"—, y lo que se le marcaba a la fila se lo llevaban las dos:
+marcar "para llevar" una se llevaba también la otra, y la tarrina se cobraba
+dos veces. La única salida era configurar cada plato antes de agregar el
+siguiente.
+
+**Ahora la hoja de un plato cambia uno solo.** Si la fila tiene varios, el que
+se toca se separa —justo debajo— y solo cambia él; la hoja lo dice: *Cambias
+solo este plato. Los otros 2 siguen como estaban.* Si se cierra sin cambiarle
+nada, vuelve con los suyos. Así da igual escribir `3c` de un tirón y después
+arreglar cada una, o ir plato por plato.
+
+Una fila sigue siendo **platos iguales**: el código, la cuenta, la tarrina, la
+cocina y la parrilla los cuentan igual que siempre. El **+** de una fila suma
+otro plato igual, con todo lo suyo.
+
 ### De qué es la menestra
 
 Se preguntaba en la mesa —*"¿lenteja o frejol?"*— y se escribía a mano: *"3 de
 lenteja"*. Lo que no se escribía salía de frejol, así que un olvido no se notaba
 en ningún lado: salía frejol y nadie se enteraba de que nadie había preguntado.
 
-Ahora, si el pedido lleva menestra, al final del borrador sale **cuántas hacen
-falta y cuántas van de cada clase**, con el mismo − y + de los platos. **Todas**
-pone de un toque las que faltan: "todas de frejol" es un toque, "dos de lenteja
-y el resto de frejol" son tres. Mientras falte o sobre alguna, el botón no dice
-Enviar: dice **Falta la menestra (2)**, y tocarlo lleva hasta donde se elige.
+**Es de cada plato.** Cada fila que sale con menestra trae debajo dos fichas,
+**Lenteja** y **Frejol**, que valen para los platos de esa fila; para que uno sea
+distinto se abre ese plato —la hoja también las tiene— y se separa. Mientras a
+alguno le falte, la fila va en naranja y el botón no dice Enviar: dice **Falta la
+menestra (2)**, y tocarlo lleva hasta la fila.
+
+La primera versión la guardaba por tanda —"3 de lenteja y 2 de frejol"— y eso no
+decía cuál: con una carne para la mesa y otra para llevar, la cocina no sabía en
+cuál poner la lenteja.
 
 **Ninguna clase viene puesta.** Lo que nadie preguntó no se sabe, y la pantalla
 no lo da por frejol.
@@ -575,33 +601,31 @@ arroz de la cocina — por la guarnición con la que el plato *sale*:
 | Apanados, camarones, pescados, hornada, espaguetis | 0 |
 | Porción de menestra, o de arroz y menestra | 1 cada una |
 
-Se guarda en la tanda —`menestra: { frejol: 2, lenteja: 3 }`— y no en cada plato,
-porque así se pregunta en la mesa y así lo lee la cocina al emplatar: **3 de
-lenteja · 2 de frejol**, en grande y junto a los cubiertos. La parrilla no lo ve:
-el asador saca la proteína igual. El mesero lo ve en sus tandas enviadas y el
-gerente en la pestaña Pedidos.
+Se guarda en cada plato —`menestra: 'lenteja'` dentro de su línea— y viaja con
+él: a la cocina, al cambiar de mesa, al pasar a llevar. La cocina la lee en cada
+plato (*Carne Asada 🥡 llevar · menestra de lenteja*) y arriba, junto a los
+cubiertos, cuántas de cada una: **1 de lenteja · 1 de frejol**. El que sirve
+también la ve en cada plato, para llevarlo a quien es. La parrilla no: el asador
+saca la proteína igual. El mesero la ve en sus tandas enviadas y el gerente en
+la pestaña Pedidos.
 
 **Corregir.** En el minuto de gracia se cambia todo, la menestra también. Pasado
-el minuto, lo que ya está en marcha no cambia de clase: si se suma una porción
-de menestra, solo se dice de qué es esa, y lo que se agrega para cocinar sale
-como tanda nueva con la suya. Si no se tocó nada con menestra, ni se pregunta.
+el minuto, lo que ya está en marcha conserva la suya escrita y no se toca; lo
+que se agrega para cocinar sale como tanda nueva y pregunta la suya.
 
 **El pedido del comensal** no la trae —en la carta no se pregunta—, así que al
-tocar *Confirmar y enviar* se abre una hoja para preguntarla. El que no lleva
-menestra se sigue confirmando de un toque.
+tocar *Confirmar y enviar* se abre una hoja que la pregunta plato por plato. El
+que no lleva menestra se sigue confirmando de un toque.
 
 **Las tandas de antes** no traen el dato y no se les inventa: se ven como
-siempre. Una tanda nueva lo trae siempre, aunque sea a medias, para que en la
-cocina lo que falta se lea *"1 sin decir de qué — pregunta al mesero"* y no
-como frejol.
+siempre, y lo que ya venía en ellas no se vuelve a preguntar. Las de la primera
+versión, que la guardaban por tanda, siguen enseñando sus totales.
 
 Las clases se declaran en `menu-data.js`, lista `MENESTRAS`. Un local que no
 pregunta esto la deja vacía y no se le pide nada a nadie.
 
-> **Antes de subir esto, publica las reglas de Firebase.** El campo tiene su
-> propia llave en `firebase-rules.json`, la de los mismos que corrigen los
-> platos. Sin ella, las tandas nuevas salen igual, pero corregir la menestra de
-> una tanda rebota en la nube y se queda en rojo, *"que la nube rechaza"*.
+> No hace falta tocar las reglas de Firebase: la menestra va dentro de los
+> platos, y los platos ya los escriben solo el mesero, el asador y el gerente.
 
 ### Llamar al salón
 

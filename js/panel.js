@@ -527,6 +527,7 @@ function renderPedidos() {
                         ${i.llevar ? ' 🥡' : ''}
                         ${i.cambio ? `<em>${Servicio.comoSeSirve(i)}</em>` : ''}
                         ${(i.sin && i.sin.length) ? `<em>sin ${i.sin.map(g => GUARNICIONES[g] || g).join(', ')}</em>` : ''}
+                        ${i.menestra ? `<em>menestra de ${Servicio.nombreMenestra(i.menestra)}</em>` : ''}
                     </li>`).join('')}
             </ul>
             ${menestraDelPedido(p.menestra)}

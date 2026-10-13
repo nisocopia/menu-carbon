@@ -989,6 +989,11 @@ function detallesDe(it) {
     if (ESTACION === 'cocina' && it.sin && it.sin.length) {
         detalles.push(it.sin.map(g => 'sin ' + (GUARNICIONES[g] || g)).join(' · '));
     }
+    /* De qué es la menestra de ESTE plato: con una carne para la mesa y
+       otra para llevar, la lenteja tiene que ir en la que es. */
+    if (ESTACION === 'cocina' && it.menestra) {
+        detalles.push(`<b>menestra de ${Servicio.nombreMenestra(it.menestra)}</b>`);
+    }
     if (it.nota) detalles.push(it.nota);
 
     return detalles;

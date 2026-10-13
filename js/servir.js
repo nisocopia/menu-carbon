@@ -435,6 +435,7 @@ function verCuenta(sesionId, titulo) {
                             ${it.cambio ? `<em>${Servicio.comoSeSirve(it)}</em>` : ''}
                             ${(it.sin && it.sin.length)
                                 ? `<em>sin ${it.sin.map(g => GUARNICIONES[g] || g).join(', ')}</em>` : ''}
+                            ${it.menestra ? `<em>menestra de ${Servicio.nombreMenestra(it.menestra)}</em>` : ''}
                             ${it.termino ? `<em>${it.termino}</em>` : ''}
                         </span>
                     </li>`).join('')}
