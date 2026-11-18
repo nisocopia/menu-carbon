@@ -129,6 +129,7 @@ function abrirApp() {
     Servicio.limpiarViejo(2);
     Servicio.iniciar(redibujar);
     verMesas();
+    abrirCodigoDeLaDireccion();
 }
 
 /** Fuera los enlaces a pantallas que esta cuenta no puede abrir. */
@@ -222,6 +223,7 @@ function verMesas() {
     $('titulo').textContent = 'Mesas';
     $('volver').hidden = true;
     pintarEntrantes();
+    pintarDomicilios();
     pintarMesas();
 }
 
@@ -317,15 +319,411 @@ function confirmarConMenestra(p) {
         return;
     }
 
+    confirmarEntrante(p.llave, platosConLenteja(p.items, p.lineas), null, cuentaDicha(p.contadas));
+}
+
+/** Cada línea que dice la suya, partida en lo de frejol y lo de lenteja. */
+function platosConLenteja(items, lineas) {
     const platos = [];
-    p.items.forEach((it, i) => {
-        const l = p.lineas.find(x => x.i === i);
+    items.forEach((it, i) => {
+        const l = lineas.find(x => x.i === i);
         if (!l) { platos.push(it); return; }
         const lenteja = Math.min(l.lenteja, it.cantidad);
         if (it.cantidad > lenteja) platos.push({ ...it, cantidad: it.cantidad - lenteja, menestra: 'frejol' });
         if (lenteja > 0)           platos.push({ ...it, cantidad: lenteja, menestra: 'lenteja' });
     });
-    confirmarEntrante(p.llave, platos, null, cuentaDicha(p.contadas));
+    return platos;
+}
+
+/* ============================================================
+   EL PEDIDO DEL CLIENTE CON SU CÓDIGO QR, Y EL DE DOMICILIO
+
+   Lo que pide el comensal desde su celular ya no le llega solo al
+   mesero: lo trae como un QR y se escanea aquí, delante de él. A
+   domicilio llega por el enlace que da el gerente y espera en su
+   sección. Ninguno va a la cocina hasta que se toca Aceptar, y la mesa
+   la pone el mesero, no lo que diga el celular del cliente.
+   ============================================================ */
+
+/** Lo que se está revisando: { clase: 'qr'|'domicilio', ... }, o null. */
+let revisando = null;
+
+const esc = t => String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const horaCorta = ts => new Date(ts).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+
+/** El código que trae un QR: el enlace a esta pantalla, o el código suelto. */
+function codigoDeTexto(texto) {
+    const t = String(texto || '').trim();
+    try {
+        const q = new URL(t).searchParams.get('qr');
+        if (q) return q;
+    } catch (e) { /* no es un enlace */ }
+    return /^[A-Za-z0-9_-]{22,40}$/.test(t) ? t : null;
+}
+
+/** Se llegó con la cámara normal del celular: comanda.html?qr=… */
+function abrirCodigoDeLaDireccion() {
+    let q = null;
+    try { q = new URLSearchParams(location.search).get('qr'); } catch (e) {}
+    if (!q) return;
+    // Que recargar la página no vuelva a abrir el mismo pedido
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    abrirCodigo(q);
+}
+
+/* ---------- El escáner ---------- */
+
+let escaner = null;      // { stream, reloj }
+
+async function abrirEscaner() {
+    $('hoja-escaner').classList.add('open');
+    const nota = $('escaner-nota');
+    const caja = $('escaner-caja');
+
+    /* La cámara normal del celular también sirve: el QR es un enlace que
+       abre esta pantalla con el pedido. Por eso, si aquí no se puede, se
+       dice cómo hacerlo, en vez de un "no compatible". */
+    const sinLector = 'Este celular no lee el código desde aquí. Abre la cámara normal del celular ' +
+                      'y apunta al código: se abre el pedido solo.';
+    if (typeof BarcodeDetector === 'undefined' || !navigator.mediaDevices) {
+        caja.hidden = true; nota.textContent = sinLector; return;
+    }
+    try {
+        const formatos = await BarcodeDetector.getSupportedFormats();
+        if (formatos.indexOf('qr_code') < 0) { caja.hidden = true; nota.textContent = sinLector; return; }
+    } catch (e) { /* algunos no lo dicen; se intenta igual */ }
+
+    caja.hidden = false;
+    nota.textContent = 'Apunta al código QR que te muestra el cliente.';
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        if (!$('hoja-escaner').classList.contains('open')) { stream.getTracks().forEach(t => t.stop()); return; }
+        const video = $('escaner-video');
+        video.srcObject = stream;
+        await video.play();
+
+        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+        escaner = { stream, reloj: null };
+
+        const mirar = async () => {
+            if (!escaner) return;
+            try {
+                const vistos = await detector.detect(video);
+                if (vistos.length) {
+                    const codigo = codigoDeTexto(vistos[0].rawValue);
+                    if (codigo) { cerrarEscaner(); abrirCodigo(codigo); return; }
+                    nota.textContent = 'Ese código no es de un pedido de este local.';
+                }
+            } catch (e) { /* un cuadro que no se pudo leer: el siguiente */ }
+            if (escaner) escaner.reloj = setTimeout(mirar, 250);
+        };
+        mirar();
+    } catch (e) {
+        caja.hidden = true;
+        nota.textContent = e && e.name === 'NotAllowedError'
+            ? 'No hay permiso para usar la cámara. Dáselo en el candado de la barra de direcciones, ' +
+              'o abre la cámara normal del celular y apunta al código.'
+            : sinLector;
+    }
+}
+
+function cerrarEscaner() {
+    if (escaner) {
+        clearTimeout(escaner.reloj);
+        escaner.stream.getTracks().forEach(t => t.stop());
+        escaner = null;
+    }
+    const video = $('escaner-video');
+    if (video) video.srcObject = null;
+    $('hoja-escaner').classList.remove('open');
+}
+
+/* ---------- Revisar el pedido ---------- */
+
+const MOTIVO_QR = {
+    invalido:    'Ese código no es de un pedido de este local.',
+    'no-existe': 'Ese pedido no existe. Pídele al cliente que lo vuelva a enviar.',
+    aceptado:    'Ese pedido ya se aceptó.',
+    rechazado:   'Ese pedido ya se rechazó.',
+    vencido:     'Ese código venció: nadie lo escaneó a tiempo. Pídele al cliente que vuelva a enviar el pedido.',
+    'sin-red':   'No se pudo leer el pedido. Revisa la conexión y vuelve a escanear.',
+    negado:      'La nube no dejó resolverlo: venció, o esta cuenta no puede aceptar pedidos.',
+    'sin-permiso': 'Esta cuenta no puede aceptar pedidos.',
+    'sin-permiso-leer': 'La nube no deja leer el pedido. Revisa que las reglas nuevas estén publicadas en Firebase.',
+    'sin-nombre': 'Escribe a nombre de quién va el pedido.',
+    'sin-platos': 'No queda nada que mandar: todo lo de este pedido se acabó.'
+};
+
+async function abrirCodigo(codigo) {
+    revisando = null;
+    $('pedido-titulo').textContent = 'Pedido del cliente';
+    $('pedido-cuerpo').innerHTML = '<p class="hoja-nota">Buscando el pedido…</p>';
+    $('pedido-btns').innerHTML = '';
+    $('hoja-pedido').classList.add('open');
+
+    const r = await Servicio.abrirPedidoQR(codigo);
+    if (!r.ok) { pintarNoSePuede(r, () => abrirCodigo(codigo)); return; }
+
+    const p = r.pedido;
+    revisando = {
+        clase: 'qr', codigo, pedido: p,
+        mesa: p.tipo === 'mesa' ? (Number(p.mesa) || 0) : 0,
+        nombre: p.tipo === 'llevar' ? (p.nombre || '') : ''
+    };
+    pintarRevision();
+}
+
+function abrirDomicilioRevision(enlace, id) {
+    const p = Servicio.getDomicilios().find(x => x.enlace === enlace && x.id === id);
+    if (!p) { toast('Ese pedido ya no está.'); return; }
+    revisando = { clase: 'domicilio', enlace, id, pedido: p, mesa: 0, nombre: p.nombre || '' };
+    $('hoja-pedido').classList.add('open');
+    if (p.estadoVisto !== 'pendiente') { pintarDomicilioResuelto(p); return; }
+    pintarRevision();
+}
+
+/** Por qué no se puede, dicho claro, y nada que tocar salvo cerrar o reintentar. */
+function pintarNoSePuede(r, reintentar) {
+    revisando = null;
+    const quien = r.por ? ` (lo aceptó ${esc(String(r.por).split('@')[0])})` : '';
+    $('pedido-cuerpo').innerHTML = `
+        <div class="rev-aviso"><i class="fas fa-ban"></i>
+            <span>${esc(MOTIVO_QR[r.motivo] || 'No se pudo abrir ese pedido.')}${r.motivo === 'aceptado' ? quien : ''}</span></div>`;
+    $('pedido-btns').innerHTML = r.motivo === 'sin-red'
+        ? '<button class="rev-otra" data-rev-reintentar>Reintentar</button>' : '';
+    abrirCodigo._reintentar = reintentar;
+}
+
+/**
+ * Lo que de verdad se va a mandar: con el NOMBRE Y EL PRECIO DE LA
+ * CARTA, no los que trae el pedido. El pedido lo escribió el celular del
+ * cliente, y lo que viene de ahí se puede cambiar: sin esto, una cola a
+ * un centavo entraba a la cuenta a un centavo. Lo que se acabó o ya no
+ * está en la carta no sale, y se dice.
+ */
+function platosDeLaRevision() {
+    const llevar = revisando.clase === 'domicilio' || revisando.pedido.tipo === 'llevar';
+    const salen = [], fuera = [], cambiados = [];
+
+    (revisando.pedido.items || []).forEach(it => {
+        const p = Store.findPlato(it.platoId);
+        const cant = Math.max(1, Math.min(50, Math.floor(Number(it.cantidad) || 1)));
+        if (!p || !tienePrecio(p) || !Servicio.sePuedePedir(p.id)) {
+            fuera.push(`${cant} ${it.nombre || it.platoId}`);
+            return;
+        }
+        if (Number(it.precio) !== p.precio) cambiados.push(p.nombre);
+        salen.push({ platoId: p.id, nombre: p.nombre, precio: p.precio, cantidad: cant, llevar });
+    });
+    return { salen, fuera, cambiados, llevar };
+}
+
+function pintarRevision() {
+    const rv = revisando;
+    const p = rv.pedido;
+    const { salen, fuera, cambiados } = platosDeLaRevision();
+    const total = salen.reduce((s, it) => s + it.precio * it.cantidad, 0);
+    const min = Math.max(0, Math.round((Date.now() - (p.creado || Date.now())) / 60000));
+
+    const modo = rv.clase === 'domicilio' ? 'domicilio' : p.tipo === 'llevar' ? 'llevar' : 'mesa';
+    const ETIQUETA = { mesa: 'Mesa', llevar: 'Para llevar', domicilio: 'A domicilio' };
+    $('pedido-titulo').textContent = ETIQUETA[modo] === 'Mesa' ? 'Pedido de mesa' : 'Pedido ' + ETIQUETA[modo].toLowerCase();
+
+    let donde = '';
+    if (modo === 'mesa') {
+        const total = Number(CFG.mesas) || 11;
+        donde = `
+            <div class="rev-bloque">
+                <h3>¿En qué mesa está? <em>Confírmalo mirando la mesa</em></h3>
+                <div class="rev-mesas">
+                    ${Array.from({ length: total }, (_, i) => i + 1).map(n => `
+                        <button class="rev-mesa ${rv.mesa === n ? 'on' : ''}" data-rev-mesa="${n}">${n}</button>`).join('')}
+                </div>
+                ${p.mesa && rv.mesa !== Number(p.mesa)
+                    ? `<p class="rev-nota">El cliente marcó la mesa ${Number(p.mesa)}.</p>` : ''}
+            </div>`;
+    } else if (modo === 'llevar') {
+        const otro = rv.nombre.trim() && Servicio.llevarPorNombre(rv.nombre);
+        donde = `
+            <label class="campo-srv rev-bloque">
+                <span>A nombre de</span>
+                <input type="text" id="rev-nombre" maxlength="30" autocomplete="off" value="${esc(rv.nombre)}">
+            </label>
+            ${otro ? `<p class="rev-nota">Ya hay un pedido para llevar a nombre de ${esc(otro.nombre)}: esto se suma
+                      a su cuenta. Si es otra persona, cambia el nombre.</p>` : ''}`;
+    } else {
+        const d = p.direccion || {};
+        const partes = [d.calle, d.numero && 'casa ' + d.numero, d.sector, d.ciudad].filter(Boolean);
+        donde = `
+            <div class="rev-bloque rev-cliente">
+                <div><b>${esc(p.nombre)}</b></div>
+                <div><a href="tel:${esc(String(p.telefono).replace(/[^0-9+]/g, ''))}">${esc(p.telefono)}</a></div>
+                ${partes.length ? `<div>${esc(partes.join(', '))}</div>` : ''}
+                ${p.referencia ? `<div class="rev-nota">${esc(p.referencia)}</div>` : ''}
+                ${p.maps && /^https:\/\//.test(p.maps) ? `<a class="rev-maps" href="${esc(p.maps)}" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-location-dot"></i> Abrir en Google Maps</a>` : ''}
+            </div>`;
+    }
+
+    $('pedido-cuerpo').innerHTML = `
+        <div class="rev-cabeza">
+            <span class="rev-modo ${modo}">${ETIQUETA[modo]}</span>
+            <span>Enviado a las ${horaCorta(p.creado || Date.now())} · hace ${min} min</span>
+        </div>
+        ${donde}
+        <div class="rev-bloque">
+            ${salen.map(it => `<div class="rev-linea"><span>${it.cantidad} ${esc(Servicio.nombreInterno(it.platoId, it.nombre))}</span>
+                                <span>${money(it.precio * it.cantidad)}</span></div>`).join('')}
+            ${fuera.length ? `<p class="rev-nota rev-mal"><i class="fas fa-triangle-exclamation"></i>
+                Se acabó, no se manda: ${esc(fuera.join(', '))}. Díselo al cliente.</p>` : ''}
+            ${cambiados.length ? `<p class="rev-nota">Va con el precio de la carta: ${esc(cambiados.join(', '))}.</p>` : ''}
+            ${p.nota ? `<div class="rev-notacli"><i class="fas fa-note-sticky"></i> ${esc(p.nota)}</div>` : ''}
+            <div class="rev-linea rev-total"><span>Total</span><span>${money(total)}</span></div>
+        </div>`;
+
+    $('pedido-btns').innerHTML = `
+        <button class="rev-rechazar" data-rev-rechazar>Rechazar</button>
+        <button class="rev-aceptar" data-rev-aceptar ${salen.length ? '' : 'disabled'}>
+            <i class="fas fa-check"></i> Aceptar y enviar</button>`;
+}
+
+/** Aceptar: si hay platos con menestra, primero la pregunta de siempre. */
+function pedirAceptar() {
+    if (!revisando) return;
+    const campo = $('rev-nombre');
+    if (campo) revisando.nombre = campo.value.trim();
+
+    if (revisando.clase === 'qr' && revisando.pedido.tipo === 'mesa' && !revisando.mesa) {
+        toast('Toca primero la mesa en la que está.'); return;
+    }
+    if (revisando.clase === 'qr' && revisando.pedido.tipo === 'llevar' && !revisando.nombre) {
+        toast(MOTIVO_QR['sin-nombre']); if (campo) campo.focus(); return;
+    }
+
+    const { salen } = platosDeLaRevision();
+    if (!salen.length) { toast(MOTIVO_QR['sin-platos']); return; }
+
+    if (Servicio.menestrasDe(salen)) {
+        return abrirPregunta({
+            para: 'revision', mesa: revisando.mesa, items: salen,
+            contadas: contadasDe(salen.filter(Servicio.menestraContada), 0),
+            lineas: salen.map((it, i) => Servicio.pideMenestra(it) && !Servicio.menestraContada(it)
+                ? { i, nombre: it.nombre, detalle: '', cantidad: it.cantidad, lenteja: 0 } : null).filter(Boolean)
+        });
+    }
+    aceptarRevision(salen, null);
+}
+
+let resolviendo = false;
+
+async function aceptarRevision(platos, menestra) {
+    const rv = revisando;
+    if (!rv || resolviendo) return;
+    resolviendo = true;
+    $('pedido-btns').classList.add('enviando');
+
+    let r;
+    try {
+        r = rv.clase === 'qr'
+            ? await Servicio.aceptarPedidoQR(rv.codigo, {
+                mesa: rv.pedido.tipo === 'mesa' ? rv.mesa : 0,
+                nombre: rv.nombre, platos, menestra, nota: rv.pedido.nota })
+            : await Servicio.aceptarDomicilio(rv.enlace, rv.id, { platos, menestra });
+    } catch (e) {
+        r = { ok: false, motivo: 'sin-red' };
+    } finally {
+        resolviendo = false;
+        $('pedido-btns').classList.remove('enviando');
+    }
+
+    if (!r.ok) {
+        // Sin red no se dio por hecho: el pedido sigue ahí y se puede volver a tocar
+        if (r.motivo === 'sin-red') { toast('Sin conexión: no se aceptó. Vuelve a tocar Aceptar.'); return; }
+        pintarNoSePuede(r);
+        return;
+    }
+
+    cerrarRevision();
+    redibujar();
+    avisarEnviada(r.comanda);
+}
+
+async function rechazarRevision() {
+    const rv = revisando;
+    if (!rv || resolviendo) return;
+    if (!confirm('¿Rechazar este pedido? No va a la cocina y al cliente le sale que no se aceptó.')) return;
+    resolviendo = true;
+    let r;
+    try {
+        r = rv.clase === 'qr' ? await Servicio.rechazarPedidoQR(rv.codigo)
+                              : await Servicio.rechazarDomicilio(rv.enlace, rv.id);
+    } catch (e) {
+        r = { ok: false, motivo: 'sin-red' };
+    } finally {
+        resolviendo = false;
+    }
+    if (!r.ok) {
+        if (r.motivo === 'sin-red') { toast('Sin conexión: no se rechazó. Vuelve a intentarlo.'); return; }
+        pintarNoSePuede(r);
+        return;
+    }
+    cerrarRevision();
+    redibujar();
+    toast('Pedido rechazado');
+}
+
+function cerrarRevision() {
+    revisando = null;
+    $('hoja-pedido').classList.remove('open');
+}
+
+/* ---------- Los de domicilio, en la pantalla de mesas ---------- */
+
+/**
+ * Los que esperan, arriba y en azul, con su hora. Debajo, plegados, los
+ * que ya se aceptaron: el que los lleva necesita la dirección y el
+ * teléfono después de que salieron de la cocina.
+ */
+function pintarDomicilios() {
+    const cont = $('domicilios');
+    if (!cont) return;
+    const todos = Servicio.getDomicilios();
+    const esperan = todos.filter(p => p.estadoVisto === 'pendiente');
+    const aceptados = todos.filter(p => p.estadoVisto === 'aceptado').slice(-10).reverse();
+
+    if (!esperan.length && !aceptados.length) { cont.innerHTML = ''; return; }
+
+    const tarjeta = p => {
+        const total = (p.items || []).reduce((s, i) => s + (Number(i.precio) || 0) * (Number(i.cantidad) || 0), 0);
+        return `
+            <button class="domi-card ${p.estadoVisto}" data-domi="${esc(p.enlace)}|${esc(p.id)}">
+                <span class="domi-nom">${esc(p.nombre)}</span>
+                <span class="domi-det">${horaCorta(p.creado)} · ${money(total)}</span>
+                <span class="domi-est">${p.estadoVisto === 'pendiente' ? 'Por aceptar' : 'Aceptado · ver dirección'}</span>
+            </button>`;
+    };
+
+    cont.innerHTML = `
+        ${esperan.length ? `
+            <h2 class="domi-titulo"><i class="fas fa-location-dot"></i>
+                ${esperan.length} a domicilio por aceptar</h2>
+            <div class="domi-lista">${esperan.map(tarjeta).join('')}</div>` : ''}
+        ${aceptados.length ? `
+            <details class="domi-hechos">
+                <summary>${aceptados.length} a domicilio aceptado${aceptados.length > 1 ? 's' : ''}</summary>
+                <div class="domi-lista">${aceptados.map(tarjeta).join('')}</div>
+            </details>` : ''}`;
+}
+
+/** Uno ya aceptado: solo para mirar a dónde va. */
+function pintarDomicilioResuelto(p) {
+    revisando = { clase: 'domicilio', enlace: p.enlace, id: p.id, pedido: p, mesa: 0, nombre: p.nombre || '' };
+    pintarRevision();
+    $('pedido-titulo').textContent = 'A domicilio · aceptado';
+    $('pedido-btns').innerHTML = '';
 }
 
 function pintarMesas() {
@@ -1068,7 +1466,7 @@ function pintarPregunta() {
 
     $('menestra-titulo').textContent = '¿Cuántos con menestra de lenteja?';
     $('menestra-cuerpo').innerHTML = `
-        <p class="hoja-nota">${pregunta.para === 'entrante' && pregunta.mesa
+        <p class="hoja-nota">${(pregunta.para === 'entrante' || pregunta.para === 'revision') && pregunta.mesa
             ? `Pedido de la mesa ${pregunta.mesa}. ` : ''}Los demás van de frejol.</p>
         ${mesa ? `
             <div class="men-plato men-mesa">
@@ -1085,6 +1483,7 @@ function pintarPregunta() {
             ${todas ? 'Ninguna de lenteja' : 'Todas de lenteja'}</button>`;
 
     $('menestra-ok').innerHTML = pregunta.para === 'entrante' ? '<i class="fas fa-check"></i> Confirmar y enviar'
+                               : pregunta.para === 'revision' ? '<i class="fas fa-check"></i> Aceptar y enviar'
                                : editandoTanda ? '<i class="fas fa-check"></i> Guardar cambios'
                                : '<i class="fas fa-paper-plane"></i> Enviar';
 }
@@ -1115,6 +1514,7 @@ function responderPregunta() {
     const p = pregunta;
     cerrarPregunta();
     if (p.para === 'entrante') return confirmarConMenestra(p);
+    if (p.para === 'revision') return aceptarRevision(platosConLenteja(p.items, p.lineas), cuentaDicha(p.contadas));
     aplicarMenestra(p);
     return enviar();
 }
@@ -1979,7 +2379,7 @@ function redibujar() {
        igual. */
     if (typeof Llamada !== 'undefined') Llamada.revisar('mesero');
 
-    if (!$('vista-mesas').hidden) { pintarEntrantes(); pintarMesas(); }
+    if (!$('vista-mesas').hidden) { pintarEntrantes(); pintarDomicilios(); pintarMesas(); }
     if (!$('vista-mesa').hidden)  pintarTandasPrevias();
     if (!$('vista-cobrar').hidden) pintarCobrar();
 }
@@ -2004,6 +2404,16 @@ function conectarEventos() {
     });
 
     $('btn-llevar').addEventListener('click', verLlevarNuevo);
+
+    // El pedido del cliente: escanearlo y revisarlo
+    $('btn-escanear').addEventListener('click', abrirEscaner);
+    $('escaner-cerrar').addEventListener('click', cerrarEscaner);
+    $('hoja-escaner').addEventListener('click', e => { if (e.target.id === 'hoja-escaner') cerrarEscaner(); });
+    $('pedido-cerrar').addEventListener('click', cerrarRevision);
+    $('hoja-pedido').addEventListener('click', e => { if (e.target.id === 'hoja-pedido') cerrarRevision(); });
+    $('pedido-cuerpo').addEventListener('input', e => {
+        if (e.target.id === 'rev-nombre' && revisando) revisando.nombre = e.target.value;
+    });
 
     // El botón de enviar aparece en cuanto hay nombre, sin tocar nada más
     const campoNombre = $('nombre-llevar');
@@ -2050,6 +2460,15 @@ function conectarEventos() {
 
         const rech = t.closest('[data-rechazadas]');
         if (rech) return resolverRechazadas(rech.dataset.rechazadas);
+
+        // --- revisar el pedido de un cliente ---
+        const revMesa = t.closest('[data-rev-mesa]');
+        if (revMesa && revisando) { revisando.mesa = Number(revMesa.dataset.revMesa); pintarRevision(); return; }
+        if (t.closest('[data-rev-aceptar]')) return pedirAceptar();
+        if (t.closest('[data-rev-rechazar]')) return rechazarRevision();
+        if (t.closest('[data-rev-reintentar]')) return abrirCodigo._reintentar && abrirCodigo._reintentar();
+        const domi = t.closest('[data-domi]');
+        if (domi) { const [enlace, id] = domi.dataset.domi.split('|'); return abrirDomicilioRevision(enlace, id); }
 
         const mesa = t.closest('[data-mesa]');
         if (mesa) return verMesa(Number(mesa.dataset.mesa));

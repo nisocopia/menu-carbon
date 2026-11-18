@@ -1047,19 +1047,88 @@ solo. Queda guardada, así que la segunda vez ya es un toque.
 
 1. El cliente arma su pedido desde la mesa.
 2. Antes de cerrar, el menú le sugiere acompañantes (**esto sube el ticket**).
-3. Toca **en qué mesa está** — el QR no lleva el número dentro.
-4. Aparece una **comanda en pantalla** con el código (`M3 · 2PO 1CA`), los
-   platos y el total, en letra grande y fondo claro para leerse de lejos.
-5. El pedido cae en la **bandeja del mesero**, que lo confirma de un toque.
-   Recién ahí sale a la parrilla y a la cocina.
-6. Al cliente le queda corriendo el aviso de progreso de su plato.
+3. Elige **para comer aquí** (y toca su mesa) o **para llevar** (y pone su
+   nombre).
+4. Le sale un **código QR** en la pantalla: *"Muestra este código QR al
+   mesero para confirmar tu pedido"*.
+5. El mesero lo **escanea** desde la comanda, ve el pedido, confirma la mesa y
+   lo acepta o lo rechaza. Recién ahí sale a la parrilla y a la cocina.
+6. El cliente ve en su pantalla si se aceptó, y le queda corriendo el aviso de
+   progreso de su plato.
 
-Ese paso 5 no es burocracia: el celular del comensal no tiene cuenta del local,
-y si pudiera escribir directo en las comandas, cualquiera que abra el menú
-podría meterle 20 platos falsos a la parrilla.
+### Por qué un QR y no la bandeja de antes
+
+Antes el pedido le llegaba solo al mesero, a una bandeja. Tenía un agujero: el
+que guardaba la dirección del menú podía mandar pedidos **desde su casa**, y
+escoger la mesa que quisiera. No llegaban a la cocina sin que el mesero los
+confirmara, pero le llenaban la pantalla, y uno falso se confirmaba sin darse
+cuenta.
+
+**Ahora el pedido no le llega solo a nadie.** Se guarda en la nube bajo un
+código al azar —128 bits, imposible de adivinar— y solo lo ve quien escanea ese
+QR, es decir, el mesero parado delante del cliente. El que pida desde su casa
+no tiene a quién enseñárselo.
+
+- **La mesa la pone el mesero**, que la está viendo. La que marcó el cliente
+  sale preseleccionada, pero cambiar el número en la dirección no le sirve a
+  nadie.
+- **El precio lo pone la carta**, no el celular del cliente. Lo que se acabó
+  no sale y se le dice al mesero, para que se lo diga a la mesa.
+- **Las reglas de Firebase hacen cumplir, del lado del servidor**, que el
+  código caduque a la media hora, que solo el mesero, el asador o el gerente
+  lo acepten, que se acepte o rechace **una sola vez**, y que se pida dentro
+  del horario.
+- **Sin respuesta de la nube no se da por aceptado.** El pedido sigue ahí y se
+  vuelve a tocar Aceptar: así no hay pedidos dobles.
+
+**Escanear.** En la comanda hay un botón amarillo, *Escanear el pedido de un
+cliente*, que abre la cámara. Si un celular no puede leerlo desde ahí, sirve
+la cámara normal del teléfono: el QR es un enlace que abre la comanda con ese
+pedido.
+
+La bandeja de antes ya **no acepta pedidos de quien no tiene cuenta**: las
+reglas se lo niegan, aunque alguien tenga guardada la página vieja.
 
 Si el restaurante configura un número de WhatsApp en `menu-data.js`,
 además aparece un botón para enviar el pedido ya escrito.
+
+## A domicilio
+
+El cliente pregunta por WhatsApp si hay comida. El gerente, en el panel,
+pestaña **Domicilio**, le crea un enlace y se lo manda:
+
+- **Para quién**, solo para reconocerlo en la lista.
+- **Cuánto vale**: 1 hora, 3 horas, hasta el cierre de hoy o 24 horas.
+- **Cuántos pedidos admite**: 1, 2, 3, 5 o 10.
+
+Con el enlace, el cliente ve la carta con un aviso arriba —*Estás haciendo un
+pedido a domicilio*—, arma su pedido y pone su nombre, su teléfono y su
+dirección: **su ubicación de Google Maps, su dirección escrita, o las dos**.
+Hay un botón *Usar mi ubicación de ahora* para quien no sabe copiar un enlace.
+
+El pedido le aparece al mesero en una sección propia, **A domicilio por
+aceptar**, con la dirección, el teléfono (se toca para llamar) y el botón de
+Google Maps. No va a la cocina hasta que se acepta. Aceptado, sale para llevar
+—con sus tarrinas— a nombre de *Domicilio · Luis*, y queda en la sección de
+aceptados para el que lo lleva.
+
+**Lo que cumplen las reglas en el servidor**, no la página:
+
+- el enlace tiene que existir, estar activo y no haber vencido;
+- cada pedido suma uno al cupo **en la misma escritura**, y el cupo no pasa
+  del límite: dos pedidos a la vez no se cuelan los dos;
+- entre un pedido y otro del mismo enlace pasan 20 segundos;
+- el mismo pedido mandado dos veces entra una;
+- cambiarle una letra al enlace no lleva a ningún otro: los códigos no se
+  pueden adivinar.
+
+En el panel se ve cada enlace con su estado —activo, vencido, desactivado o ya
+usado— y cuántos pedidos recibió. Se puede **desactivar** cuando se quiera.
+
+**Los datos del cliente no se quedan.** Vaciar el servicio borra los pedidos a
+domicilio y los pedidos con QR sin escanear: lo aceptado ya es una comanda, y
+la dirección y el teléfono de alguien no tienen por qué guardarse de una noche
+a otra. Los enlaces sí se quedan: caducan solos.
 
 ---
 
@@ -1185,6 +1254,11 @@ dispositivo trabaja sobre su propia copia.
 ---
 
 ## Antes de subir cambios
+
+> **Si cambiaste `firebase-rules.json`, publica las reglas PRIMERO** y sube el
+> código después. Con el código nuevo y las reglas viejas, los pedidos con QR y
+> a domicilio rebotan. Con las reglas nuevas y algún celular con la página
+> vieja, ese celular no puede pedir y se le dice que llame al mesero.
 
 ```bash
 node scripts/probar.js     # comprueba lo que no se ve mirando la pantalla

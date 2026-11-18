@@ -1664,3 +1664,180 @@ footer {
     padding: 10px;
     cursor: pointer;
 }
+
+/* ============================================================
+   EL PEDIDO CON SU CÓDIGO QR
+
+   El comensal ya no le manda el pedido a nadie: le enseña al mesero
+   un código. Esa pantalla se lee de cerca y la escanea otro celular,
+   así que el código va grande, en blanco y negro y con margen.
+   ============================================================ */
+
+.campo input {
+    width: 100%;
+    background: #1f1f1f;
+    border: 1px solid #333;
+    border-radius: 10px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 12px;
+}
+.campo input:focus { outline: none; border-color: #FFC107; }
+.campo input.error { border-color: #e74c3c; animation: shake 0.35s; }
+
+.como-opciones { display: grid; gap: 12px; margin-bottom: 14px; }
+
+.como-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 20px 14px;
+    background: #262626;
+    border: 2px solid #3a3a3a;
+    border-radius: 14px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.como-btn i { color: #FFC107; font-size: 1.3rem; }
+.como-btn:active { border-color: #FFC107; background: #2e2a1c; }
+
+.mesa-panel .campo { text-align: left; margin: 0 0 16px; }
+.como-enviar { margin-bottom: 6px; }
+
+/* Mientras se manda, nada se toca dos veces */
+.mesa-panel.enviando { opacity: 0.6; pointer-events: none; }
+
+.qr-papel {
+    background: #fdfcf7;
+    color: #111;
+    border-radius: 14px;
+    padding: 20px 18px 18px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+}
+
+.qr-estado { text-align: center; margin-bottom: 14px; }
+.qr-estado strong { display: block; font-size: 1.2rem; margin-bottom: 4px; }
+.qr-estado span { display: block; font-size: 0.92rem; color: #444; line-height: 1.4; }
+.qr-estado.aceptado strong { color: #1e8e3e; }
+.qr-estado.rechazado strong,
+.qr-estado.vencido strong { color: #c0392b; }
+
+.qr-codigo {
+    background: #fff;
+    border-radius: 10px;
+    padding: 6px;
+    margin: 0 auto 10px;
+    max-width: 280px;
+}
+.qr-codigo svg { display: block; width: 100%; height: auto; }
+.qr-sin { color: #c0392b; font-size: 0.88rem; text-align: center; padding: 18px 8px; }
+
+.qr-espera {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #8a6d00;
+    margin-bottom: 14px;
+}
+.qr-punto {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #FFC107;
+    animation: qr-late 1.2s ease-in-out infinite;
+}
+@keyframes qr-late { 50% { opacity: 0.25; } }
+
+.qr-resumen { border-top: 1px dashed #bbb; padding-top: 12px; font-size: 0.92rem; }
+.qr-quien { font-weight: 700; margin-bottom: 8px; }
+.qr-linea { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
+.qr-nota { font-size: 0.84rem; color: #555; margin-top: 6px; }
+.qr-total { font-weight: 700; border-top: 1px solid #ddd; margin-top: 8px; padding-top: 8px; }
+
+.qr-overlay .comanda-acciones { display: grid; gap: 10px; margin-top: 14px; }
+
+/* La pastilla de arriba: el pedido sigue esperando aunque se cierre */
+.qr-pill {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9400;
+    max-width: calc(100% - 32px);
+    background: #FFC107;
+    color: #111;
+    border: none;
+    border-radius: 30px;
+    padding: 11px 18px;
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.qr-pill[hidden] { display: none; }
+.qr-pill i { margin-right: 6px; }
+.qr-pill.aceptado { background: #2e7d32; color: #fff; }
+.qr-pill.rechazado,
+.qr-pill.vencido { background: #c0392b; color: #fff; }
+
+/* ============================================================
+   A DOMICILIO
+   ============================================================ */
+
+.domi-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #10222e;
+    border-bottom: 2px solid #2196f3;
+    color: #cfe8ff;
+    padding: 12px 16px;
+    font-size: 0.92rem;
+}
+.domi-banner[hidden] { display: none; }
+.domi-banner i { color: #64b5f6; }
+.domi-banner.cerrado { background: #2a1414; border-color: #c0392b; color: #ffd6d6; }
+.domi-banner.cerrado i { color: #ff6b6b; }
+
+.domi-overlay { align-items: flex-start; overflow-y: auto; }
+.domi-panel { text-align: left; margin: auto 0; }
+.domi-panel h2, .domi-panel > p { text-align: center; }
+.domi-panel .campo { margin-top: 12px; }
+
+.domi-bloque {
+    border: 1px solid #2f2f2f;
+    border-radius: 14px;
+    padding: 12px 12px 14px;
+    margin-top: 16px;
+}
+.domi-tit { display: block; font-weight: 600; font-size: 0.92rem; color: #FFC107; }
+
+.domi-ubicarme {
+    width: 100%;
+    margin-top: 10px;
+    background: #10222e;
+    border: 1px solid #1d4e6b;
+    border-radius: 10px;
+    color: #cfe8ff;
+    font-family: inherit;
+    font-size: 0.95rem;
+    padding: 12px;
+    cursor: pointer;
+}
+.domi-ubicarme:disabled { opacity: 0.7; }
+
+.domi-error { color: #ff6b6b; font-size: 0.88rem; min-height: 1.2em; margin: 14px 0 10px; text-align: center; }
+.domi-panel .btn-confirmar { margin-bottom: 6px; }
+.domi-panel .mesa-cancelar { display: block; margin: 0 auto; }
+

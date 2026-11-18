@@ -141,7 +141,17 @@ function ponerEnNube(rama, valor) {
     let nodo = nube.datos;
     partes.forEach(p => { if (!nodo[p] || typeof nodo[p] !== 'object') nodo[p] = {}; nodo = nodo[p]; });
     if (valor === null) delete nodo[hoja];
-    else nodo[hoja] = JSON.parse(JSON.stringify(valor));
+    else nodo[hoja] = conHoraDelServidor(JSON.parse(JSON.stringify(valor)));
+}
+
+/* La hora que pone el servidor ({ '.sv': 'timestamp' }) la resuelve la
+   nube, esté en el campo que esté. */
+function conHoraDelServidor(v) {
+    if (v && typeof v === 'object') {
+        if (v['.sv'] === 'timestamp') return Date.now();
+        Object.keys(v).forEach(k => { v[k] = conHoraDelServidor(v[k]); });
+    }
+    return v;
 }
 
 /* Un retoque cambia SOLO los campos que trae y deja el resto como
@@ -214,7 +224,13 @@ function celular(rol, extra) {
             if (esMia()) ponerEnNube(rama, valor);
             return true;
         },
-        parchear: async (rama, valor) => { propio.enviado.push({ metodo: 'PATCH', rama, valor }); return true; },
+        /* Un retoque se aplica como en Firebase: solo los campos que trae. */
+        parchear: async (rama, valor) => {
+            if (nube.caida) return false;
+            propio.enviado.push({ metodo: 'PATCH', rama, valor });
+            if (esMia()) retocarEnNube(rama, valor);
+            return true;
+        },
 
         /* Varias ramas de una sola vez, o ninguna. La mentira imita LA
            REGLA de verdad del cerrojo: solo se puede poner si no hay
@@ -278,6 +294,7 @@ function celular(rol, extra) {
 
     const ctx = vm.createContext({
         console, Date: (extra && extra.Date) || Date, Math, JSON, Promise,
+        crypto: globalThis.crypto, btoa: globalThis.btoa,
         Sync: SyncFalso,
         setInterval: () => 0,
         setTimeout: (f, ms) => setTimeout(f, ms),
@@ -1964,6 +1981,7 @@ function pantallaComanda() {
 
     const ctx = vm.createContext({
         console, Date, Math, JSON, Promise, Number, String, Array, Object, isNaN, parseFloat, parseInt,
+        crypto: globalThis.crypto, btoa: globalThis.btoa, URL, URLSearchParams,
         Sync: {
             activo: true, haySesion: () => true, correoSesion: () => 'mesa@gmail.com',
             uidSesion: () => 'u', rolSesion: () => 'mesero',
@@ -3700,6 +3718,11 @@ function probarLaFranjaDePedir() {
 
     comprobar('a las 5 de la tarde, no', corre(`Servicio.horaDePedir(${aLaHora(17)}).ok`), false);
     comprobar('a las 6 en punto, si',    corre(`Servicio.horaDePedir(${aLaHora(18)}).ok`), true);
+    // Abre a las 5:50 de la tarde
+    comprobar('a las 5:49, todavía no',
+        corre(`Servicio.horaDePedir(${Date.UTC(2026, 7, 10, 17 + 5, 49)}).ok`), false);
+    comprobar('a las 5:50 justo, si',
+        corre(`Servicio.horaDePedir(${Date.UTC(2026, 7, 10, 17 + 5, 50)}).ok`), true);
     comprobar('a las 9 de la noche, si', corre(`Servicio.horaDePedir(${aLaHora(21)}).ok`), true);
     comprobar('a las 10:30 justo, si',
         corre(`Servicio.horaDePedir(${Date.UTC(2026, 7, 10, 22 + 5, 30)}).ok`), true);
@@ -3710,7 +3733,7 @@ function probarLaFranjaDePedir() {
     // Y sabe decir de que hora a que hora, que es lo que se le enseña
     comprobar('sabe decir su horario',
         [corre(`Servicio.horaDePedir().desde`), corre(`Servicio.horaDePedir().hasta`)],
-        ['18:00', '22:30']);
+        ['17:50', '22:30']);
 
     /* LO MISMO EN LA NUBE, que es lo unico que no se puede saltar. La
        regla se escribe en milisegundos, asi que hay que comprobar que
@@ -3874,8 +3897,8 @@ function probarElPanelDelAsador() {
     const delGerente = listaDe('gerente');
     const delAsador  = listaDe('parrilla');
 
-    comprobar('el gerente ve las seis',
-        delGerente, ['hoy', 'menu', 'numeros', 'platos', 'gastos', 'local']);
+    comprobar('el gerente ve las siete, con la de domicilio',
+        delGerente, ['hoy', 'menu', 'numeros', 'platos', 'gastos', 'domicilio', 'local']);
     comprobar('el asador ve el menu, la contabilidad y los gastos',
         delAsador, ['menu', 'platos', 'gastos']);
     comprobar('y NO los pedidos, los numeros ni el local',
@@ -3936,7 +3959,7 @@ function probarElPanelDelAsador() {
 
     const gerente = puerta({ uid: uidDe('gerente'), rol: 'gerente' });
     comprobar('el gerente entra', gerente.entra, true);
-    comprobar('y ve las seis', gerente.pestanas.length, 6);
+    comprobar('y ve las siete', gerente.pestanas.length, 7);
 
     const asador = puerta({ uid: ASADOR, rol: 'parrilla' });
     comprobar('el asador entra', asador.entra, true);
@@ -6106,6 +6129,295 @@ async function probarLaCuentaQueSiguioPidiendo() {
     comprobar('ni una tanda que llega ya anulada', A.corre(`Servicio.sesionDeMesa(3)`), null);
 }
 
+/* ============================================================
+   EL PEDIDO DEL COMENSAL, CON SU CÓDIGO QR
+
+   El agujero: quien guardó la dirección del menú podía mandar pedidos
+   desde su casa a la bandeja del mesero, y escoger la mesa. Ahora el
+   pedido no le llega solo a nadie: se guarda bajo un código al azar, el
+   comensal lo enseña como QR y el mesero lo abre al escanearlo.
+
+   Lo que aquí se imita con `nube.prohibido` es lo que deciden las
+   reglas en el servidor: crear solo si no existe, y aceptar o rechazar
+   solo lo que sigue pendiente.
+   ============================================================ */
+
+/** Las reglas del pedido con QR, imitadas: lo pendiente se resuelve una vez. */
+function reglasDelQR(rama, valor, metodo) {
+    const m = String(rama).match(/^pedidosqr\/([^/]+)$/);
+    if (!m) return false;
+    const ya = sacarDeNube(rama);
+    if (metodo === 'PATCH' && !valor.items) return !ya || ya.estado !== 'pendiente' ||
+        (valor.estado === 'aceptado' && Date.now() - ya.creado > 30 * 60 * 1000);
+    return !!ya;                                   // crear: solo si todavía no existe
+}
+
+async function probarPedidoConQR() {
+    console.log('\n--- El pedido del comensal llega por su código QR ---');
+    nubeLimpia();
+    nube.prohibido = reglasDelQR;
+    const A = celular('mesero'), B = celular('parrilla'), C = celular('mesero');
+
+    const pide = (datos) => C.corre(`Servicio.crearPedidoQR(${JSON.stringify(Object.assign({
+        tipo: 'mesa', mesa: 7, nota: 'sin cebolla',
+        items: [{ id: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 }] }, datos))})`);
+
+    const r = await pide({});
+    comprobar('el comensal manda su pedido y recibe un código', r.ok, true);
+    comprobar('el código no se puede adivinar: 128 bits al azar', /^[A-Za-z0-9_-]{22}$/.test(r.codigo), true);
+    const guardado = sacarDeNube('pedidosqr/' + r.codigo);
+    comprobar('queda pendiente, con la hora del servidor',
+        [guardado.estado, typeof guardado.creado, guardado.mesa], ['pendiente', 'number', 7]);
+
+    A.corre(`Servicio.iniciar(() => {})`);
+    await respirar();
+    comprobar('NO le aparece solo al mesero: la bandeja sigue vacía', A.corre(`Servicio.getEntrantes().length`), 0);
+    comprobar('y a la cocina no le llega nada', Object.keys(sacarDeNube('servicio/comandas') || {}).length, 0);
+
+    // Escanear
+    comprobar('un código que no es de este sistema se dice',
+        (await A.corre(`Servicio.abrirPedidoQR('hola')`)).motivo, 'invalido');
+    comprobar('uno bien escrito que no existe, también',
+        (await A.corre(`Servicio.abrirPedidoQR('${'A'.repeat(22)}')`)).motivo, 'no-existe');
+    const abierto = await A.corre(`Servicio.abrirPedidoQR('${r.codigo}')`);
+    comprobar('al escanearlo, el mesero ve el pedido', [abierto.ok, abierto.pedido.items.length, abierto.pedido.nota],
+        [true, 1, 'sin cebolla']);
+
+    /* LA MESA LA PONE EL MESERO. El comensal marcó la 7; el mesero, que
+       está delante, ve que es la 3. */
+    const platos = [{ platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 2 }];
+    const acepto = await A.corre(`Servicio.aceptarPedidoQR('${r.codigo}', { mesa: 3, platos: ${JSON.stringify(platos)}, nota: 'sin cebolla' })`);
+    comprobar('aceptado, sale a la cocina como una tanda más', [acepto.ok, acepto.comanda.mesa, acepto.comanda.origen],
+        [true, 3, 'cliente']);
+    comprobar('en la mesa que dijo el mesero, no la del celular', A.corre(`!!Servicio.sesionDeMesa(3) && !Servicio.sesionDeMesa(7)`), true);
+    await respirar();
+
+    // Dos celulares, el mismo código: gana uno
+    const otra = await B.corre(`Servicio.aceptarPedidoQR('${r.codigo}', { mesa: 3, platos: ${JSON.stringify(platos)} })`);
+    comprobar('un segundo escaneo no lo acepta otra vez', [otra.ok, otra.motivo], [false, 'aceptado']);
+    comprobar('a la cocina le llega UNA comanda', Object.keys(sacarDeNube('servicio/comandas') || {}).length, 1);
+    comprobar('y abrirlo otra vez dice que ya se aceptó',
+        (await B.corre(`Servicio.abrirPedidoQR('${r.codigo}')`)).motivo, 'aceptado');
+    comprobar('el comensal ve que se aceptó', await C.corre(`Servicio.estadoPedidoQR('${r.codigo}')`), 'aceptado');
+
+    // Rechazar
+    const r2 = await pide({ mesa: 4 });
+    comprobar('rechazar lo deja rechazado', (await A.corre(`Servicio.rechazarPedidoQR('${r2.codigo}')`)).ok, true);
+    const tarde = await B.corre(`Servicio.aceptarPedidoQR('${r2.codigo}', { mesa: 4, platos: ${JSON.stringify(platos)} })`);
+    comprobar('lo rechazado ya no se puede aceptar', tarde.motivo, 'rechazado');
+    comprobar('y no llega a la cocina', Object.keys(sacarDeNube('servicio/comandas') || {}).length, 1);
+    comprobar('el comensal ve que no se aceptó', await C.corre(`Servicio.estadoPedidoQR('${r2.codigo}')`), 'rechazado');
+
+    // Vencido
+    const r3 = await pide({ mesa: 5 });
+    ponerEnNube(`pedidosqr/${r3.codigo}/creado`, Date.now() - 31 * 60 * 1000);
+    comprobar('a la media hora el código vence', (await A.corre(`Servicio.abrirPedidoQR('${r3.codigo}')`)).motivo, 'vencido');
+    comprobar('y el comensal lo sabe', await C.corre(`Servicio.estadoPedidoQR('${r3.codigo}')`), 'vencido');
+    comprobar('aceptarlo igual no entra',
+        (await A.corre(`Servicio.aceptarPedidoQR('${r3.codigo}', { mesa: 5, platos: ${JSON.stringify(platos)} })`)).ok, false);
+
+    // Para llevar
+    const r4 = await pide({ tipo: 'llevar', nombre: 'Ana', mesa: 9 });
+    comprobar('para llevar guarda el nombre y ninguna mesa',
+        [sacarDeNube('pedidosqr/' + r4.codigo).nombre, sacarDeNube('pedidosqr/' + r4.codigo).mesa], ['Ana', 0]);
+    const llevar = await A.corre(`Servicio.aceptarPedidoQR('${r4.codigo}', { mesa: 0, nombre: 'Ana',
+        platos: [{ platoId: 'p5', nombre: 'Pollo Asado', precio: 3.5, cantidad: 1, llevar: true }] })`);
+    comprobar('aceptado, es su cuenta para llevar con su tarrina',
+        [llevar.comanda.mesa, llevar.comanda.nombre, llevar.comanda.items.some(i => i.platoId === 't1')], [0, 'Ana', true]);
+    comprobar('sin nombre no se acepta un para llevar',
+        (await A.corre(`Servicio.aceptarPedidoQR('${r4.codigo}', { mesa: 0, nombre: ' ', platos: [] })`)).motivo, 'sin-nombre');
+
+    /* LA RESPUESTA SE PIERDE. El "aceptado" llegó a la nube pero el
+       celular no lo supo: se reconoce por su marca y no se duplica. */
+    const r5 = await pide({ mesa: 6 });
+    const enviarDeVerdad = A.ctx.Sync.enviar;
+    A.ctx.Sync.enviar = async (...a) => { await enviarDeVerdad(...a); return { ok: false, status: 0 }; };
+    const sinRespuesta = await A.corre(`Servicio.aceptarPedidoQR('${r5.codigo}', { mesa: 6, platos: ${JSON.stringify(platos)} })`);
+    comprobar('si llegó pero no se supo, se reconoce como propio', sinRespuesta.ok, true);
+    A.ctx.Sync.enviar = async () => ({ ok: false, status: 0 });
+    const r6 = await pide({ mesa: 8 });
+    const sinRed = await A.corre(`Servicio.aceptarPedidoQR('${r6.codigo}', { mesa: 8, platos: ${JSON.stringify(platos)} })`);
+    comprobar('sin red NO se da por aceptado: no sale ninguna comanda', [sinRed.ok, sinRed.motivo], [false, 'sin-red']);
+    A.ctx.Sync.enviar = enviarDeVerdad;
+    comprobar('el pedido sigue pendiente para volver a tocar', sacarDeNube('pedidosqr/' + r6.codigo).estado, 'pendiente');
+
+    // Mandar dos veces el mismo pedido (se cortó la red a mitad) no crea dos
+    const d1 = await pide({ codigo: 'X'.repeat(22), mesa: 2 });
+    const d2 = await pide({ codigo: 'X'.repeat(22), mesa: 2 });
+    comprobar('reintentar con el mismo código no crea otro', [d1.ok, d2.ok, d2.codigo], [true, true, 'X'.repeat(22)]);
+    nube.prohibido = null;
+
+    // Vaciar el servicio se lleva lo pendiente
+    const fuente = String(A.corre(`Servicio.vaciarTodo.toString()`));
+    comprobar('vaciar el servicio borra los pedidos con QR y los de domicilio',
+        /'pedidosqr'/.test(fuente) && /'domicilio\/pedidos'/.test(fuente), true);
+}
+
+/* ============================================================
+   A DOMICILIO, POR EL ENLACE DEL GERENTE
+   ============================================================ */
+
+/** Las reglas del enlace, imitadas: cupo, vigencia, apagado y espera entre pedidos. */
+function reglasDelDomicilio(rama, valor, metodo) {
+    const u = String(rama).match(/^domicilio\/enlaces\/([^/]+)\/usados$/);
+    if (u) {
+        const e = sacarDeNube('domicilio/enlaces/' + u[1]);
+        if (!e) return true;
+        return !(valor === (e.usados || 0) + 1 && valor <= e.limite && e.activo === true && e.expira > Date.now() &&
+                 (!e.ultimo || e.ultimo < Date.now() - 20000));
+    }
+    if (/^domicilio\/pedidos\/[^/]+\/[^/]+$/.test(rama)) {
+        const ya = sacarDeNube(rama);
+        if (metodo === 'PATCH' && !valor.items) return !ya || ya.estado !== 'pendiente';
+        return !!ya;                               // crear: solo si todavía no existe
+    }
+    return false;
+}
+
+async function probarDomicilio() {
+    console.log('\n--- A domicilio, por el enlace del gerente ---');
+    nubeLimpia();
+    const G = celular('gerente'), M = celular('mesero'), cliente = celular('mesero');
+
+    const r = await G.corre(`Servicio.crearEnlace({ para: 'Don Luis', horas: 3, limite: 2 })`);
+    comprobar('el gerente crea el enlace', r.ok, true);
+    const t = r.token;
+    comprobar('con un código que no se puede adivinar', /^[A-Za-z0-9_-]{22}$/.test(t), true);
+    const e = sacarDeNube('domicilio/enlaces/' + t);
+    comprobar('vence, tiene cupo y está activo', [e.limite, e.usados, e.activo, e.expira > Date.now()], [2, 0, true, true]);
+    comprobar('a quién se lo mandó va aparte, donde el cliente no lo lee',
+        [sacarDeNube('domicilio/notas/' + t).para, 'para' in e], ['Don Luis', false]);
+
+    nube.prohibido = (rama, valor, metodo) => reglasDelDomicilio(rama, valor, metodo) || reglasDelQR(rama, valor, metodo);
+
+    const pedido = (id, extra) => cliente.corre(`Servicio.enviarDomicilio(${JSON.stringify(Object.assign({
+        enlace: t, id, nombre: 'Luis', telefono: '0991234567',
+        maps: 'https://maps.app.goo.gl/abc', direccion: { calle: 'Av. Sucre y Bolívar', sector: 'La Florida' },
+        referencia: 'Casa verde', items: [{ id: 'p1', nombre: 'Carne Asada', precio: 3.5, cantidad: 1 }] }, extra))})`);
+
+    comprobar('el cliente ve que su enlace sirve', (await cliente.corre(`Servicio.leerEnlace('${t}')`)).estado, 'ok');
+    const p1 = await pedido('pedido-uno-abcdef');
+    comprobar('manda su pedido con Maps y dirección', p1.ok, true);
+    const guardado = sacarDeNube(`domicilio/pedidos/${t}/pedido-uno-abcdef`);
+    comprobar('queda pendiente, con su dirección y su teléfono',
+        [guardado.estado, guardado.maps, guardado.direccion.calle, guardado.telefono],
+        ['pendiente', 'https://maps.app.goo.gl/abc', 'Av. Sucre y Bolívar', '0991234567']);
+    comprobar('y cuenta en el cupo', sacarDeNube('domicilio/enlaces/' + t).usados, 1);
+    comprobar('no va a la cocina sin que lo acepten', Object.keys(sacarDeNube('servicio/comandas') || {}).length, 0);
+
+    comprobar('reintentar el mismo pedido no gasta cupo ni lo duplica',
+        [(await pedido('pedido-uno-abcdef')).ok, sacarDeNube('domicilio/enlaces/' + t).usados], [true, 1]);
+    comprobar('otro pedido enseguida tiene que esperar', (await pedido('pedido-dos-abcdef')).motivo, 'espera');
+
+    ponerEnNube(`domicilio/enlaces/${t}/ultimo`, Date.now() - 60000);
+    comprobar('pasado el rato, el segundo entra (solo con dirección escrita)',
+        (await pedido('pedido-dos-abcdef', { maps: '' })).ok, true);
+    ponerEnNube(`domicilio/enlaces/${t}/ultimo`, Date.now() - 60000);
+    comprobar('el tercero no: el enlace admitía dos', (await pedido('pedido-tres-abcde')).motivo, 'agotado');
+    comprobar('y el cupo no pasa de dos', sacarDeNube('domicilio/enlaces/' + t).usados, 2);
+
+    // Apagado, vencido, inventado
+    const r2 = await G.corre(`Servicio.crearEnlace({ para: 'Ana', horas: 1, limite: 5 })`);
+    await G.corre(`Servicio.revocarEnlace('${r2.token}')`);
+    comprobar('un enlace desactivado ya no admite pedidos',
+        (await pedido('pedido-cuatro-abc', { enlace: r2.token })).motivo, 'revocado');
+    const r3 = await G.corre(`Servicio.crearEnlace({ para: 'Eva', horas: 1, limite: 5 })`);
+    ponerEnNube(`domicilio/enlaces/${r3.token}/expira`, Date.now() - 1000);
+    comprobar('uno vencido tampoco', (await pedido('pedido-cinco-abc', { enlace: r3.token })).motivo, 'vencido');
+    comprobar('y uno inventado es inválido', (await pedido('pedido-seis-abcd', { enlace: 'Z'.repeat(22) })).motivo, 'invalido');
+    comprobar('cambiar la dirección por algo que no es un código, también',
+        (await cliente.corre(`Servicio.leerEnlace('../servicio/pagos')`)).estado, 'invalido');
+
+    // El mesero los ve, los acepta o rechaza
+    M.corre(`Servicio.iniciar(() => {})`);
+    await respirar();
+    const lista = M.corre(`Servicio.getDomicilios().map(p => [p.nombre, p.estadoVisto])`);
+    comprobar('el mesero ve los dos pendientes', lista, [['Luis', 'pendiente'], ['Luis', 'pendiente']]);
+
+    const ok = await M.corre(`Servicio.aceptarDomicilio('${t}', 'pedido-uno-abcdef',
+        { platos: [{ platoId: 'p1', nombre: 'Carne Asada', precio: 3.5, cantidad: 1, llevar: true }] })`);
+    comprobar('aceptado, sale a la cocina para llevar, con su tarrina y a nombre del cliente',
+        [ok.ok, ok.comanda.mesa, ok.comanda.nombre, ok.comanda.origen, ok.comanda.items.some(i => i.platoId === 't1')],
+        [true, 0, 'Domicilio · Luis', 'domicilio', true]);
+    const otra = await M.corre(`Servicio.aceptarDomicilio('${t}', 'pedido-uno-abcdef', { platos: [{ platoId: 'p1', precio: 3.5, cantidad: 1 }] })`);
+    comprobar('no se acepta dos veces', otra.ok, false);
+    comprobar('rechazar el otro', (await M.corre(`Servicio.rechazarDomicilio('${t}', 'pedido-dos-abcdef')`)).ok, true);
+    comprobar('lo rechazado no llega a la cocina', Object.keys(sacarDeNube('servicio/comandas') || {}).length, 1);
+    comprobar('y el cliente ve en qué quedó cada uno',
+        [await cliente.corre(`Servicio.estadoDomicilio('${t}', 'pedido-uno-abcdef')`),
+         await cliente.corre(`Servicio.estadoDomicilio('${t}', 'pedido-dos-abcdef')`)], ['aceptado', 'rechazado']);
+
+    // La lista del gerente
+    const enlaces = await G.corre(`Servicio.listarEnlaces()`);
+    comprobar('el gerente ve cada enlace con su estado y cuántos pedidos recibió',
+        enlaces.map(x => [x.para, x.estado, x.usados]).sort(),
+        [['Ana', 'revocado', 0], ['Don Luis', 'agotado', 2], ['Eva', 'vencido', 0]]);
+    nube.prohibido = null;
+}
+
+/* ============================================================
+   EL PRECIO LO PONE LA CARTA, NO EL CELULAR DEL CLIENTE
+
+   El pedido lo escribe el celular del comensal, y lo que viene de ahí
+   se puede cambiar. Al aceptarlo, cada plato sale con el nombre y el
+   precio de la carta; lo que se acabó no sale y se dice.
+   ============================================================ */
+
+function probarPrecioDeLaCarta() {
+    console.log('\n--- Al aceptar, manda el precio de la carta ---');
+    const { corre } = pantallaComanda();
+    corre(`localStorage.setItem('menu_overrides', JSON.stringify({ p2: { agotado: true } }))`);
+    corre(`revisando = { clase: 'qr', codigo: 'x', mesa: 3, nombre: '', pedido: { tipo: 'mesa', mesa: 3, items: [
+        { platoId: 'p5', nombre: 'Pollo Asado', precio: 0.01, cantidad: 2 },
+        { platoId: 'p2', nombre: 'Chuleta', precio: 4, cantidad: 1 },
+        { platoId: 'no-existe', nombre: 'Langosta', precio: 1, cantidad: 1 } ] } }`);
+    const r = corre(`platosDeLaRevision()`);
+    comprobar('una cola a un centavo entra al precio de la carta',
+        r.salen.map(i => [i.platoId, i.precio, i.cantidad]), [['p5', 3.5, 2]]);
+    comprobar('lo agotado y lo que no está en la carta no sale, y se dice', r.fuera, ['1 Chuleta', '1 Langosta']);
+    comprobar('y se avisa del precio corregido', r.cambiados, ['Pollo Asado']);
+
+    corre(`revisando.pedido.tipo = 'llevar'`);
+    comprobar('para llevar, todo va marcado para llevar', corre(`platosDeLaRevision().salen.every(i => i.llevar)`), true);
+    comprobar('el código de un QR se saca del enlace o suelto',
+        [corre(`codigoDeTexto('https://x.github.io/menu/comanda.html?qr=${'a'.repeat(22)}')`),
+         corre(`codigoDeTexto('${'b'.repeat(22)}')`), corre(`codigoDeTexto('https://otro.com/')`)],
+        ['a'.repeat(22), 'b'.repeat(22), null]);
+}
+
+/* ============================================================
+   LAS REGLAS: LA BANDEJA VIEJA YA NO ACEPTA A CUALQUIERA
+
+   Con el QR, el pedido del comensal no tiene por qué entrar a la bandeja
+   del mesero. Si se dejara abierta, quien guardó la dirección seguiría
+   llenándola desde su casa con el código de antes.
+   ============================================================ */
+
+function probarReglasDelQR() {
+    console.log('\n--- Las reglas del QR y del domicilio ---');
+    const r = JSON.parse(fuente('firebase-rules.json')).rules;
+    const entrante = String(r.servicio.entrantes.$entrante['.write']);
+    comprobar('la bandeja vieja solo la escribe el personal', /^auth != null/.test(entrante) && !/!data\.exists\(\) \|\|/.test(entrante), true);
+
+    const qr = r.pedidosqr.$codigo;
+    comprobar('un pedido con QR solo se crea si no existe', qr['.write'], '!data.exists()');
+    comprobar('con la hora del servidor y dentro del horario',
+        /creado'\)\.val\(\) == now/.test(qr['.validate']) && /64200000/.test(qr['.validate']) && /81000000/.test(qr['.validate']), true);
+    comprobar('solo se resuelve lo pendiente, y por el personal',
+        /data\.val\(\) == 'pendiente'/.test(qr.estado['.write']) && /auth != null/.test(qr.estado['.write']), true);
+    comprobar('aceptar caduca a la media hora', /now - 1800000/.test(qr.estado['.validate']), true);
+    comprobar('nadie puede listar los pendientes', r.pedidosqr['.read'] === undefined, true);
+
+    const usados = r.domicilio.enlaces.$enlace.usados['.validate'];
+    comprobar('el cupo sube de uno en uno y no pasa del límite',
+        /data\.val\(\) \+ 1/.test(usados) && /<= newData\.parent\(\)\.child\('limite'\)/.test(usados), true);
+    comprobar('y solo en un enlace activo, sin vencer, y con espera entre pedidos',
+        /activo'\)\.val\(\) == true/.test(usados) && /expira'\)\.val\(\) > now/.test(usados) && /now - 20000/.test(usados), true);
+    comprobar('los enlaces y sus notas solo los ve el gerente',
+        [r.domicilio.enlaces['.read'], r.domicilio.notas['.read']].every(x => /fbdIzi6tOwhwJwQR6xY0MLUz4UE3/.test(x) && !/YHeMm/.test(x)), true);
+    comprobar('los pedidos a domicilio no los lista quien no es del local', /auth != null/.test(r.domicilio.pedidos['.read']), true);
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -6182,6 +6494,10 @@ async function main() {
     await probarACualCuentaVa();
     await probarUnSoloEnvio();
     await probarAvisoDeUnPedidoAnulado();
+    await probarPedidoConQR();
+    await probarDomicilio();
+    probarPrecioDeLaCarta();
+    probarReglasDelQR();
     await probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();

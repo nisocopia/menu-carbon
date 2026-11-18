@@ -1142,3 +1142,38 @@
     .fila-acciones { margin-top: 0; }
     .in-nombre { flex: 1; }
 }
+
+/* ---------- A domicilio: los enlaces ---------- */
+
+.campo-panel select {
+    width: 100%;
+    background: #1f1f1f;
+    border: 1px solid #303030;
+    border-radius: 10px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.93rem;
+    padding: 12px;
+}
+
+#vista-domicilio .campo-panel { margin-bottom: 12px; }
+.enlace-opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.enlace {
+    border: 1px solid #262626;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-top: 10px;
+}
+.enlace.nuevo { border-color: #2e7d4f; background: #0f1f16; margin-top: 14px; }
+.enlace.apagado { opacity: 0.6; }
+.enlace-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.enlace-estado { font-size: 0.75rem; font-weight: 700; border-radius: 20px; padding: 3px 10px; }
+.enlace-estado.activo  { background: #0f2a1a; color: #7ee2a0; }
+.enlace-estado.apagado { background: #222; color: #999; }
+.enlace-det { font-size: 0.82rem; color: #999; margin-top: 4px; }
+.enlace-url { font-size: 0.8rem; color: #cfe8ff; word-break: break-all; }
+.enlace-btns { display: flex; gap: 18px; flex-wrap: wrap; }
+.enlace-btns .btn-texto { width: auto; text-decoration: none; color: #7ec8ff; }
+.enlace-btns .btn-texto.peligro { color: #c0605f; }
+

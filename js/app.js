@@ -352,20 +352,531 @@ function confirmarPedido() {
         return;
     }
 
-    const total = Number(CFG.mesas) || 11;
-    document.getElementById('mesa-botones').innerHTML =
-        Array.from({ length: total }, (_, i) => i + 1)
-             .map(n => `<button class="mesa-btn" data-mesa="${n}">${n}</button>`).join('');
+    // La librería del código se va bajando mientras el comensal elige
+    if (Nube.activo) cargarQR();
 
+    /* A domicilio no hay mesa ni mesero delante: va a su formulario.
+       Y si el enlace ya no sirve, se le dice ANTES de que escriba su
+       dirección para nada. */
+    if (DOMICILIO) {
+        if (enlaceDomicilio && enlaceDomicilio.estado !== 'ok' && enlaceDomicilio.estado !== 'sin-red') {
+            avisar(MOTIVO_ENLACE[enlaceDomicilio.estado] || MOTIVO_ENLACE.invalido, 9);
+            return;
+        }
+        abrirDomicilio();
+        return;
+    }
+
+    /* Sin nube no hay código que escanear: el comensal le enseña la
+       pantalla al mesero, como antes de todo esto. */
+    pintarPaso(Nube.activo ? 'como' : 'mesa');
     document.getElementById('mesa-modal').classList.add('open');
+}
+
+/**
+ * El panel de "¿cómo lo quieres?" en sus tres pasos. Es un solo panel
+ * que cambia de contenido: tres ventanas una encima de otra confunden a
+ * quien no está acostumbrado a pedir por el celular.
+ */
+function pintarPaso(paso) {
+    const panel = document.getElementById('mesa-panel');
+    const volver = Nube.activo && paso !== 'como'
+        ? `<button class="mesa-cancelar" data-paso="como">Volver</button>`
+        : `<button class="mesa-cancelar" data-cerrar-mesa>Volver</button>`;
+
+    if (paso === 'como') {
+        panel.innerHTML = `
+            <h2><i class="fas fa-receipt"></i> ¿Cómo lo quieres?</h2>
+            <p>Te damos un código para que se lo muestres al mesero.</p>
+            <div class="como-opciones">
+                <button class="como-btn" data-paso="mesa">
+                    <i class="fas fa-utensils"></i> Para comer aquí
+                </button>
+                <button class="como-btn" data-paso="llevar">
+                    <i class="fas fa-bag-shopping"></i> Para llevar
+                </button>
+            </div>
+            ${volver}`;
+        return;
+    }
+
+    if (paso === 'llevar') {
+        panel.innerHTML = `
+            <h2><i class="fas fa-bag-shopping"></i> ¿A nombre de quién?</h2>
+            <p>Para entregarte tu pedido cuando esté listo.</p>
+            <label class="campo"><span>Tu nombre</span>
+                <input id="llevar-nombre" maxlength="30" autocomplete="given-name" autocapitalize="words"></label>
+            <button class="btn-confirmar como-enviar" data-enviar-llevar>
+                <i class="fas fa-paper-plane"></i> Enviar pedido
+            </button>
+            ${volver}`;
+        const campo = document.getElementById('llevar-nombre');
+        try { campo.value = localStorage.getItem('menu_mi_nombre') || ''; } catch (e) {}
+        campo.focus();
+        return;
+    }
+
+    const total = Number(CFG.mesas) || 11;
+    panel.innerHTML = `
+        <h2><i class="fas fa-location-dot"></i> ¿En qué mesa estás?</h2>
+        <p>${Nube.activo ? 'El mesero la confirma al escanear tu código.'
+                         : 'Para que tu pedido llegue a tu mesa y no a otra.'}</p>
+        <div class="mesa-botones" id="mesa-botones">
+            ${Array.from({ length: total }, (_, i) => i + 1)
+                .map(n => `<button class="mesa-btn" data-mesa="${n}">${n}</button>`).join('')}
+        </div>
+        ${volver}`;
 }
 
 function cerrarMesaModal() {
     document.getElementById('mesa-modal').classList.remove('open');
 }
 
+/* ============================================================
+   EL PEDIDO CON SU CÓDIGO QR
+
+   Desde el celular del comensal el pedido no le llega solo a nadie. Se
+   guarda en la nube bajo un código al azar y se le enseña como QR: el
+   mesero lo escanea en la mesa, delante de quien pidió, y solo entonces
+   lo ve y lo acepta. Así, quien guardó la dirección del menú y pide
+   desde su casa no llega a ninguna pantalla.
+
+   La mesa que se toca aquí es una sugerencia: la pone el mesero, que
+   está parado delante de ella.
+   ============================================================ */
+
+const LLAVE_QR = 'menu_pedido_qr';       // el pedido que espera, en ESTE celular
+const LLAVE_INTENTO = 'menu_qr_intento';  // el código de un envío que no se sabe si salió
+
+const leerLocal = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
+const guardarLocal = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+/**
+ * La librería que dibuja el QR, solo cuando hace falta: son 58 KB que
+ * el que mira el menú sin pedir no tiene por qué bajar. Lleva la misma
+ * marca de versión que este archivo, así que el ayudante la guarda.
+ */
+let cargandoQR = null;
+function cargarQR() {
+    if (typeof qrcode !== 'undefined') return Promise.resolve(true);
+    if (cargandoQR) return cargandoQR;
+    cargandoQR = new Promise(res => {
+        const yo = document.querySelector('script[src*="js/app.js"]');
+        const s = document.createElement('script');
+        s.src = yo ? yo.getAttribute('src').replace('js/app.js', 'js/qrcode.js') : 'js/qrcode.js';
+        s.onload = () => res(true);
+        s.onerror = () => { cargandoQR = null; res(false); };
+        document.head.appendChild(s);
+    });
+    return cargandoQR;
+}
+
+/** Lo que identifica un envío: el mismo pedido reintentado lleva el mismo código. */
+const firmaDe = datos => JSON.stringify([datos.tipo, datos.mesa || 0, datos.nombre || '',
+    carrito.map(i => [i.id, i.cantidad]), document.getElementById('pedido-nota').value.trim()]);
+
+let enviandoQR = false;
+
+async function enviarConQR(datos) {
+    if (!carrito.length || enviandoQR) return;
+    enviandoQR = true;
+
+    const boton = document.querySelector('#mesa-panel .como-enviar, #mesa-panel .mesa-btn');
+    const panel = document.getElementById('mesa-panel');
+    panel.classList.add('enviando');
+
+    /* SI SE CORTA A MEDIAS, EL REINTENTO NO DUPLICA. El código se apunta
+       antes de mandar; si el mismo pedido se vuelve a mandar, sale con el
+       mismo código, y la nube solo deja crearlo una vez. */
+    const firma = firmaDe(datos);
+    const intento = leerLocal(LLAVE_INTENTO, null);
+    const codigo = intento && intento.firma === firma ? intento.codigo : Servicio.codigoSeguro(16);
+    guardarLocal(LLAVE_INTENTO, { firma, codigo });
+
+    const nota = document.getElementById('pedido-nota').value.trim();
+    const items = carrito.map(i => ({ ...i, platoId: i.id }));
+
+    let r;
+    try {
+        r = await Servicio.crearPedidoQR({ codigo, tipo: datos.tipo, mesa: datos.mesa,
+                                           nombre: datos.nombre, items, nota });
+    } catch (e) {
+        r = { ok: false, motivo: 'no-salio' };
+    } finally {
+        enviandoQR = false;
+        panel.classList.remove('enviando');
+    }
+    void boton;
+
+    if (!r.ok) {
+        const hora = Servicio.horaDePedir();
+        avisar(r.motivo === 'negado'
+            ? `Ahora no se toman pedidos desde el celular (de ${horaEnLetras(hora.desde)} a ` +
+              `${horaEnLetras(hora.hasta)}). Llama al mesero y con gusto te atiende.`
+            : 'No se pudo enviar el pedido. Revisa tu conexión e inténtalo otra vez.', 10);
+        return;                                   // el carrito se queda como estaba
+    }
+
+    guardarLocal(LLAVE_INTENTO, null);
+    if (datos.nombre) { try { localStorage.setItem('menu_mi_nombre', datos.nombre); } catch (e) {} }
+
+    guardarLocal(LLAVE_QR, {
+        clase: 'qr', codigo: r.codigo, tipo: datos.tipo, mesa: datos.mesa || 0,
+        nombre: datos.nombre || '', items: carrito.map(i => ({ ...i })), nota,
+        total: totalCarrito(), sugerencia: sugerenciaAceptada,
+        enviado: Date.now(), estado: 'pendiente'
+    });
+
+    vaciarCarrito();
+    cerrarMesaModal();
+    mostrarQR();
+    seguirElPedido();
+}
+
+/** El pedido salió: el carrito se vacía, como se vaciaba antes. */
+function vaciarCarrito() {
+    carrito = [];
+    Store.limpiarCarrito();
+    sugerenciaAceptada = false;
+    document.getElementById('pedido-nota').value = '';
+    actualizarBarra();
+    cerrarCarrito();
+    Store.enviarVistas();
+}
+
+/* ---------- La pantalla del código y del estado ---------- */
+
+const TEXTOS_QR = {
+    pendiente: ['Tu pedido fue enviado', 'Muestra este código QR al mesero para confirmar tu pedido.'],
+    aceptado:  ['Tu pedido fue aceptado', 'Ya está en la cocina. Te avisamos aquí cómo va.'],
+    rechazado: ['El mesero no aceptó este pedido', 'Pregúntale qué pasó. Puedes volver a armarlo.'],
+    vencido:   ['Este código venció', 'Nadie lo escaneó a tiempo. Vuelve a enviar tu pedido.']
+};
+
+const TEXTOS_DOMI = {
+    pendiente: ['Tu pedido fue enviado al restaurante', 'Tu pedido está pendiente de aceptación por el restaurante.'],
+    aceptado:  ['Tu pedido fue aceptado', 'Ya lo estamos preparando para llevártelo.'],
+    rechazado: ['El restaurante no pudo aceptar tu pedido', 'Escríbenos por WhatsApp para saber qué pasó.'],
+    vencido:   ['Tu pedido no se confirmó a tiempo', 'Escríbenos por WhatsApp para saber qué pasó.']
+};
+
+function mostrarQR() {
+    const a = leerLocal(LLAVE_QR, null);
+    if (!a) return;
+
+    pintarQR(a);
+    document.getElementById('qr-modal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    pintarPastilla();
+}
+
+function cerrarQR() {
+    document.getElementById('qr-modal').classList.remove('open');
+    document.body.style.overflow = '';
+    const a = leerLocal(LLAVE_QR, null);
+    // Lo resuelto ya se leyó: se va. Lo que espera sigue en la pastilla.
+    if (a && a.estado !== 'pendiente' && a.estado !== 'enviando') guardarLocal(LLAVE_QR, null);
+    pintarPastilla();
+}
+
+async function pintarQR(a) {
+    const domicilio = a.clase === 'domicilio';
+    const [titulo, texto] = (domicilio ? TEXTOS_DOMI : TEXTOS_QR)[a.estado] || TEXTOS_QR.pendiente;
+    const conCodigo = !domicilio && a.estado === 'pendiente';
+
+    const quien = domicilio ? 'A domicilio · ' + a.nombre
+                : a.tipo === 'llevar' ? 'Para llevar · ' + a.nombre
+                : 'Mesa ' + a.mesa;
+
+    document.getElementById('qr-papel').innerHTML = `
+        <div class="qr-estado ${a.estado}">
+            <strong>${titulo}</strong>
+            <span>${texto}</span>
+        </div>
+        ${conCodigo ? `<div class="qr-codigo" id="qr-codigo"></div>
+                       <p class="qr-espera"><span class="qr-punto"></span> Tu pedido está esperando confirmación</p>` : ''}
+        ${domicilio && a.estado === 'pendiente'
+            ? `<p class="qr-espera"><span class="qr-punto"></span> Esperando que el restaurante lo acepte</p>` : ''}
+        <div class="qr-resumen">
+            <div class="qr-quien">${escapar(quien)}</div>
+            ${a.items.map(i => `<div class="qr-linea"><span>${i.cantidad} ${escapar(i.nombre)}</span>
+                                <span>${money(i.precio * i.cantidad)}</span></div>`).join('')}
+            ${a.nota ? `<div class="qr-nota">${escapar(a.nota)}</div>` : ''}
+            <div class="qr-linea qr-total"><span>Total</span><span>${money(a.total)}</span></div>
+        </div>`;
+
+    const otraVez = a.estado === 'rechazado' || a.estado === 'vencido';
+    document.getElementById('qr-acciones').innerHTML = `
+        ${otraVez ? `<button class="btn-confirmar" data-qr-otra-vez><i class="fas fa-rotate-left"></i> Volver a armar el pedido</button>` : ''}
+        ${domicilio && otraVez && CFG.whatsapp ? `<a class="btn-wa" target="_blank" rel="noopener"
+            href="https://wa.me/${CFG.whatsapp}"><i class="fab fa-whatsapp"></i> Escribir por WhatsApp</a>` : ''}
+        <button class="btn-cerrar-comanda" data-qr-cerrar>${a.estado === 'pendiente' ? 'Seguir viendo el menú' : 'Listo'}</button>`;
+
+    if (!conCodigo) return;
+
+    // El QR es un enlace a la comanda: el escáner de la app lo lee, y la
+    // cámara normal del celular también lo abre
+    const caja = document.getElementById('qr-codigo');
+    const hay = await cargarQR();
+    if (!hay || typeof qrcode === 'undefined') {
+        caja.innerHTML = `<p class="qr-sin">No se pudo dibujar el código. Revisa tu conexión y vuelve a abrir esta pantalla.</p>`;
+        return;
+    }
+    const q = qrcode(0, 'M');
+    q.addData(enlaceDelCodigo(a.codigo));
+    q.make();
+    caja.innerHTML = q.createSvgTag(6, 3);
+}
+
+/** A dónde lleva el QR: a la comanda del mesero, con el pedido ya abierto. */
+const enlaceDelCodigo = codigo =>
+    location.href.split(/[?#]/)[0].replace(/[^/]*$/, '') + 'comanda.html?qr=' + codigo;
+
+/** Lo que escribe el comensal no puede pintar HTML en ninguna pantalla. */
+const escapar = t => String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** El botón chico que queda abajo mientras el pedido espera. */
+function pintarPastilla() {
+    const p = document.getElementById('qr-pill');
+    const a = leerLocal(LLAVE_QR, null);
+    const abierto = document.getElementById('qr-modal').classList.contains('open');
+    if (!a || abierto) { p.hidden = true; document.body.classList.remove('qr-esperando'); return; }
+
+    p.hidden = false;
+    document.body.classList.add('qr-esperando');
+    p.className = 'qr-pill ' + a.estado;
+    p.innerHTML = a.estado === 'pendiente'
+        ? (a.clase === 'domicilio'
+            ? '<i class="fas fa-clock"></i> Tu pedido espera aceptación · Ver'
+            : '<i class="fas fa-receipt"></i> Tu pedido espera · Ver mi código')
+        : a.estado === 'aceptado' ? '<i class="fas fa-check"></i> Tu pedido fue aceptado · Ver'
+        : '<i class="fas fa-circle-exclamation"></i> Tu pedido no se aceptó · Ver';
+}
+
+/* ---------- Seguirle la pista ---------- */
+
+let siguiendo = null;
+
+/**
+ * Pregunta cada pocos segundos en qué va el pedido. Es una pregunta
+ * suelta y no un canal abierto: el comensal no tiene cuenta, y en cuanto
+ * el pedido se resuelve deja de preguntar.
+ */
+function seguirElPedido() {
+    clearTimeout(siguiendo);
+    const a = leerLocal(LLAVE_QR, null);
+    if (!a || a.estado !== 'pendiente') return;
+
+    siguiendo = setTimeout(async () => {
+        if (document.hidden) { seguirElPedido(); return; }      // se retoma al volver
+        let estado;
+        try {
+            estado = a.clase === 'domicilio'
+                ? await Servicio.estadoDomicilio(a.enlace, a.id)
+                : await Servicio.estadoPedidoQR(a.codigo);
+        } catch (e) { estado = undefined; }
+
+        const ahora = leerLocal(LLAVE_QR, null);
+        if (!ahora || ahora.enviado !== a.enviado) return;     // ya es otro pedido
+        if (estado && estado !== 'no-existe' && estado !== ahora.estado) {
+            ahora.estado = estado;
+            guardarLocal(LLAVE_QR, ahora);
+            alResolverse(ahora);
+            if (document.getElementById('qr-modal').classList.contains('open')) pintarQR(ahora);
+            pintarPastilla();
+        }
+        seguirElPedido();
+    }, 4000);
+}
+
+/** Aceptado: arranca el aviso de "tu pedido va en camino", como antes. */
+function alResolverse(a) {
+    if (a.estado !== 'aceptado') return;
+    const pedido = Store.guardarPedido({
+        items: a.items, total: a.total, mesa: a.mesa || 0, nota: a.nota,
+        aceptoSugerencia: !!a.sugerencia
+    });
+    if (typeof iniciarTracker === 'function') iniciarTracker(pedido);
+}
+
+/** Rechazado o vencido: lo que había elegido vuelve al carrito. */
+function volverAArmar() {
+    const a = leerLocal(LLAVE_QR, null);
+    if (!a) return;
+    carrito = a.items
+        .map(i => Object.assign({}, i))
+        .filter(i => { const p = Store.findPlato(i.id); return p && sePuedePedir(p); });
+    Store.saveCarrito(carrito);
+    document.getElementById('pedido-nota').value = a.nota || '';
+    guardarLocal(LLAVE_QR, null);
+    cerrarQR();
+    actualizarBarra();
+    if (carrito.length) abrirCarrito();
+}
+
+/* ============================================================
+   A DOMICILIO
+
+   Se entra por un enlace que manda el restaurante por WhatsApp
+   (index.html?d=…). El enlace caduca, se puede apagar y admite los
+   pedidos que diga el gerente: lo cumplen las reglas de la nube, no
+   esta página.
+   ============================================================ */
+
+const DOMICILIO = (() => {
+    try { return new URLSearchParams(location.search).get('d') || ''; } catch (e) { return ''; }
+})();
+
+let enlaceDomicilio = null;
+
+const MOTIVO_ENLACE = {
+    invalido: 'Este enlace no es válido. Pídele uno nuevo al restaurante.',
+    revocado: 'Este enlace ya no está activo. Solicita uno nuevo al restaurante.',
+    vencido:  'Este enlace ha expirado. Solicita uno nuevo al restaurante.',
+    agotado:  'Este enlace ya se usó. Solicita uno nuevo al restaurante.',
+    espera:   'Acabas de enviar un pedido. Espera unos segundos antes de mandar otro.',
+    'sin-red': 'No se pudo comprobar el enlace. Revisa tu conexión.',
+    'no-salio': 'No se pudo enviar el pedido. Revisa tu conexión e inténtalo otra vez.'
+};
+
+async function revisarEnlace() {
+    if (!DOMICILIO || typeof Servicio === 'undefined') return;
+    const banner = document.getElementById('domi-banner');
+    document.body.classList.add('modo-domicilio');
+    document.getElementById('cart-confirmar').innerHTML =
+        '<i class="fas fa-location-dot"></i> Continuar con la dirección';
+
+    enlaceDomicilio = await Servicio.leerEnlace(DOMICILIO);
+    const ok = enlaceDomicilio.estado === 'ok' || enlaceDomicilio.estado === 'sin-red';
+    banner.hidden = false;
+    banner.className = 'domi-banner' + (ok ? '' : ' cerrado');
+    banner.innerHTML = ok
+        ? '<i class="fas fa-location-dot"></i> <span>Estás haciendo un <b>pedido a domicilio</b></span>'
+        : `<i class="fas fa-circle-exclamation"></i> <span>${MOTIVO_ENLACE[enlaceDomicilio.estado] || MOTIVO_ENLACE.invalido}</span>`;
+}
+
+const CAMPOS_DOMI = ['nombre', 'telefono', 'maps', 'ciudad', 'sector', 'calle', 'numero', 'referencia'];
+
+function abrirDomicilio() {
+    /* Lo que escribió la vez anterior, en este mismo celular: el cliente
+       que repite no tiene por qué volver a teclear su casa. */
+    const antes = leerLocal('menu_mi_direccion', {});
+    CAMPOS_DOMI.forEach(k => {
+        const c = document.getElementById('domi-' + k);
+        if (c && !c.value) c.value = antes[k] || '';
+    });
+    document.getElementById('domi-error').textContent = '';
+    document.getElementById('domi-modal').classList.add('open');
+}
+
+const cerrarDomicilio = () => document.getElementById('domi-modal').classList.remove('open');
+
+/**
+ * Del texto que pegó, el enlace. Google Maps comparte "Mi ubicación
+ * https://maps.app.goo.gl/…" y la gente lo pega entero.
+ */
+function enlaceDeMaps(texto) {
+    const t = String(texto || '').trim();
+    if (!t) return '';
+    const m = t.match(/https?:\/\/\S+/i);
+    if (m) return m[0].replace(/^http:/i, 'https:');
+    if (/^(maps\.app\.goo\.gl|goo\.gl\/maps|(www\.)?google\.[a-z.]+\/maps|maps\.google\.)/i.test(t)) return 'https://' + t;
+    return null;                      // escribió algo, pero no es un enlace
+}
+
+function ubicarme() {
+    const boton = document.getElementById('domi-ubicarme');
+    if (!navigator.geolocation) { avisar('Este celular no deja usar la ubicación. Pega el enlace o escribe tu dirección.', 8); return; }
+    boton.disabled = true;
+    boton.innerHTML = '<i class="fas fa-clock"></i> Buscando dónde estás…';
+    navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude, longitude } = pos.coords;
+        document.getElementById('domi-maps').value =
+            `https://maps.google.com/?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+        boton.disabled = false;
+        boton.innerHTML = '<i class="fas fa-check"></i> Ubicación puesta';
+    }, () => {
+        boton.disabled = false;
+        boton.innerHTML = '<i class="fas fa-location-dot"></i> Usar mi ubicación de ahora';
+        avisar('No se pudo tomar tu ubicación. Pega el enlace de Google Maps o escribe tu dirección.', 8);
+    }, { enableHighAccuracy: true, timeout: 15000 });
+}
+
+let enviandoDomi = false;
+
+async function enviarDomicilio() {
+    if (!carrito.length || enviandoDomi) return;
+    const v = {};
+    CAMPOS_DOMI.forEach(k => { v[k] = (document.getElementById('domi-' + k).value || '').trim(); });
+    const error = document.getElementById('domi-error');
+
+    const maps = enlaceDeMaps(v.maps);
+    if (!v.nombre) { error.textContent = 'Escribe tu nombre.'; return; }
+    if (!/^[0-9 +()-]{7,20}$/.test(v.telefono)) { error.textContent = 'Escribe un teléfono válido, solo números.'; return; }
+    if (maps === null) { error.textContent = 'Eso no parece un enlace de Google Maps. Bórralo o pega el enlace completo.'; return; }
+    if (!maps && !v.calle) { error.textContent = 'Pon tu ubicación o escribe al menos la calle.'; return; }
+    error.textContent = '';
+
+    enviandoDomi = true;
+    const boton = document.getElementById('domi-enviar');
+    boton.disabled = true;
+
+    // El mismo pedido reintentado lleva el mismo número, y entra una sola vez
+    const firma = JSON.stringify([DOMICILIO, carrito.map(i => [i.id, i.cantidad]), v]);
+    const intento = leerLocal(LLAVE_INTENTO, null);
+    const id = intento && intento.firma === firma ? intento.codigo : Servicio.codigoSeguro(12);
+    guardarLocal(LLAVE_INTENTO, { firma, codigo: id });
+
+    const nota = document.getElementById('pedido-nota').value.trim();
+    let r;
+    try {
+        r = await Servicio.enviarDomicilio({
+            enlace: DOMICILIO, id, nombre: v.nombre, telefono: v.telefono,
+            direccion: { ciudad: v.ciudad, sector: v.sector, calle: v.calle, numero: v.numero },
+            maps, referencia: v.referencia,
+            items: carrito.map(i => ({ ...i, platoId: i.id })), nota
+        });
+    } catch (e) {
+        r = { ok: false, motivo: 'no-salio' };
+    } finally {
+        enviandoDomi = false;
+        boton.disabled = false;
+    }
+
+    if (!r.ok) {
+        error.textContent = MOTIVO_ENLACE[r.motivo] || MOTIVO_ENLACE['no-salio'];
+        if (['invalido', 'revocado', 'vencido', 'agotado'].includes(r.motivo)) {
+            enlaceDomicilio = { estado: r.motivo };
+            revisarEnlace();
+        }
+        return;
+    }
+
+    guardarLocal(LLAVE_INTENTO, null);
+    guardarLocal('menu_mi_direccion', v);
+    guardarLocal(LLAVE_QR, {
+        clase: 'domicilio', enlace: DOMICILIO, id, nombre: v.nombre,
+        items: carrito.map(i => ({ ...i })), nota, total: totalCarrito(),
+        sugerencia: sugerenciaAceptada, enviado: Date.now(), estado: 'pendiente'
+    });
+
+    vaciarCarrito();
+    cerrarDomicilio();
+    mostrarQR();
+    seguirElPedido();
+}
+
+/* ============================================================
+   SIN NUBE: la comanda en pantalla, como antes
+   ============================================================ */
+
 async function enviarPedido(mesa) {
     if (!carrito.length) return;
+
+    // Con nube, la mesa es solo una sugerencia que viaja con el código
+    if (Nube.activo) { enviarConQR({ tipo: 'mesa', mesa }); return; }
+
     cerrarMesaModal();
 
     const nota = document.getElementById('pedido-nota').value.trim();
@@ -540,6 +1051,28 @@ function conectarEventos() {
 
         const mesa = e.target.closest('[data-mesa]');
         if (mesa) { enviarPedido(Number(mesa.dataset.mesa)); return; }
+
+        // ¿Cómo lo quieres? — aquí, para llevar, y volver
+        const paso = e.target.closest('[data-paso]');
+        if (paso) { pintarPaso(paso.dataset.paso); return; }
+
+        if (e.target.closest('[data-enviar-llevar]')) { enviarLlevar(); return; }
+        if (e.target.closest('[data-cerrar-mesa]')) { cerrarMesaModal(); return; }
+
+        // La pantalla del código
+        if (e.target.closest('[data-qr-cerrar]')) { cerrarQR(); return; }
+        if (e.target.closest('[data-qr-otra-vez]')) { volverAArmar(); return; }
+        if (e.target.closest('#qr-pill')) { mostrarQR(); return; }
+
+        // A domicilio
+        if (e.target.closest('[data-cerrar-domi]')) { cerrarDomicilio(); return; }
+        if (e.target.closest('#domi-enviar')) { enviarDomicilio(); return; }
+        if (e.target.closest('#domi-ubicarme')) { ubicarme(); return; }
+    });
+
+    // El nombre del pedido para llevar se manda también con la tecla Enter
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && e.target && e.target.id === 'llevar-nombre') { e.preventDefault(); enviarLlevar(); }
     });
 
     // Una foto que no llega (mal escrita, borrada, sin señal) deja en su
@@ -561,7 +1094,6 @@ function conectarEventos() {
             .forEach((b, i) => b.classList.toggle('activa', i === actual));
     }, { capture: true, passive: true });
 
-    document.getElementById('mesa-cancelar').addEventListener('click', cerrarMesaModal);
     document.getElementById('mesa-modal').addEventListener('click', e => {
         if (e.target.id === 'mesa-modal') cerrarMesaModal();
     });
@@ -580,6 +1112,7 @@ function conectarEventos() {
        ninguna prisa y así la red queda libre para lo que sí importa. */
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) Store.enviarVistas();
+        else seguirElPedido();          // de vuelta: en qué va el pedido
     });
     window.addEventListener('pagehide', () => Store.enviarVistas());
 }
@@ -692,6 +1225,20 @@ function iniciarApp() {
     observarVistas();
     marcarCategoriaActiva();
     escucharCambiosDelLocal();
+
+    /* Un pedido que se mandó y todavía espera sigue a la vista, aunque
+       se haya cerrado la página entre medio. */
+    pintarPastilla();
+    seguirElPedido();
+    revisarEnlace();
+}
+
+/** Para llevar: sin nombre no sale, igual que en la comanda del mesero. */
+function enviarLlevar() {
+    const campo = document.getElementById('llevar-nombre');
+    const nombre = campo ? campo.value.trim() : '';
+    if (!nombre) { if (campo) { campo.focus(); campo.classList.add('error'); } return; }
+    enviarConQR({ tipo: 'llevar', nombre });
 }
 
 document.addEventListener('DOMContentLoaded', iniciarApp);

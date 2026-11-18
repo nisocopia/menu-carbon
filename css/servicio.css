@@ -2454,3 +2454,169 @@ body.hay-nuevo::after {
     .sllevar-nom { font-size: 1.6rem; }
     .sllevar-platos { font-size: 1.05rem; }
 }
+
+/* ============================================================
+   EL PEDIDO DEL CLIENTE: ESCANEARLO, REVISARLO, ACEPTARLO
+
+   El botón de escanear va lleno y amarillo, arriba de las mesas: es lo
+   que el mesero hace cada vez que un cliente le enseña su celular.
+   ============================================================ */
+
+.btn-escanear {
+    width: 100%;
+    margin-bottom: 14px;
+    background: #FFC107;
+    border: none;
+    border-radius: 14px;
+    color: #111;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 16px;
+    cursor: pointer;
+}
+.btn-escanear i { margin-right: 8px; }
+
+.escaner-caja {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    max-height: 60vh;
+    background: #000;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+.escaner-caja[hidden] { display: none; }
+.escaner-caja video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.escaner-marco {
+    position: absolute;
+    inset: 18%;
+    border: 3px solid #FFC107;
+    border-radius: 14px;
+    box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+}
+
+.rev-cabeza {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+    color: #999;
+    margin-bottom: 14px;
+}
+.rev-modo {
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    background: #3a2f0b;
+    color: #FFC107;
+}
+.rev-modo.llevar    { background: #10222e; color: #7ec8ff; }
+.rev-modo.domicilio { background: #0f2a1a; color: #7ee2a0; }
+
+.rev-bloque { display: block; margin-bottom: 16px; }
+.rev-bloque h3 { font-size: 0.85rem; margin-bottom: 10px; }
+.rev-bloque h3 em { font-style: normal; font-weight: 400; color: #888; margin-left: 6px; }
+
+.rev-mesas { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.rev-mesa {
+    aspect-ratio: 1;
+    background: #222;
+    border: 2px solid #333;
+    border-radius: 10px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.rev-mesa.on { background: #FFC107; border-color: #FFC107; color: #111; }
+
+.rev-linea { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 0.95rem; }
+.rev-total { border-top: 1px solid #2a2a2a; margin-top: 6px; padding-top: 10px; font-weight: 700; color: #FFC107; }
+.rev-nota { font-size: 0.8rem; color: #999; margin-top: 8px; }
+.rev-mal { color: #ff8a80; }
+.rev-notacli { font-size: 0.85rem; color: #ffd54f; margin-top: 10px; }
+.rev-cliente { line-height: 1.6; font-size: 0.95rem; }
+.rev-cliente a { color: #7ec8ff; }
+.rev-maps {
+    display: inline-block;
+    margin-top: 8px;
+    background: #10222e;
+    border: 1px solid #1d4e6b;
+    border-radius: 10px;
+    padding: 8px 12px;
+    text-decoration: none;
+}
+
+.rev-aviso {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: #2a1414;
+    border: 1px solid #5c2626;
+    border-radius: 12px;
+    color: #ffd6d6;
+    padding: 14px;
+    font-size: 0.92rem;
+    line-height: 1.4;
+}
+.rev-aviso i { color: #ff6b6b; margin-top: 2px; }
+
+.pedido-btns { display: flex; gap: 10px; padding-top: 12px; }
+.pedido-btns:empty { display: none; }
+.pedido-btns.enviando { opacity: 0.6; pointer-events: none; }
+.pedido-btns button {
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: 12px;
+    padding: 15px 10px;
+    cursor: pointer;
+}
+.rev-rechazar { flex: 1; background: none; border: 1px solid #5c2626; color: #ff8a80; }
+.rev-aceptar  { flex: 2; background: #4caf50; border: none; color: #fff; }
+.rev-aceptar:disabled { opacity: 0.4; }
+.rev-otra { flex: 1; background: #222; border: 1px solid #444; color: #ddd; }
+
+/* ---------- A domicilio, en la pantalla de mesas ---------- */
+
+.domi-titulo {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #7ee2a0;
+    margin: 4px 0 10px;
+}
+.domi-titulo i { margin-right: 6px; }
+.domi-lista { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
+.domi-card {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    text-align: left;
+    background: #0f2a1a;
+    border: 2px solid #2e7d4f;
+    border-radius: 14px;
+    color: #fff;
+    font-family: inherit;
+    padding: 12px;
+    cursor: pointer;
+}
+.domi-card.aceptado { background: #161616; border-color: #2a2a2a; }
+.domi-nom { font-weight: 700; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.domi-det { font-size: 0.8rem; color: #aaa; }
+.domi-est { font-size: 0.75rem; color: #7ee2a0; font-weight: 600; }
+.domi-card.aceptado .domi-est { color: #888; }
+.domi-hechos { margin-bottom: 14px; }
+.domi-hechos summary { font-size: 0.82rem; color: #888; padding: 6px 0 10px; cursor: pointer; }
+
+/* La pregunta de la menestra se abre ENCIMA de la revisión del pedido:
+   sale al tocar Aceptar, y por orden en la página quedaba debajo, sin
+   poder tocarse. */
+#hoja-menestra { z-index: 160; }

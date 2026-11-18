@@ -24,7 +24,7 @@
 /* Lo reescribe scripts/version.py en cada publicación. Al cambiar,
    cambia el nombre de la caja y la anterior se tira entera: así una
    pantalla nunca mezcla el HTML nuevo con el JavaScript viejo. */
-const VERSION = '202611160141';
+const VERSION = '202611180224';
 
 const CAJA = 'carbon-' + VERSION;
 

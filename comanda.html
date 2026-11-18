@@ -20,9 +20,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Comanda">
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202611160141">
-    <link rel="stylesheet" href="css/iconos.css?v=202611160141">
-    <link rel="stylesheet" href="css/servicio.css?v=202611160141">
+    <link rel="stylesheet" href="css/fuentes.css?v=202611180224">
+    <link rel="stylesheet" href="css/iconos.css?v=202611180224">
+    <link rel="stylesheet" href="css/servicio.css?v=202611180224">
 </head>
 
 <body class="srv-body">
@@ -55,6 +55,16 @@
         <!-- Lo que mandaron los comensales desde su celular. No entra a la
              cocina hasta que se confirma aquí. -->
         <div id="entrantes"></div>
+
+        <!-- El pedido del comensal ya no llega solo: lo trae en su
+             celular como un QR, y se lee aquí. -->
+        <button class="btn-escanear" id="btn-escanear">
+            <i class="fas fa-mobile-screen"></i> Escanear el pedido de un cliente
+        </button>
+
+        <!-- Los pedidos a domicilio, que llegan por el enlace del gerente y
+             esperan que alguien los acepte. -->
+        <div id="domicilios"></div>
 
         <div class="mesas-grid" id="mesas-grid"></div>
 
@@ -257,16 +267,47 @@
         </div>
     </div>
 
+    <!-- ============ HOJA: ESCANEAR EL CÓDIGO DEL CLIENTE ============ -->
+    <div class="hoja-overlay" id="hoja-escaner">
+        <div class="hoja">
+            <div class="hoja-head">
+                <h2>Escanear el pedido</h2>
+                <button class="hoja-close" id="escaner-cerrar" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="hoja-cuerpo">
+                <div class="escaner-caja" id="escaner-caja">
+                    <video id="escaner-video" playsinline muted></video>
+                    <div class="escaner-marco"></div>
+                </div>
+                <p class="hoja-nota" id="escaner-nota">Apunta al código QR que te muestra el cliente.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ HOJA: REVISAR UN PEDIDO ANTES DE ACEPTARLO ============
+         El de la mesa, el para llevar y el de domicilio. Nada de esto
+         llega a la cocina hasta que se toca Aceptar. -->
+    <div class="hoja-overlay" id="hoja-pedido">
+        <div class="hoja">
+            <div class="hoja-head">
+                <h2 id="pedido-titulo">Pedido</h2>
+                <button class="hoja-close" id="pedido-cerrar" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="hoja-cuerpo" id="pedido-cuerpo"></div>
+            <div class="pedido-btns" id="pedido-btns"></div>
+        </div>
+    </div>
+
     <div class="srv-toast" id="toast"></div>
 
-    <script src="js/menu-data.js?v=202611160141"></script>
-    <script src="js/sync.js?v=202611160141"></script>
-    <script src="js/store.js?v=202611160141"></script>
-    <script src="js/servicio.js?v=202611160141"></script>
-    <script src="js/llamada.js?v=202611160141"></script>
-    <script src="js/comanda.js?v=202611160141"></script>
-    <script src="js/pwa.js?v=202611160141"></script>
-    <script src="js/aviso.js?v=202611160141"></script>
+    <script src="js/menu-data.js?v=202611180224"></script>
+    <script src="js/sync.js?v=202611180224"></script>
+    <script src="js/store.js?v=202611180224"></script>
+    <script src="js/servicio.js?v=202611180224"></script>
+    <script src="js/llamada.js?v=202611180224"></script>
+    <script src="js/comanda.js?v=202611180224"></script>
+    <script src="js/pwa.js?v=202611180224"></script>
+    <script src="js/aviso.js?v=202611180224"></script>
 
 </body>
 
