@@ -2981,6 +2981,389 @@ const Servicio = (() => {
         encolar(`servicio/pidiendo/${mesa || 0}`, null);
     }
 
+    /* ============================================================
+       EL PEDIDO DEL COMENSAL CON SU CÓDIGO QR
+
+       La bandeja tenía un agujero que no se cierra con la bandeja:
+       cualquiera que hubiera guardado la dirección del menú podía mandar
+       pedidos desde su casa, y escoger la mesa que quisiera. No llegaban
+       a la cocina sin que el mesero los confirmara, pero llenaban su
+       pantalla y uno falso se confirmaba sin darse cuenta.
+
+       AHORA EL PEDIDO NO LE LLEGA SOLO A NADIE. Se guarda bajo un código
+       al azar —128 bits, imposible de adivinar— y el comensal lo enseña
+       como QR. El mesero lo escanea en la mesa, delante de quien pidió,
+       y solo ahí lo ve. Quien pida desde su casa no tiene a quién
+       enseñárselo, y su pedido se queda en una rama que no mira nadie.
+
+       LA MESA LA PONE EL MESERO, que está parado delante de ella. Lo que
+       mande el celular del comensal es una sugerencia: cambiar el número
+       en la dirección no le sirve a nadie.
+
+       Lo que de verdad lo impide son las reglas de Firebase, que miran
+       en el servidor:
+         · que el código caduque a la media hora,
+         · que solo el mesero, el asador o el gerente lo acepten,
+         · que se acepte o rechace UNA vez y quede usado,
+         · que se pida dentro del horario.
+       ============================================================ */
+
+    const VIDA_QR = 30 * 60 * 1000;
+    const VIDA_DOMICILIO = 3 * 3600 * 1000;
+    const FORMA_CODIGO = /^[A-Za-z0-9_-]{22,40}$/;
+
+    /** Un código que no se puede adivinar: 128 bits del azar del navegador. */
+    function codigoSeguro(bytes) {
+        const b = new Uint8Array(bytes || 16);
+        crypto.getRandomValues(b);
+        let s = '';
+        b.forEach(x => { s += String.fromCharCode(x); });
+        return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    const HORA_DEL_SERVIDOR = { '.sv': 'timestamp' };
+
+    /** Lo que se guarda de cada plato: lo justo, como en la bandeja. */
+    const platosDelComensal = items => (items || []).map(it => ({
+        platoId: it.platoId || it.id,
+        nombre: String(it.nombre || '').slice(0, 79),
+        precio: Number(it.precio) || 0,
+        cantidad: Number(it.cantidad) || 1
+    }));
+
+    /** Firebase devuelve las listas como objeto en cuanto les falta algo. */
+    const comoLista = x => Array.isArray(x) ? x.filter(Boolean) : Object.values(x || {}).filter(Boolean);
+
+    /**
+     * El comensal manda su pedido. Devuelve el código para pintar el QR.
+     *
+     * Si la respuesta se pierde se puede volver a llamar con el MISMO
+     * código: las reglas solo dejan crearlo una vez, y si ya está allá
+     * es que el primer intento sí llegó.
+     */
+    async function crearPedidoQR({ tipo, mesa, nombre, items, nota, codigo }) {
+        const c = codigo || codigoSeguro(16);
+        const llevar = tipo === 'llevar';
+
+        const pedido = {
+            tipo: llevar ? 'llevar' : 'mesa',
+            mesa: llevar ? 0 : Math.max(0, Math.min(99, Number(mesa) || 0)),
+            items: platosDelComensal(items),
+            nota: String(nota || '').slice(0, 299),
+            creado: HORA_DEL_SERVIDOR,
+            estado: 'pendiente'
+        };
+        if (llevar) pedido.nombre = String(nombre || '').trim().slice(0, 39);
+
+        if (!Red.activo || !Red.todoONada) return { ok: false, motivo: 'sin-nube', codigo: c };
+
+        const r = await Red.todoONada({ ['pedidosqr/' + c]: pedido });
+        if (r && r.ok) return { ok: true, codigo: c };
+
+        // ¿Llegó el intento anterior y lo que se perdió fue la respuesta?
+        const ya = await Red.leer('pedidosqr/' + c, false);
+        if (ya && ya.estado) return { ok: true, codigo: c };
+
+        return { ok: false, codigo: c,
+                 motivo: r && (r.status === 401 || r.status === 403) ? 'negado' : 'no-salio' };
+    }
+
+    /**
+     * En qué va. `undefined` si no se pudo preguntar, para no decirle al
+     * comensal nada que no se sabe.
+     */
+    function estadoDe(p, vida) {
+        if (!p) return 'no-existe';
+        if (p.estado === 'aceptado' || p.estado === 'rechazado') return p.estado;
+        if (typeof p.creado === 'number' && Date.now() - p.creado > vida) return 'vencido';
+        return 'pendiente';
+    }
+
+    async function estadoPedidoQR(codigo) {
+        if (!FORMA_CODIGO.test(String(codigo || ''))) return 'no-existe';
+        const p = await Red.leer('pedidosqr/' + codigo, false);
+        return p === undefined ? undefined : estadoDe(p, VIDA_QR);
+    }
+
+    /**
+     * El mesero escaneó un QR: qué pedido es y si todavía se puede aceptar.
+     *
+     * `motivo`: 'invalido' (no es un código de este sistema), 'sin-red',
+     * 'no-existe', 'aceptado', 'rechazado' o 'vencido'.
+     */
+    async function abrirPedidoQR(codigo) {
+        if (!FORMA_CODIGO.test(String(codigo || ''))) return { ok: false, motivo: 'invalido' };
+        const p = await Red.leer('pedidosqr/' + codigo, true);
+        /* Un "no se pudo leer" puede ser la red o el permiso, y no se
+           arreglan igual: si las reglas nuevas no se publicaron en
+           Firebase, decir "revisa la conexión" mandaría a buscar donde no es. */
+        if (p === undefined) return { ok: false, motivo: /Permiso/.test(porQueNoSale()) ? 'sin-permiso-leer' : 'sin-red' };
+
+        const estado = estadoDe(p, VIDA_QR);
+        if (estado !== 'pendiente') return { ok: false, motivo: estado, por: p && p.por, pedido: p };
+
+        return { ok: true, pedido: Object.assign({}, p, { codigo, items: comoLista(p.items) }) };
+    }
+
+    /**
+     * Acepta o rechaza en la nube, y UNA sola vez.
+     *
+     * Las reglas solo dejan cambiar un pedido que sigue pendiente: el
+     * primer celular gana y al segundo le rebota. Se apunta una marca al
+     * azar para reconocer la propia escritura si la respuesta se pierde.
+     *
+     * Y SIN RESPUESTA NO SE DA POR HECHO. En la bandeja se prefería
+     * mandar la comida por si acaso; aquí no hace falta: el pedido sigue
+     * en la nube, el mesero lo tiene delante y puede volver a tocar.
+     * Darlo por aceptado sin saberlo es la puerta del pedido doble.
+     */
+    async function resolverEnNube(rama, estado) {
+        if (!Red.activo) return { ok: false, motivo: 'sin-nube' };
+        if (!puedeAnotar()) return { ok: false, motivo: 'sin-permiso' };
+
+        const toma = nuevoId();
+        const r = await Red.enviar(rama, {
+            estado, resuelto: HORA_DEL_SERVIDOR, por: miCorreo() || '', toma
+        }, 'PATCH');
+        if (r && r.ok) return { ok: true };
+
+        const ahora = await Red.leer(rama, true);
+        if (ahora && ahora.toma === toma) return { ok: true };
+        if (ahora === undefined || (ahora && ahora.estado === 'pendiente' && !(r && r.status))) {
+            return { ok: false, motivo: 'sin-red' };
+        }
+        if (!ahora) return { ok: false, motivo: 'no-existe' };
+        if (ahora.estado !== 'pendiente') return { ok: false, motivo: ahora.estado, por: ahora.por };
+        return { ok: false, motivo: 'negado' };       // venció, o esta cuenta no puede
+    }
+
+    /**
+     * El mesero lo acepta: recién ahí sale a la parrilla y a la cocina,
+     * como cualquier tanda.
+     *
+     * `mesa` es la que dice el mesero, no la del comensal. `platos` ya
+     * viene con lo que se preguntó al aceptar (de qué es la menestra) y
+     * con el "para llevar" puesto.
+     */
+    async function aceptarPedidoQR(codigo, { mesa, nombre, platos, menestra, nota }) {
+        const llevar = !mesa;
+        if (llevar && !String(nombre || '').trim()) return { ok: false, motivo: 'sin-nombre' };
+        if (!platos || !platos.length) return { ok: false, motivo: 'sin-platos' };
+
+        const r = await resolverEnNube('pedidosqr/' + codigo, 'aceptado');
+        if (!r.ok) return r;
+
+        const comanda = enviarComanda({
+            mesa: llevar ? 0 : mesa,
+            nombre: llevar ? String(nombre).trim() : '',
+            items: platos,
+            nota: nota || '',
+            origen: 'cliente',
+            menestra
+        });
+        return { ok: true, comanda };
+    }
+
+    const rechazarPedidoQR = codigo => resolverEnNube('pedidosqr/' + codigo, 'rechazado');
+
+    /* ============================================================
+       A DOMICILIO, POR UN ENLACE QUE DA EL GERENTE
+
+       El cliente pregunta por WhatsApp si hay comida, y el gerente le
+       manda un enlace. No es el menú de siempre: es un enlace suyo, que
+       caduca, que el gerente puede apagar y que admite los pedidos que
+       él diga. Con eso, guardar la dirección no sirve para pedir otro
+       día ni para pedir veinte veces.
+
+       Las reglas de la nube son las que lo cumplen:
+         · el enlace tiene que existir, estar activo y no haber vencido;
+         · cada pedido suma uno al contador EN LA MISMA ESCRITURA, y el
+           contador no puede pasar del límite — dos pedidos a la vez no
+           se cuelan los dos;
+         · entre un pedido y otro del mismo enlace pasan 20 segundos;
+         · el mismo pedido mandado dos veces entra una.
+
+       Y como el pedido de la mesa, no va a la cocina hasta que alguien
+       del local lo acepta.
+       ============================================================ */
+
+    /** En qué está un enlace, visto desde el celular del cliente. */
+    function estadoEnlace(e) {
+        if (!e || typeof e !== 'object') return 'invalido';
+        if (e.activo === false) return 'revocado';
+        if (typeof e.expira === 'number' && e.expira <= Date.now()) return 'vencido';
+        if ((Number(e.usados) || 0) >= (Number(e.limite) || 0)) return 'agotado';
+        return 'ok';
+    }
+
+    async function leerEnlace(enlace) {
+        if (!FORMA_CODIGO.test(String(enlace || ''))) return { estado: 'invalido' };
+        const e = await Red.leer('domicilio/enlaces/' + enlace, false);
+        if (e === undefined) return { estado: 'sin-red' };
+        return { estado: estadoEnlace(e), enlace: e };
+    }
+
+    /**
+     * El cliente manda su pedido a domicilio.
+     *
+     * `id` lo pone quien llama y lo guarda: si se reintenta con el mismo,
+     * no puede entrar dos veces. Devuelve `motivo`: 'invalido',
+     * 'revocado', 'vencido', 'agotado', 'espera' (otro pedido de este
+     * enlace hace segundos), 'sin-red' o 'no-salio'.
+     */
+    async function enviarDomicilio({ enlace, id, nombre, telefono, direccion, maps, referencia, items, nota }) {
+        if (!Red.activo || !Red.todoONada) return { ok: false, motivo: 'sin-nube' };
+
+        const rama = `domicilio/pedidos/${enlace}/${id}`;
+        const ya = await Red.leer(rama, false);
+        if (ya && ya.estado) return { ok: true };            // un reintento que ya había llegado
+
+        const leido = await leerEnlace(enlace);
+        if (leido.estado !== 'ok') return { ok: false, motivo: leido.estado };
+
+        const pedido = {
+            nombre: String(nombre || '').trim().slice(0, 39),
+            telefono: String(telefono || '').trim().slice(0, 20),
+            items: platosDelComensal(items),
+            nota: String(nota || '').slice(0, 299),
+            creado: HORA_DEL_SERVIDOR,
+            estado: 'pendiente'
+        };
+        const dir = {};
+        ['ciudad', 'sector', 'calle', 'numero'].forEach(k => {
+            const v = String((direccion || {})[k] || '').trim().slice(0, 119);
+            if (v) dir[k] = v;
+        });
+        if (Object.keys(dir).length) pedido.direccion = dir;
+        if (maps) pedido.maps = String(maps).trim().slice(0, 299);
+        if (referencia) pedido.referencia = String(referencia).trim().slice(0, 199);
+
+        const base = `domicilio/enlaces/${enlace}/`;
+        const r = await Red.todoONada({
+            [rama]: pedido,
+            [base + 'usados']: (Number(leido.enlace.usados) || 0) + 1,
+            [base + 'ultimo']: HORA_DEL_SERVIDOR,
+            [base + 'ultimoPedido']: id
+        });
+        if (r && r.ok) return { ok: true };
+
+        const otraVez = await Red.leer(rama, false);
+        if (otraVez && otraVez.estado) return { ok: true };
+        if (!(r && r.status)) return { ok: false, motivo: 'sin-red' };
+
+        /* Rebotó. Se mira por qué para decírselo en cristiano: lo más
+           corriente es que se acabó el cupo o pasó la hora. */
+        const despues = await leerEnlace(enlace);
+        if (despues.estado !== 'ok' && despues.estado !== 'sin-red') return { ok: false, motivo: despues.estado };
+        const ultimo = despues.enlace && despues.enlace.ultimo;
+        if (typeof ultimo === 'number' && Date.now() - ultimo < 30000) return { ok: false, motivo: 'espera' };
+        return { ok: false, motivo: 'no-salio' };
+    }
+
+    async function estadoDomicilio(enlace, id) {
+        const p = await Red.leer(`domicilio/pedidos/${enlace}/${id}`, false);
+        return p === undefined ? undefined : estadoDe(p, VIDA_DOMICILIO);
+    }
+
+    /* ---------- Lo que ve el que toma pedidos ---------- */
+
+    let domicilios = {};
+
+    /** Los pedidos a domicilio: los pendientes primero, del más viejo al más nuevo. */
+    function getDomicilios() {
+        const lista = [];
+        Object.keys(domicilios || {}).forEach(enlace => {
+            Object.keys(domicilios[enlace] || {}).forEach(id => {
+                const p = domicilios[enlace][id];
+                if (!p || typeof p !== 'object') return;
+                lista.push(Object.assign({}, p, {
+                    enlace, id, items: comoLista(p.items), estadoVisto: estadoDe(p, VIDA_DOMICILIO)
+                }));
+            });
+        });
+        const orden = { pendiente: 0, aceptado: 1, rechazado: 2, vencido: 3 };
+        return lista.sort((a, b) => (orden[a.estadoVisto] - orden[b.estadoVisto]) || (a.creado - b.creado));
+    }
+
+    async function aceptarDomicilio(enlace, id, { platos, menestra }) {
+        const p = ((domicilios || {})[enlace] || {})[id];
+        if (!p) return { ok: false, motivo: 'no-existe' };
+        if (!platos || !platos.length) return { ok: false, motivo: 'sin-platos' };
+
+        const r = await resolverEnNube(`domicilio/pedidos/${enlace}/${id}`, 'aceptado');
+        if (!r.ok) return r;
+
+        domicilios[enlace][id] = Object.assign({}, p, { estado: 'aceptado' });
+        const comanda = enviarComanda({
+            mesa: 0,
+            nombre: ('Domicilio · ' + (p.nombre || '')).slice(0, 39),
+            items: platos,
+            nota: p.nota || '',
+            origen: 'domicilio',
+            menestra
+        });
+        return { ok: true, comanda };
+    }
+
+    async function rechazarDomicilio(enlace, id) {
+        const r = await resolverEnNube(`domicilio/pedidos/${enlace}/${id}`, 'rechazado');
+        if (r.ok && domicilios[enlace] && domicilios[enlace][id]) {
+            domicilios[enlace][id] = Object.assign({}, domicilios[enlace][id], { estado: 'rechazado' });
+        }
+        return r;
+    }
+
+    /* ---------- Los enlaces, en el panel del gerente ---------- */
+
+    /**
+     * Un enlace nuevo. Lo escribe solo el gerente: las reglas no dejan a
+     * nadie más. `para` es a quién se le manda, para reconocerlo en la
+     * lista; se guarda aparte, donde el cliente no lo puede leer.
+     */
+    async function crearEnlace({ para, horas, hasta, limite }) {
+        const token = codigoSeguro(16);
+        const expira = hasta || (Date.now() + Math.max(0.25, Number(horas) || 3) * 3600 * 1000);
+        const enlace = {
+            creado: HORA_DEL_SERVIDOR,
+            expira,
+            limite: Math.max(1, Math.min(50, Math.floor(Number(limite) || 1))),
+            usados: 0,
+            activo: true
+        };
+        const ok = await Red.guardar('domicilio/enlaces/' + token, enlace);
+        if (!ok) return { ok: false, motivo: porQueNoSale() || 'No se pudo guardar el enlace.' };
+        await Red.guardar('domicilio/notas/' + token, {
+            para: String(para || '').trim().slice(0, 59), creado: HORA_DEL_SERVIDOR
+        });
+        return { ok: true, token };
+    }
+
+    /** Todos los enlaces con su nota, del más nuevo al más viejo. */
+    async function listarEnlaces() {
+        const [enlaces, notas] = await Promise.all([
+            Red.leer('domicilio/enlaces', true),
+            Red.leer('domicilio/notas', true)
+        ]);
+        if (enlaces === undefined) return undefined;
+        return Object.keys(enlaces || {}).map(t => Object.assign({}, enlaces[t], {
+            token: t,
+            para: ((notas || {})[t] || {}).para || '',
+            estado: estadoEnlace(enlaces[t])
+        })).sort((a, b) => (b.creado || 0) - (a.creado || 0));
+    }
+
+    const revocarEnlace = token => Red.parchear('domicilio/enlaces/' + token, { activo: false });
+
+    /** Hasta cuándo se puede pedir hoy, en la hora del local: el cierre de la franja. */
+    function cierreDeHoy() {
+        const cfg = Store.getConfig();
+        const huso = typeof cfg.husoLocal === 'number' ? cfg.husoLocal : 0;
+        const hasta = enMinutos(cfg.pedirHasta) || 24 * 60;
+        const local = new Date(Date.now() + huso * 3600000);
+        const medianoche = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - huso * 3600000;
+        return medianoche + hasta * 60000;
+    }
+
     let entrantes = {};
 
     /* ------------------------------------------------------------
@@ -3362,15 +3745,22 @@ const Servicio = (() => {
         // adelante no puede pisarlo una respuesta que ya venía en camino
         const desde = Date.now();
 
-        const [ses, pag, ent] = await Promise.all([
+        /* Los pedidos a domicilio, para quien toma pedidos. Van en la
+           misma ronda y no en un canal propio: las conexiones son lo
+           escaso, y un pedido que espera aceptación aguanta seis segundos. */
+        const domicilio = !soloMesas && puedeAnotar();
+
+        const [ses, pag, ent, dom] = await Promise.all([
             Red.leer('servicio/sesiones',  true),
             cobros    ? Red.leer('servicio/pagos',     true) : Promise.resolve(undefined),
-            soloMesas ? Promise.resolve(undefined) : Red.leer('servicio/entrantes', true)
+            soloMesas ? Promise.resolve(undefined) : Red.leer('servicio/entrantes', true),
+            domicilio ? Red.leer('domicilio/pedidos', true) : Promise.resolve(undefined)
         ]);
 
         if (ses !== undefined) mezclar(K.sesiones, ses, desde);
         if (pag !== undefined) mezclar(K.pagos, pag, desde);
         if (ent !== undefined) { entrantes = ent || {}; limpiarTomados(); }
+        if (dom !== undefined) domicilios = dom || {};
 
         // Lo que se anuló sin conocer todavía su cuenta ya se puede cerrar
         if (ses !== undefined) revisarLoApuntado();
@@ -3516,7 +3906,14 @@ const Servicio = (() => {
                un pedido que ya no existe. */
             const ramas = ['servicio/comandas', 'servicio/sesiones', 'servicio/pagos',
                            'servicio/entrantes', 'servicio/pidiendo',
-                           'servicio/tomados', 'servicio/llamadas'];
+                           'servicio/tomados', 'servicio/llamadas',
+                           /* Los pedidos con QR sin escanear y los de
+                              domicilio: los aceptados ya son comandas, y
+                              los datos del cliente —su teléfono, su casa—
+                              no tienen por qué quedarse de una noche a
+                              otra. Los enlaces sí se quedan: caducan solos
+                              y el gerente los ve en su pestaña. */
+                           'pedidosqr', 'domicilio/pedidos'];
 
             /* LAS SIETE DE UN SOLO GOLPE, Y O SE VAN TODAS O NINGUNA.
 
@@ -3553,6 +3950,7 @@ const Servicio = (() => {
         write(K.cierres, {});
         write(K.revisar, {});
         entrantes = {};
+        domicilios = {};
 
         alCambiar();
         return true;
@@ -3632,6 +4030,11 @@ const Servicio = (() => {
         // lo que manda el comensal
         enviarEntrante, getEntrantes, confirmarEntrante, descartarEntrante,
         horaDePedir, soltarCerrojo,
+        // el pedido del comensal con su QR
+        crearPedidoQR, estadoPedidoQR, abrirPedidoQR, aceptarPedidoQR, rechazarPedidoQR, codigoSeguro,
+        // a domicilio, por un enlace del gerente
+        leerEnlace, estadoEnlace, enviarDomicilio, estadoDomicilio, getDomicilios,
+        aceptarDomicilio, rechazarDomicilio, crearEnlace, listarEnlaces, revocarEnlace, cierreDeHoy,
         // para el panel del gerente
         comandasComoPedidos, sesionesEntre,
         // estado del sistema

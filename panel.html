@@ -9,10 +9,10 @@
     <meta name="referrer" content="no-referrer">
     <title>Panel del Gerente</title>
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202611160141">
-    <link rel="stylesheet" href="css/iconos.css?v=202611160141">
-    <link rel="stylesheet" href="css/style.css?v=202611160141">
-    <link rel="stylesheet" href="css/panel.css?v=202611160141">
+    <link rel="stylesheet" href="css/fuentes.css?v=202611180224">
+    <link rel="stylesheet" href="css/iconos.css?v=202611180224">
+    <link rel="stylesheet" href="css/style.css?v=202611180224">
+    <link rel="stylesheet" href="css/panel.css?v=202611180224">
 </head>
 
 <body class="panel-body">
@@ -58,6 +58,7 @@
             <button class="tab" data-tab="numeros"><i class="fas fa-chart-simple"></i> Números</button>
             <button class="tab" data-tab="platos"><i class="fas fa-clipboard-list"></i> Contabilidad</button>
             <button class="tab" data-tab="gastos"><i class="fas fa-bag-shopping"></i> Gastos</button>
+            <button class="tab" data-tab="domicilio"><i class="fas fa-location-dot"></i> Domicilio</button>
             <button class="tab" data-tab="local"><i class="fas fa-store"></i> Local</button>
         </nav>
 
@@ -216,6 +217,53 @@
         </section>
 
         <!-- ===== LOCAL ===== -->
+        <!-- A DOMICILIO: el enlace que se manda por WhatsApp. Caduca solo,
+             admite los pedidos que se digan y se puede apagar. -->
+        <section class="panel-vista" id="vista-domicilio">
+            <div class="bloque">
+                <h2><i class="fas fa-location-dot"></i> Enlace para pedir a domicilio</h2>
+                <p class="ayuda">Cuando alguien te pregunta por WhatsApp si hay comida, créale un
+                    enlace y mándaselo. Con él arma su pedido y pone su dirección; el pedido le
+                    llega al mesero para que lo acepte. El enlace caduca solo, admite los pedidos
+                    que digas aquí y lo puedes apagar cuando quieras.</p>
+
+                <label class="campo-panel"><span>¿Para quién? <em>(para reconocerlo en la lista)</em></span>
+                    <input id="enlace-para" maxlength="59" autocomplete="off" placeholder="Ej: Don Luis"></label>
+
+                <div class="enlace-opciones">
+                    <label class="campo-panel"><span>Vale</span>
+                        <select id="enlace-vigencia">
+                            <option value="1">1 hora</option>
+                            <option value="3" selected>3 horas</option>
+                            <option value="cierre">Hasta el cierre de hoy</option>
+                            <option value="24">24 horas</option>
+                        </select></label>
+                    <label class="campo-panel"><span>Pedidos que admite</span>
+                        <select id="enlace-limite">
+                            <option value="1" selected>1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="5">5</option>
+                            <option value="10">10</option>
+                        </select></label>
+                </div>
+
+                <button class="btn-principal" id="btn-crear-enlace">
+                    <i class="fas fa-plus"></i> Crear enlace
+                </button>
+                <p class="guardado" id="aviso-enlace"></p>
+                <div id="enlace-nuevo"></div>
+            </div>
+
+            <div class="bloque">
+                <div class="bloque-head">
+                    <h2>Enlaces</h2>
+                    <button class="btn-texto" id="btn-refrescar-enlaces">Actualizar</button>
+                </div>
+                <div id="lista-enlaces"><p class="vacio">Todavía no has creado ninguno.</p></div>
+            </div>
+        </section>
+
         <section class="panel-vista" id="vista-local">
             <div class="bloque">
                 <h2>Datos del restaurante</h2>
@@ -227,12 +275,12 @@
 
     </div>
 
-    <script src="js/menu-data.js?v=202611160141"></script>
-    <script src="js/sync.js?v=202611160141"></script>
-    <script src="js/store.js?v=202611160141"></script>
-    <script src="js/servicio.js?v=202611160141"></script>
-    <script src="js/panel.js?v=202611160141"></script>
-    <script src="js/pwa.js?v=202611160141"></script>
+    <script src="js/menu-data.js?v=202611180224"></script>
+    <script src="js/sync.js?v=202611180224"></script>
+    <script src="js/store.js?v=202611180224"></script>
+    <script src="js/servicio.js?v=202611180224"></script>
+    <script src="js/panel.js?v=202611180224"></script>
+    <script src="js/pwa.js?v=202611180224"></script>
 
 </body>
 

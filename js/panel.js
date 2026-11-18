@@ -196,7 +196,7 @@ const PESTANAS = {
        en servicio.js y la rama `gastos` de firebase-rules.json. Las
        tres van juntas: las dos primeras ordenan la pantalla, la tercera
        es la única que decide de verdad. */
-    gerente:  ['hoy', 'menu', 'numeros', 'platos', 'gastos', 'local'],
+    gerente:  ['hoy', 'menu', 'numeros', 'platos', 'gastos', 'domicilio', 'local'],
     parrilla: ['menu', 'platos', 'gastos']
 };
 
@@ -468,6 +468,8 @@ function conectarTabs() {
             btn.classList.add('activo');
             document.getElementById('vista-' + btn.dataset.tab).classList.add('activa');
             window.scrollTo({ top: 0 });
+            // Los enlaces se preguntan al entrar: en vivo no hacen falta
+            if (btn.dataset.tab === 'domicilio') renderEnlaces();
         });
     });
 }
@@ -827,6 +829,138 @@ function conectarFiados() {
         if (!confirm(`¿${f.nombre} pagó los ${dinero(f.monto)}?\n\nLa deuda desaparece de la lista.`)) return;
         Servicio.pagarFiado(b.dataset.pago);
         renderFiados();
+    });
+}
+
+/* ============================================================
+   A DOMICILIO: LOS ENLACES
+
+   El cliente pregunta por WhatsApp si hay comida, y el gerente le
+   manda un enlace de aquí. El enlace lleva un código al azar que no se
+   puede adivinar, caduca, admite los pedidos que se digan y se puede
+   apagar. Todo eso lo cumplen las reglas de la nube; esta pantalla solo
+   lo crea y lo enseña.
+   ============================================================ */
+
+const escPanel = t => String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** La dirección que se manda: el menú, con el código del enlace. */
+const urlDeEnlace = token =>
+    location.href.split(/[?#]/)[0].replace(/[^/]*$/, '') + 'index.html?d=' + token;
+
+const ESTADO_ENLACE = {
+    ok:       ['Activo', 'activo'],
+    vencido:  ['Vencido', 'apagado'],
+    revocado: ['Desactivado', 'apagado'],
+    agotado:  ['Ya se usó', 'apagado']
+};
+
+function cuandoVence(ts) {
+    const d = new Date(ts);
+    const hora = d.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+    return esDeHoy(ts) ? 'hoy a las ' + hora : d.toLocaleDateString('es-EC', { day: 'numeric', month: 'short' }) + ', ' + hora;
+}
+
+/** Los botones de copiar y mandar por WhatsApp de un enlace. */
+const botonesDeEnlace = token => `
+    <button class="btn-texto" data-copiar-enlace="${token}"><i class="fas fa-clone"></i> Copiar</button>
+    <a class="btn-texto" target="_blank" rel="noopener"
+       href="https://wa.me/?text=${encodeURIComponent('Aquí puedes hacer tu pedido a domicilio: ' + urlDeEnlace(token))}">
+       <i class="fab fa-whatsapp"></i> WhatsApp</a>`;
+
+async function renderEnlaces() {
+    const caja = document.getElementById('lista-enlaces');
+    if (!caja || !hayServicio() || !puedeVer('domicilio')) return;
+
+    const lista = await Servicio.listarEnlaces();
+    if (lista === undefined) {
+        caja.innerHTML = `<p class="vacio">No se pudieron leer los enlaces. ${escPanel((Nube.fallo && Nube.fallo()) || '')}</p>`;
+        return;
+    }
+    if (!lista.length) { caja.innerHTML = `<p class="vacio">Todavía no has creado ninguno.</p>`; return; }
+
+    caja.innerHTML = lista.slice(0, 40).map(e => {
+        const [texto, clase] = ESTADO_ENLACE[e.estado] || ESTADO_ENLACE.vencido;
+        return `
+            <div class="enlace ${clase}">
+                <div class="enlace-top">
+                    <strong>${escPanel(e.para) || 'Sin nombre'}</strong>
+                    <span class="enlace-estado ${clase}">${texto}</span>
+                </div>
+                <div class="enlace-det">
+                    ${Number(e.usados) || 0} de ${Number(e.limite) || 0} pedido${Number(e.limite) === 1 ? '' : 's'}
+                    · ${e.estado === 'vencido' ? 'venció' : 'vence'} ${cuandoVence(e.expira)}
+                </div>
+                ${e.estado === 'ok' ? `
+                    <div class="enlace-btns">
+                        ${botonesDeEnlace(e.token)}
+                        <button class="btn-texto peligro" data-apagar-enlace="${e.token}">Desactivar</button>
+                    </div>` : ''}
+            </div>`;
+    }).join('');
+}
+
+async function crearEnlaceDesdeElPanel() {
+    const aviso = document.getElementById('aviso-enlace');
+    const boton = document.getElementById('btn-crear-enlace');
+    const para = document.getElementById('enlace-para').value.trim();
+    const vigencia = document.getElementById('enlace-vigencia').value;
+    const limite = Number(document.getElementById('enlace-limite').value) || 1;
+
+    let horas = Number(vigencia) || 3, hasta = null;
+    if (vigencia === 'cierre') {
+        hasta = Servicio.cierreDeHoy();
+        // Si hoy ya cerró, el cierre de hoy no le sirve a nadie
+        if (hasta < Date.now() + 15 * 60000) { hasta = null; horas = 3; }
+    }
+
+    boton.disabled = true;
+    const r = await Servicio.crearEnlace({ para, horas, hasta, limite });
+    boton.disabled = false;
+
+    if (!r.ok) {
+        aviso.textContent = '✕ ' + r.motivo;
+        aviso.classList.add('mal');
+        return;
+    }
+    aviso.classList.remove('mal');
+    aviso.textContent = '✓ Enlace creado. Mándaselo por WhatsApp.';
+    document.getElementById('enlace-para').value = '';
+    document.getElementById('enlace-nuevo').innerHTML = `
+        <div class="enlace nuevo">
+            <div class="enlace-url">${escPanel(urlDeEnlace(r.token))}</div>
+            <div class="enlace-btns">${botonesDeEnlace(r.token)}</div>
+        </div>`;
+    renderEnlaces();
+}
+
+async function copiarEnlace(token) {
+    const url = urlDeEnlace(token);
+    try {
+        await navigator.clipboard.writeText(url);
+        avisar('Enlace copiado');
+    } catch (e) {
+        prompt('Copia el enlace:', url);
+    }
+}
+
+function conectarEnlaces() {
+    const crear = document.getElementById('btn-crear-enlace');
+    if (!crear) return;
+    crear.addEventListener('click', crearEnlaceDesdeElPanel);
+    document.getElementById('btn-refrescar-enlaces').addEventListener('click', renderEnlaces);
+
+    document.getElementById('vista-domicilio').addEventListener('click', async e => {
+        const copiar = e.target.closest('[data-copiar-enlace]');
+        if (copiar) { copiarEnlace(copiar.dataset.copiarEnlace); return; }
+
+        const apagar = e.target.closest('[data-apagar-enlace]');
+        if (!apagar) return;
+        if (!confirm('¿Desactivar este enlace? Quien lo tenga ya no podrá pedir con él.')) return;
+        const ok = await Servicio.revocarEnlace(apagar.dataset.apagarEnlace);
+        avisar(ok ? 'Enlace desactivado' : 'No se pudo desactivar. Revisa la conexión.');
+        renderEnlaces();
     });
 }
 
@@ -1876,6 +2010,7 @@ document.addEventListener('DOMContentLoaded', () => {
     conectarFiados();
     conectarGastos();
     conectarAnularPedidos();
+    conectarEnlaces();
 
     // Con nube se entra con correo y clave; sin nube, solo con la clave
     if (Nube.activo) {

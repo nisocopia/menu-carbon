@@ -184,14 +184,31 @@ cobra en **Efectivo**.
 - [ ] Escoge Pollo y Carne, Listo, Enviar
 - [ ] **Asador:** ve "Mixto 2 Carnes · Pollo + Carne", entero
 
-## 8. Un pedido desde el celular de un cliente
+## 8. Un pedido desde el celular de un cliente, con su QR
 
 Abre el menú en **otro** celular (o de incógnito), agrega un pollo, toca
-*Listo, llamar al mesero*, escoge la mesa 9.
+*Listo, enviar mi pedido* → **Para comer aquí** → mesa 9.
 
-- [ ] **Mesero:** arriba aparece "1 pedido desde la mesa", en amarillo
-- [ ] **No** le llegó al asador todavía
-- [ ] Tocas **Confirmar y enviar** → recién ahí le llega al asador
+- [ ] Al cliente le sale un **código QR** y *"Muestra este código QR al mesero"*
+- [ ] Al mesero **no** le aparece nada solo, y al asador tampoco
+- [ ] **Mesero:** toca **Escanear el pedido de un cliente** y apunta al QR
+      (la primera vez el celular pide permiso para la cámara)
+- [ ] Se abre el pedido con la **mesa 9 marcada**. Toca la **mesa 4** (como si
+      se hubieran equivocado) → **Aceptar y enviar**
+- [ ] Le llega al asador, **en la mesa 4**
+- [ ] En el celular del cliente, en unos segundos: **"Tu pedido fue aceptado"**
+- [ ] Escanea **el mismo QR otra vez** (o desde otro celular): dice **"Ese
+      pedido ya se aceptó"** y no ofrece aceptarlo
+- [ ] Prueba también con la **cámara normal** del celular del mesero: el QR
+      abre la comanda con el pedido
+
+Otro pedido igual, pero ahora tocas **Rechazar**:
+
+- [ ] No llega a la cocina, y al cliente le sale que **no se aceptó** con un
+      botón para volver a armar su pedido
+
+Y uno **para llevar**: el cliente pone su nombre, el mesero lo ve con ese
+nombre, y al aceptarlo aparece entre los para llevar **con su tarrina**.
 
 ## 9. Sin wifi (el más importante)
 
@@ -244,13 +261,36 @@ escribiendo la direccion a mano en el celular equivocado.
 ## 11. Que el mismo pedido no entre dos veces
 
 Con **dos** celulares abiertos en `comanda.html` (el tuyo y el del
-mesero), manda un pedido desde el celular de un cliente a la mesa 4.
+mesero), manda un pedido con QR desde el celular de un cliente a la mesa 4.
 
-- [ ] Los dos ven "1 pedido desde la mesa"
-- [ ] Tocas **Confirmar y enviar** en el tuyo → se crea la comanda
-- [ ] En el del mesero, tocas Confirmar tambien → dice **"Ese pedido ya lo
-      confirmo otro celular"** y **no** crea una segunda comanda
+- [ ] Los **dos** escanean el QR y ven el pedido
+- [ ] Tocas **Aceptar y enviar** en el tuyo → se crea la comanda
+- [ ] En el del mesero, tocas Aceptar también → dice **"Ese pedido ya se
+      aceptó"** y **no** crea una segunda comanda
 - [ ] En el asador aparece **una sola** tarjeta de la mesa 4
+
+## 11b. A domicilio
+
+**En el panel**, pestaña **Domicilio**: escribe `Prueba`, vale **1 hora**,
+admite **1 pedido** → **Crear enlace** → **WhatsApp** y mándatelo.
+
+- [ ] Abre el enlace en otro celular: arriba dice **"Estás haciendo un
+      pedido a domicilio"**
+- [ ] Agrega algo → **Continuar con la dirección** → pon nombre, teléfono y
+      toca **Usar mi ubicación de ahora** (o escribe la calle) → **Enviar**
+- [ ] Al cliente le sale **"pendiente de aceptación"**
+- [ ] **Mesero:** aparece **"1 a domicilio por aceptar"**, en verde. Al
+      tocarlo ve la dirección, el teléfono y **Abrir en Google Maps**
+- [ ] No llegó a la cocina. **Aceptar y enviar** → llega a nombre de
+      **Domicilio · …**, para llevar y con su tarrina
+- [ ] El cliente ve **"Tu pedido fue aceptado"**
+- [ ] Vuelve a abrir el enlace: dice que **ya se usó** (admitía uno)
+- [ ] En el panel el enlace figura **"Ya se usó · 1 de 1"**
+
+Crea otro enlace y tócale **Desactivar**:
+
+- [ ] Al abrirlo, el cliente lee que **ya no está activo** y no puede pedir
+- [ ] Cámbiale una letra al final de la dirección: dice que **no es válido**
 
 ## 12. Que solo tu puedas vaciar el servicio
 

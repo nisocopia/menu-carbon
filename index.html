@@ -39,14 +39,19 @@
     <link rel="preload" href="fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/poppins-700.woff2" as="font" type="font/woff2" crossorigin>
 
-    <link rel="stylesheet" href="css/fuentes.css?v=202611160141">
-    <link rel="stylesheet" href="css/iconos.css?v=202611160141">
-    <link rel="stylesheet" href="css/style.css?v=202611160141">
+    <link rel="stylesheet" href="css/fuentes.css?v=202611180224">
+    <link rel="stylesheet" href="css/iconos.css?v=202611180224">
+    <link rel="stylesheet" href="css/style.css?v=202611180224">
 </head>
 
 <body>
 
     <a href="#" class="back-to-top" aria-label="Volver arriba">↑</a>
+
+    <!-- PEDIDO A DOMICILIO: solo sale cuando se entra por el enlace que
+         manda el restaurante por WhatsApp. Dice en qué modo está, o por
+         qué ese enlace ya no sirve. -->
+    <div class="domi-banner" id="domi-banner" hidden></div>
 
     <!-- El nombre del local no va aquí a propósito: ya está en el banner,
          y repetirlo se comía la primera pantalla del celular. -->
@@ -114,22 +119,76 @@
                     <strong id="cart-modal-total">$0.00</strong>
                 </div>
                 <button class="btn-confirmar" id="cart-confirmar">
-                    <i class="fas fa-bell-concierge"></i> Listo, llamar al mesero
+                    <i class="fas fa-paper-plane"></i> Listo, enviar mi pedido
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- ¿EN QUÉ MESA ESTÁS?
-         El QR de la mesa manda al menú pero no lleva el número dentro,
-         así que se pregunta aquí. Es un solo toque y evita el error que
-         más cuesta: mandar la comida a la mesa equivocada. -->
+    <!-- ¿CÓMO LO QUIERES? ¿EN QUÉ MESA?
+         Aquí o para llevar, y después la mesa o el nombre. El contenido
+         lo pone app.js según el paso: es un solo panel que cambia, para
+         que el comensal no vea tres ventanas una encima de otra. -->
     <div class="mesa-overlay" id="mesa-modal">
-        <div class="mesa-panel">
+        <div class="mesa-panel" id="mesa-panel">
             <h2><i class="fas fa-location-dot"></i> ¿En qué mesa estás?</h2>
             <p>Para que tu pedido llegue a tu mesa y no a otra.</p>
             <div class="mesa-botones" id="mesa-botones"></div>
-            <button class="mesa-cancelar" id="mesa-cancelar">Volver</button>
+            <button class="mesa-cancelar" id="mesa-cancelar" data-cerrar-mesa>Volver</button>
+        </div>
+    </div>
+
+    <!-- EL CÓDIGO PARA EL MESERO, Y EN QUÉ VA EL PEDIDO.
+         El pedido no le llega solo a nadie: el mesero lo ve cuando escanea
+         este QR. Aquí también se le dice al comensal si ya se aceptó. -->
+    <div class="comanda-overlay qr-overlay" id="qr-modal">
+        <div class="comanda-wrap">
+            <div class="qr-papel" id="qr-papel"></div>
+            <div class="comanda-acciones" id="qr-acciones"></div>
+        </div>
+    </div>
+
+    <!-- Cuando se cierra la pantalla del código, el pedido sigue ahí -->
+    <button class="qr-pill" id="qr-pill" hidden></button>
+
+    <!-- A DOMICILIO: a quién y a dónde. Lo mínimo para que el pedido
+         llegue: nombre, teléfono y la dirección, escrita o de Google Maps. -->
+    <div class="mesa-overlay domi-overlay" id="domi-modal">
+        <div class="mesa-panel domi-panel">
+            <h2><i class="fas fa-location-dot"></i> ¿A dónde te lo llevamos?</h2>
+            <p>Verifica que tu dirección sea correcta antes de enviar el pedido.</p>
+
+            <label class="campo"><span>Tu nombre</span>
+                <input id="domi-nombre" maxlength="39" autocomplete="name" autocapitalize="words"></label>
+            <label class="campo"><span>Tu teléfono</span>
+                <input id="domi-telefono" maxlength="20" inputmode="tel" autocomplete="tel" placeholder="09…"></label>
+
+            <div class="domi-bloque">
+                <span class="domi-tit">Tu ubicación</span>
+                <button class="domi-ubicarme" id="domi-ubicarme" type="button">
+                    <i class="fas fa-location-dot"></i> Usar mi ubicación de ahora
+                </button>
+                <label class="campo"><span>o pega el enlace de Google Maps <em>(opcional)</em></span>
+                    <input id="domi-maps" maxlength="299" inputmode="url" placeholder="https://maps.app.goo.gl/…"></label>
+            </div>
+
+            <div class="domi-bloque">
+                <span class="domi-tit">Tu dirección</span>
+                <label class="campo"><span>Ciudad</span>
+                    <input id="domi-ciudad" maxlength="119" autocomplete="address-level2"></label>
+                <label class="campo"><span>Barrio, ciudadela o sector</span>
+                    <input id="domi-sector" maxlength="119"></label>
+                <label class="campo"><span>Calle principal y secundaria</span>
+                    <input id="domi-calle" maxlength="119" autocomplete="address-line1"></label>
+                <label class="campo"><span>Número de casa <em>(opcional)</em></span>
+                    <input id="domi-numero" maxlength="119"></label>
+                <label class="campo"><span>Referencia para encontrarte <em>(opcional)</em></span>
+                    <input id="domi-referencia" maxlength="199" placeholder="Casa verde, junto a la tienda…"></label>
+            </div>
+
+            <p class="domi-error" id="domi-error"></p>
+            <button class="btn-confirmar" id="domi-enviar"><i class="fas fa-paper-plane"></i> Enviar pedido</button>
+            <button class="mesa-cancelar" data-cerrar-domi>Volver</button>
         </div>
     </div>
 
@@ -244,14 +303,14 @@
         </div>
     </div>
 
-    <script src="js/menu-data.js?v=202611160141"></script>
-    <script src="js/sync.js?v=202611160141"></script>
-    <script src="js/store.js?v=202611160141"></script>
-    <script src="js/servicio.js?v=202611160141"></script>
-    <script src="js/app.js?v=202611160141"></script>
-    <script src="js/pwa.js?v=202611160141"></script>
-    <script src="js/games.js?v=202611160141"></script>
-    <script src="js/tracker.js?v=202611160141"></script>
+    <script src="js/menu-data.js?v=202611180224"></script>
+    <script src="js/sync.js?v=202611180224"></script>
+    <script src="js/store.js?v=202611180224"></script>
+    <script src="js/servicio.js?v=202611180224"></script>
+    <script src="js/app.js?v=202611180224"></script>
+    <script src="js/pwa.js?v=202611180224"></script>
+    <script src="js/games.js?v=202611180224"></script>
+    <script src="js/tracker.js?v=202611180224"></script>
 
 </body>
 

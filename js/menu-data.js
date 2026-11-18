@@ -34,7 +34,7 @@ const RESTAURANTE = {
 
        SI CAMBIAS ESTO, cámbialo también en firebase-rules.json — hay una
        comprobación que falla si los dos no dicen lo mismo. */
-    pedirDesde: '18:00',
+    pedirDesde: '17:50',
     pedirHasta: '22:30',
     husoLocal:  -5,
 

@@ -83,6 +83,30 @@ Esto es seguridad de verdad: la valida el servidor de Google, no el navegador.
 | `servicio/tomados` | cuentas del local | solo si no existe ya (un ganador) |
 | `avisos` | **solo el gerente** | cualquier cuenta, solo la suya |
 | `pedidos`, `vistas` | solo el gerente | solo el gerente |
+| `pedidosqr/$codigo` | quien tenga el código | el comensal solo **crea**; el personal acepta o rechaza **una vez** |
+| `domicilio/enlaces` | el gerente (cada enlace suelto, quien tenga su código) | el gerente; el cliente solo **suma uno** al cupo |
+| `domicilio/notas` | solo el gerente | solo el gerente |
+| `domicilio/pedidos` | el personal (cada pedido suelto, quien tenga su código) | el cliente solo **crea**, si el enlace lo permite; el personal acepta o rechaza **una vez** |
+
+**El pedido con QR** (`pedidosqr`) se guarda bajo un código al azar. Nadie
+puede listarlos: solo se lee el que se tiene. Las reglas exigen que lo cree
+alguien que no lo pisa (solo si no existe), con la hora del servidor y dentro
+del horario. Aceptarlo o rechazarlo lo hace el mesero, el asador o el gerente,
+**solo mientras siga pendiente** —el segundo que lo intenta rebota— y aceptar
+caduca a la media hora.
+
+**A domicilio**, las reglas comprueban en cada pedido que el enlace exista, esté
+activo y no haya vencido; que el cupo suba **de uno en uno** en la misma
+escritura que el pedido y no pase del límite; y que entre un pedido y otro del
+mismo enlace pasen 20 segundos. La bandeja de antes (`servicio/entrantes`) ya
+solo la escribe el personal.
+
+> **Publica estas reglas ANTES de subir el código nuevo.** Con el código nuevo
+> y las reglas viejas, los pedidos con QR y a domicilio rebotan.
+
+> **Para probarlas sin tocar nada**, la consola tiene un simulador: pestaña
+> **Reglas → Área de pruebas de reglas**. Por ejemplo, simular un **set** en
+> `/servicio/entrantes/prueba` **sin autenticar** tiene que salir **denegado**.
 
 `avisos` es donde cada celular queda apuntado para recibir los avisos que
 suenan con la aplicación cerrada. **Solo el gerente la lee**, porque leerla
