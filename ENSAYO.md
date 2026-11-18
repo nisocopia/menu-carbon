@@ -275,6 +275,49 @@ Ahora manda otro para llevar a nombre de `Luis`, con `1c`.
 - [ ] Tocas el de Carlos → ves solo lo suyo, no lo de Luis
 - [ ] Lo cobras → desaparece de la lista y el de Luis **sigue ahi**
 
+## 13b. Anular un pedido para llevar
+
+Toca **Pedido para llevar** otra vez.
+
+- [ ] El campo del nombre sale **vacio**, no con el nombre del anterior
+
+Escribe `Rosa`, `1p`, Enviar. Sin salir de esa cuenta, agregale `1c` y Enviar:
+son dos tandas al mismo nombre.
+
+- [ ] Tocas **Anular** en una de las dos → Rosa **sigue** en la lista, y
+      debe solo la tanda que queda
+- [ ] Anulas la otra → el aviso dice que **el pedido quedo cerrado**
+- [ ] En la pantalla de mesas **Rosa ya no esta**. El de Luis sigue ahi
+- [ ] En el otro celular y en **Servir**, Rosa desaparece en unos segundos
+      (como mucho seis), sin vaciar nada
+- [ ] **Asador y cocina:** las tarjetas de Rosa ya no estan
+
+Lo mismo con una mesa: mesa 8, `1p`, Enviar, y **Anular**.
+
+- [ ] La mesa 8 queda **libre**, no "ocupada" con `$0.00`
+
+Y el que se equivoca de cuenta: con el de Luis todavia abierto, anota otro
+para llevar a nombre de `Uber`. Vuelve a mesas, toca el de **Luis** y agregale
+una cola.
+
+- [ ] La cola sale en la cuenta de **Luis**, no en la de Uber
+
+## 13c. Cobrar en efectivo, y que se quede cobrado
+
+**En el celular del mesero:** mesa 10, `2p`, Enviar → Cobrar →
+"Seleccionar todo lo que falta" → **Efectivo**.
+
+- [ ] Dice **Mesa cerrada** y la mesa 10 queda **libre**
+- [ ] Quedate mirando la pantalla de mesas diez segundos: la mesa 10
+      **no vuelve a salir ocupada** ni con `$0.00`
+
+Ahora con **dos celulares** y un para llevar a nombre de `Ana`: los dos entran
+a su cuenta → Cobrar → "Seleccionar todo lo que falta". **No toquen Efectivo
+todavia.** Cobra primero uno; espera diez segundos; toca Efectivo en el otro.
+
+- [ ] Al segundo le dice **"Esa cuenta ya estaba cobrada"**, no "Pedido
+      cobrado", y lo devuelve a las mesas
+
 ## 14. Corregir a tiempo, y no poder despues
 
 **En el celular del mesero:** mesa 4, escribe `1p`, Enviar.

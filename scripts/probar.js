@@ -144,6 +144,15 @@ function ponerEnNube(rama, valor) {
     else nodo[hoja] = JSON.parse(JSON.stringify(valor));
 }
 
+/* Un retoque cambia SOLO los campos que trae y deja el resto como
+   estaba; un campo en null se borra. Antes la mentira guardaba el retoque
+   encima de todo lo demás, así que una comanda corregida quedaba en la
+   nube reducida a los dos campos del arreglo — y cualquier prueba que
+   después la leyera de vuelta miraba una comanda que no existe. */
+function retocarEnNube(rama, valor) {
+    Object.keys(valor || {}).forEach(k => ponerEnNube(rama + '/' + k, valor[k]));
+}
+
 function sacarDeNube(rama) {
     let nodo = nube.datos;
     for (const p of String(rama).split('/').filter(Boolean)) {
@@ -153,7 +162,11 @@ function sacarDeNube(rama) {
     return JSON.parse(JSON.stringify(nodo));
 }
 
-function celular(rol) {
+/**
+ * @param extra  `{ Date }` para darle al celular un reloj que la prueba
+ *        mueve a mano: hay cosas que solo pasan a los 40 segundos.
+ */
+function celular(rol, extra) {
     const guardado = {};
     const propio = { enviado: [], leidos: [] };
     const miNube = nube.gen;          // el celular pertenece a ESTA nube
@@ -248,7 +261,7 @@ function celular(rol) {
             // Sin señal: no es que no se pueda, es que no llega. Se reintenta.
             if (nube.caida) return { ok: false, status: 0 };
             propio.enviado.push({ metodo: metodo || 'PUT', rama, valor });
-            if (esMia()) ponerEnNube(rama, valor);
+            if (esMia()) (metodo === 'PATCH' ? retocarEnNube : ponerEnNube)(rama, valor);
             return { ok: true, status: 200 };
         },
         /* Lo que de verdad decide quién se queda con un pedido: las
@@ -264,7 +277,7 @@ function celular(rol) {
     };
 
     const ctx = vm.createContext({
-        console, Date, Math, JSON, Promise,
+        console, Date: (extra && extra.Date) || Date, Math, JSON, Promise,
         Sync: SyncFalso,
         setInterval: () => 0,
         setTimeout: (f, ms) => setTimeout(f, ms),
@@ -383,18 +396,32 @@ async function probarEscrituras() {
     comprobar('crear la comanda va como PUT del objeto entero',
         A.propio.enviado.filter(e => e.rama.indexOf('servicio/comandas') === 0).map(e => e.metodo), ['PUT']);
 
+    /* Se mira lo que va A LA COMANDA, que es donde cada cuenta tiene
+       permiso sobre su campo y nada más. */
+    const aLaComanda = () => A.propio.enviado.filter(e => e.rama.indexOf('servicio/comandas') === 0);
+
     const soloEsto = (accion, campos) => {
         A.propio.enviado.length = 0;
         A.corre(accion);
         return respirar().then(() => comprobar(
             accion.replace(/Servicio\.|\(.*/g, '') + ' manda solo ' + campos.join(' + '),
-            A.propio.enviado.map(e => [e.metodo, Object.keys(e.valor).sort()]),
+            aLaComanda().map(e => [e.metodo, Object.keys(e.valor).sort()]),
             [['PATCH', campos]]));
     };
 
     await soloEsto(`Servicio.marcarSacado('${id}', true)`, ['sacado']);
+    comprobar('y nada más, a ninguna otra rama', A.propio.enviado.length, 1);
     await soloEsto(`Servicio.marcarEntregado('${id}')`,    ['entregado', 'estado']);
+    comprobar('y nada más, a ninguna otra rama', A.propio.enviado.length, 1);
     await soloEsto(`Servicio.anularComanda('${id}', '')`,  ['anulado', 'estado', 'motivo']);
+
+    /* Anular lo único que tenía la mesa la deja sin nada que cobrar, así
+       que además se cierra su cuenta: eso va a las sesiones, donde quien
+       toma pedidos ya tiene permiso, y no toca ningún campo de la comanda. */
+    comprobar('y al quedar la mesa sin nada, cierra su cuenta',
+        A.propio.enviado.filter(e => e.rama.indexOf('servicio/comandas') !== 0)
+            .map(e => [e.metodo, e.rama.split('/').slice(0, 2).join('/'), e.valor.abierta]),
+        [['PUT', 'servicio/sesiones', false]]);
 }
 
 /* ============================================================
@@ -5450,6 +5477,635 @@ async function probarMenestraDelComensal() {
     comprobar('sin pregunta de por medio', corre(`pregunta`), null);
 }
 
+/* ============================================================
+   UNA CUENTA QUE NO DEBE NADA NO SE QUEDA ABIERTA
+
+   Lo que contó el dueño: anota un pedido para llevar a nombre de
+   Carlos, lo anula, y el nombre se queda en la lista para siempre. La
+   única forma de quitarlo era vaciar el servicio entero.
+
+   La cocina sí dejaba de verlo —la comanda quedaba anulada— pero la
+   CUENTA seguía abierta, y una cuenta solo se cerraba al cobrar. Con
+   todo anulado no hay nada que cobrar, así que no había botón que la
+   cerrara. A una mesa le pasaba igual: "ocupada", con cero platos.
+
+   Y la otra mitad, que importa tanto como la primera: mientras quede
+   algo vivo, NO se toca. Varias tandas al mismo nombre, dos sesiones en
+   la misma mesa, lo de otra persona.
+   ============================================================ */
+
+const unPollo  = n => `{ platoId:'p5', nombre:'Pollo Asado', precio:3.5, cantidad:${n} }`;
+const unaCola  = n => `{ platoId:'b3', nombre:'Cola personal', precio:0.5, cantidad:${n} }`;
+
+async function probarAnularCierraLaCuenta() {
+    console.log('\n--- Anular lo único que tenía una cuenta la cierra ---');
+    nubeLimpia();
+    const A = celular('mesero');
+    const { corre } = A;
+    const llevar = (nombre, items) =>
+        corre(`Servicio.enviarComanda({ mesa: 0, nombre: '${nombre}', items: [${items}] })`);
+    const enMesa = (mesa, items) => corre(`Servicio.enviarComanda({ mesa: ${mesa}, items: [${items}] })`);
+    const anular = (id, motivo) => corre(`Servicio.anularComanda('${id}', '${motivo || ''}')`);
+    const abiertos = () => corre(`Servicio.llevarAbiertos().map(s => s.nombre)`);
+
+    const c1 = llevar('Carlos', unPollo(2));
+    const c2 = llevar('Luis', unPollo(1));
+    const deLuis = corre(`Servicio.cuentaDe({ sesion: '${c2.sesion}' })`);
+    await respirar();
+    A.propio.enviado.length = 0;
+
+    anular(c1.id, 'se arrepintió');
+    await respirar();
+
+    comprobar('anulado el pedido de Carlos, su nombre sale de la lista', abiertos(), ['Luis']);
+    comprobar('el de Luis no se toca', corre(`Servicio.cuentaDe({ sesion: '${c2.sesion}' })`), deLuis);
+
+    /* No se borra nada: la cuenta queda cerrada y la comanda anulada,
+       las dos con su rastro. Quitar el nombre borrando el registro
+       habría arreglado la pantalla y roto el historial. */
+    const s1 = corre(`Servicio.getSesiones()['${c1.sesion}']`);
+    comprobar('la cuenta de Carlos no se borra: queda cerrada, con su hora',
+        [s1.abierta, typeof s1.cerrado], [false, 'number']);
+    comprobar('y la comanda tampoco: queda anulada, con su motivo',
+        corre(`[Servicio.getComandas()['${c1.id}'].estado, Servicio.getComandas()['${c1.id}'].motivo]`),
+        ['anulado', 'se arrepintió']);
+    comprobar('a la nube va el cierre de ESA cuenta y de ninguna otra',
+        A.propio.enviado.filter(e => e.rama.indexOf('servicio/sesiones') === 0).map(e => [e.rama, e.valor.abierta]),
+        [['servicio/sesiones/' + c1.sesion, false]]);
+    comprobar('y allá queda cerrada, que es lo que ven los otros celulares',
+        sacarDeNube('servicio/sesiones/' + c1.sesion).abierta, false);
+
+    // Varios pedidos al mismo nombre: mientras quede uno vivo, el nombre se queda
+    const r1 = llevar('Rosa', unPollo(1));
+    const r2 = llevar('rosa', unaCola(1));
+    comprobar('la segunda tanda de Rosa va a su misma cuenta', r2.sesion, r1.sesion);
+    anular(r1.id);
+    comprobar('con una tanda viva, Rosa SIGUE en la lista', abiertos(), ['Luis', 'Rosa']);
+    comprobar('debiendo solo lo que queda',
+        corre(`Servicio.cuentaDe({ sesion: '${r1.sesion}' }).saldo`), 0.5);
+    anular(r2.id);
+    comprobar('anuladas las dos, Rosa se va', abiertos(), ['Luis']);
+
+    // Una mesa es lo mismo: antes quedaba "ocupada" con $0.00 y sin forma de cerrarla
+    const m1 = enMesa(4, unPollo(1));
+    anular(m1.id);
+    comprobar('una mesa a la que se le anula todo queda libre', corre(`Servicio.sesionDeMesa(4)`), null);
+
+    enMesa(5, unPollo(2));
+    const m3 = enMesa(5, unaCola(1));
+    anular(m3.id);
+    comprobar('con otra tanda sin cobrar, la mesa sigue ocupada',
+        [corre(`!!Servicio.sesionDeMesa(5)`), corre(`Servicio.cuentaDe({ mesa: 5 }).saldo`)], [true, 7]);
+
+    /* Se cobró una parte y se anula justo lo que faltaba: ya no debe
+       nada, y tampoco había botón que la cerrara. */
+    enMesa(6, unPollo(1));
+    const m5 = enMesa(6, unaCola(1));
+    corre(`Servicio.registrarPago({ mesa: 6, forma: 'efectivo',
+        lineas: [{ platoId: 'p5', precio: 3.5, cantidad: 1 }] })`);
+    comprobar('cobrado el pollo, la mesa sigue abierta por la cola',
+        corre(`Servicio.cuentaDe({ mesa: 6 }).saldo`), 0.5);
+    anular(m5.id);
+    comprobar('anulada la cola, ya no debe nada y se libera', corre(`Servicio.sesionDeMesa(6)`), null);
+    comprobar('el cobro del pollo sigue anotado',
+        corre(`Object.values(Servicio.getPagos()).map(p => p.monto)`), [3.5]);
+
+    // Lo mismo si lo que faltaba no se anula, sino que se quita de la tanda
+    const m6 = enMesa(7, unaCola(2));
+    corre(`Servicio.registrarPago({ mesa: 7, forma: 'efectivo',
+        lineas: [{ platoId: 'b3', precio: 0.5, cantidad: 1 }] })`);
+    corre(`Servicio.editarComanda('${m6.id}', [${unaCola(1)}])`);
+    comprobar('quitar de la tanda lo único sin pagar también la libera',
+        corre(`Servicio.sesionDeMesa(7)`), null);
+
+    /* DOS SESIONES EN LA MISMA MESA. Los cobros se apuntan en la más
+       vieja; si al anular lo de la otra se cerrara una sola, sus cobros
+       saldrían de la suma y lo ya pagado volvería a deberse. */
+    corre(`(() => {
+        const s = Servicio.getSesiones();
+        s.aaa = { id:'aaa', mesa:9, nombre:'', abierta:true, creado:1000, cerrado:null };
+        s.zzz = { id:'zzz', mesa:9, nombre:'', abierta:true, creado:1005, cerrado:null };
+        localStorage.setItem('srv_sesiones', JSON.stringify(s));
+        const c = Servicio.getComandas();
+        c.k1 = { id:'k1', sesion:'aaa', mesa:9, tanda:0, creado:2000, estado:'nuevo',
+                 items:[{uid:'i1',platoId:'p5',nombre:'Pollo Asado',precio:3.5,cantidad:2,estacion:'asador'}] };
+        c.k2 = { id:'k2', sesion:'zzz', mesa:9, tanda:1, creado:2100, estado:'nuevo',
+                 items:[{uid:'i2',platoId:'p1',nombre:'Carne Asada',precio:3.5,cantidad:1,estacion:'asador'}] };
+        localStorage.setItem('srv_comandas', JSON.stringify(c));
+    })()`);
+    corre(`Servicio.registrarPago({ mesa: 9, forma: 'efectivo',
+        lineas: [{ platoId: 'p5', precio: 3.5, cantidad: 1 }] })`);
+    anular('k2');
+    comprobar('dos sesiones en la mesa: anular lo de una no cierra ninguna suelta',
+        corre(`Servicio.sesionesAbiertasDeMesa(9).length`), 2);
+    comprobar('y lo cobrado sigue contando',
+        [corre(`Servicio.cuentaDe({ mesa: 9 }).cobrado`), corre(`Servicio.cuentaDe({ mesa: 9 }).saldo`)],
+        [3.5, 3.5]);
+    corre(`Servicio.registrarPago({ mesa: 9, forma: 'efectivo',
+        lineas: [{ platoId: 'p5', precio: 3.5, cantidad: 1 }] })`);
+    comprobar('y al pagar lo que falta se cierran las dos', corre(`Servicio.sesionesAbiertasDeMesa(9).length`), 0);
+
+    /* Lo que se anuló entero no fue una mesa atendida. Importa más ahora:
+       anular y volver a mandar abre una cuenta nueva, y la vieja —cerrada
+       y vacía— inflaría las "mesas hoy" del panel. */
+    comprobar('lo anulado entero no cuenta como mesa atendida',
+        corre(`Servicio.sesionesEntre(0, Date.now() + 1000).map(s => s.nombre || 'mesa ' + s.mesa).sort()`),
+        ['Luis', 'mesa 5', 'mesa 6', 'mesa 7', 'mesa 9']);
+
+    /* EL PANEL ANULA SIN CONOCER TODAVÍA LA CUENTA. Las comandas le
+       llegan en vivo y las mesas cada seis segundos: un pedido recién
+       entrado se puede anular antes de saber de quién es. */
+    nubeLimpia();
+    const M = celular('mesero'), G = celular('gerente');
+    const u = M.corre(`Servicio.enviarComanda({ mesa: 0, nombre: 'Uber', items: [${unPollo(1)}] })`);
+    await respirar();
+    G.corre(`localStorage.setItem('srv_comandas', ${JSON.stringify(JSON.stringify(sacarDeNube('servicio/comandas')))})`);
+    G.corre(`Servicio.anularComanda('${u.id}', 'prueba')`);
+    await respirar();
+    comprobar('el panel anula sin tener la cuenta: todavía no hay qué cerrar',
+        sacarDeNube('servicio/sesiones/' + u.sesion).abierta, true);
+    await G.corre(`Servicio.traerParaElPanel()`);
+    await respirar();
+    comprobar('en cuanto le llegan las mesas, la cierra',
+        sacarDeNube('servicio/sesiones/' + u.sesion).abierta, false);
+}
+
+/* ============================================================
+   UN COBRO NO SE ANOTA DOS VECES
+
+   Lo que se va a cobrar se marca en una pantalla, y la pantalla no se
+   entera sola de que otro celular cobró lo mismo. Con una mesa no
+   pasaba nada: al estar cerrada no se encontraba y el cobro rebotaba.
+   Con un pedido para llevar sí: se busca por su identificador, aparece
+   igual esté cobrado o no, y se le anotaba otro cobro encima — con la
+   pantalla diciendo "Pedido cobrado".
+   ============================================================ */
+
+async function probarCobroQueNoSeRepite() {
+    console.log('\n--- Un cobro no se anota dos veces ---');
+    nubeLimpia();
+    const { corre } = celular('mesero');
+
+    const c = corre(`Servicio.enviarComanda({ mesa: 0, nombre: 'Ana', items: [${unPollo(2)}] })`);
+    const todo = corre(`Servicio.cuentaDe({ sesion: '${c.sesion}' }).items
+        .map(l => ({ platoId: l.platoId, precio: l.precio, cantidad: l.pendiente }))`);
+    const pagar = lineas => corre(`Servicio.registrarPago({ sesion: '${c.sesion}', forma: 'efectivo',
+        lineas: ${JSON.stringify(lineas)} })`);
+
+    comprobar('el primer cobro entra', !!pagar(todo), true);
+    comprobar('y cierra el pedido', corre(`Servicio.llevarAbiertos().length`), 0);
+    comprobar('el mismo cobro otra vez NO entra: esa cuenta ya está cerrada', pagar(todo), null);
+    comprobar('queda un solo pago', corre(`Object.keys(Servicio.getPagos()).length`), 1);
+
+    // Y en una cuenta abierta, solo entra lo que de verdad falta
+    corre(`Servicio.enviarComanda({ mesa: 3, items: [${unPollo(2)}] })`);
+    const pollo = n => [{ platoId: 'p5', precio: 3.5, cantidad: n }];
+    const enMesa = lineas => corre(`Servicio.registrarPago({ mesa: 3, forma: 'efectivo',
+        lineas: ${JSON.stringify(lineas)} })`);
+
+    comprobar('se cobra un pollo de dos', !!enMesa(pollo(1)), true);
+    comprobar('cobrar DOS cuando ya solo falta uno no entra', enMesa(pollo(2)), null);
+    comprobar('ni algo que no está en la cuenta',
+        enMesa([{ platoId: 'p1', precio: 3.5, cantidad: 1 }]), null);
+    comprobar('ni una lista vacía', enMesa([]), null);
+    comprobar('la mesa sigue debiendo su pollo', corre(`Servicio.cuentaDe({ mesa: 3 }).saldo`), 3.5);
+    comprobar('y el que falta sí entra, y la cierra',
+        [!!enMesa(pollo(1)), corre(`Servicio.sesionDeMesa(3)`)], [true, null]);
+    comprobar('fiar algo ya cobrado tampoco entra',
+        corre(`Servicio.fiar({ mesa: 3, nombre: 'Don Luis', lineas: ${JSON.stringify(pollo(1))} })`), null);
+    comprobar('y no deja ninguna deuda apuntada', corre(`Servicio.fiadosPendientes().length`), 0);
+
+    /* EN LA PANTALLA. El mesero tiene el pedido de Ana abierto en
+       "Cobrar", con todo marcado, y otro celular la cobra. */
+    const { nodo, corre: p } = pantallaComanda();
+    p(`verLlevarNuevo(); nombreLlevar = 'Ana'; agregarAlBorrador(Store.findPlato('p5'), 1)`);
+    todasDe(p, 'frejol');
+    await p.esperando('enviar()');
+    p(`verCobrar(ref())`);
+    p(`Servicio.cuentaDe(refCobrando).items.forEach(l => seleccion.set(l.platoId + '|' + l.precio, l.pendiente))`);
+
+    // lo que hace el otro celular, visto desde este: llega el cobro y la cuenta cerrada
+    p(`Servicio.registrarPago({ sesion: refCobrando.sesion, forma: 'efectivo',
+        lineas: Servicio.cuentaDe(refCobrando).items
+            .map(l => ({ platoId: l.platoId, precio: l.precio, cantidad: l.pendiente })) })`);
+
+    p(`cobrar('efectivo')`);
+    comprobar('con la selección vieja, tocar Efectivo no anota otro cobro',
+        p(`Object.keys(Servicio.getPagos()).length`), 1);
+    comprobar('y lo dice, en vez de "cobrado"',
+        /ya estaba cobrada/.test(nodo('toast').textContent), true);
+    comprobar('la selección vieja se tira', p(`seleccion.size`), 0);
+    comprobar('y vuelve a las mesas', nodo('vista-mesas').hidden, false);
+}
+
+/* ============================================================
+   UNA LECTURA ATRASADA NO DESHACE LO RECIÉN COBRADO
+
+   Lo que se veía al pagar en efectivo: la mesa quedaba libre y, un
+   momento después, volvía a salir ocupada con $0.00 — o con todo por
+   cobrar otra vez. A los seis segundos se arreglaba sola.
+
+   Las mesas y los cobros se preguntan cada seis segundos. Lo que
+   contesta la nube es una foto de cuando se preguntó, y a esa foto se
+   le creía aunque este celular hubiera cobrado después: lo que ya había
+   salido no estaba en la cola que lo protegía, y lo que seguía en la
+   cola solo estaba protegido si la nube no lo conocía.
+   ============================================================ */
+
+async function probarLecturaQueLlegaTarde() {
+    console.log('\n--- Una lectura atrasada no deshace lo recién cobrado ---');
+    nubeLimpia();
+    const A = celular('mesero');
+    const { corre } = A;
+    const sesionDe = mesa => Object.values(sacarDeNube('servicio/sesiones') || {}).find(s => s.mesa === mesa);
+    const ronda = async () => { corre(`Servicio.iniciar(() => {})`); await respirar(); };
+
+    corre(`Servicio.enviarComanda({ mesa: 7, items: [${unPollo(2)}] })`);
+    await respirar();
+
+    /* Sale la ronda: la nube toma la foto AHORA, con la mesa abierta y
+       sin cobros, pero la respuesta tarda en llegar. */
+    const leerDeVerdad = A.ctx.Sync.leer;
+    let soltar;
+    const puerta = new Promise(r => { soltar = r; });
+    A.ctx.Sync.leer = async rama => { const foto = await leerDeVerdad(rama); await puerta; return foto; };
+    await ronda();
+
+    corre(`Servicio.registrarPago({ mesa: 7, forma: 'efectivo',
+        lineas: [{ platoId: 'p5', precio: 3.5, cantidad: 2 }] })`);
+    await respirar();
+    comprobar('el cobro y el cierre ya están en la nube',
+        [Object.keys(sacarDeNube('servicio/pagos') || {}).length, sesionDe(7).abierta], [1, false]);
+    comprobar('y nada espera en la cola', corre(`Servicio.pendientes()`), 0);
+
+    soltar();                                   // ahora sí llega la foto vieja
+    A.ctx.Sync.leer = leerDeVerdad;
+    await respirar();
+    comprobar('la respuesta vieja NO reabre la mesa', corre(`Servicio.sesionDeMesa(7)`), null);
+    comprobar('ni se lleva el cobro de este celular', corre(`Object.keys(Servicio.getPagos()).length`), 1);
+
+    /* Y el caso más corriente: el cierre todavía no ha salido —la red va
+       lenta— y llega una ronda. La nube aún tiene la mesa abierta. */
+    corre(`Servicio.enviarComanda({ mesa: 8, items: [${unPollo(1)}] })`);
+    await respirar();
+    const enviarDeVerdad = A.ctx.Sync.enviar;
+    A.ctx.Sync.enviar = async () => ({ ok: false, status: 0 });     // lo que se manda no llega
+    corre(`Servicio.registrarPago({ mesa: 8, forma: 'efectivo',
+        lineas: [{ platoId: 'p5', precio: 3.5, cantidad: 1 }] })`);
+    await respirar();
+    await ronda();                                                   // pero lo que se pregunta sí
+    comprobar('con el cierre aún en la cola, la ronda no devuelve la mesa a ocupada',
+        corre(`Servicio.sesionDeMesa(8)`), null);
+    comprobar('y el cobro tampoco se pierde', corre(`Servicio.cuentaDe({ sesion: '${sesionDe(8).id}' }).saldo`), 0);
+
+    A.ctx.Sync.enviar = enviarDeVerdad;
+    corre(`Servicio.vaciarCola()`);
+    await respirar();
+    comprobar('y cuando sale, queda cerrada en la nube', sesionDe(8).abierta, false);
+
+    /* LA OTRA MITAD: esto no puede volver sordo al celular. Lo que
+       cambia OTRO se sigue obedeciendo, y pasado el momento la nube
+       vuelve a mandar también en lo que este celular escribió. */
+    ponerEnNube('servicio/sesiones/otra',
+        { id: 'otra', mesa: 2, nombre: '', abierta: true, creado: Date.now() });
+    await ronda();
+    comprobar('una mesa que abrió otro celular aparece', corre(`!!Servicio.sesionDeMesa(2)`), true);
+    ponerEnNube('servicio/sesiones/otra/abierta', false);
+    await ronda();
+    comprobar('y cuando otro la cierra, se cierra aquí', corre(`Servicio.sesionDeMesa(2)`), null);
+
+    ponerEnNube('servicio/sesiones/' + sesionDe(7).id + '/abierta', true);
+    await ronda();
+    comprobar('pasado el momento, la nube vuelve a mandar en lo que este celular escribió',
+        corre(`!!Servicio.sesionDeMesa(7)`), true);
+
+    // Y el vaciado del gerente se sigue obedeciendo entero
+    nube.datos.servicio = {};
+    nube.vacio = true;
+    await ronda();
+    nube.vacio = false;
+    comprobar('si el gerente vacía el servicio, las mesas se van igual',
+        corre(`Object.keys(Servicio.getSesiones()).length`), 0);
+}
+
+/* ============================================================
+   LA COLA NO SE MANDA POR DUPLICADO NI PIERDE NADA
+
+   Una vuelta de la cola se daba por colgada a los 40 segundos de haber
+   EMPEZADO, no de su último envío. Con una cola larga y la red lenta
+   —lo que se junta tras un rato sin señal— arrancaba una segunda
+   vuelta encima de la primera, y cada una quitaba "lo primero de la
+   cola" al terminar: una quitaba lo que la otra aún no había mandado.
+   Ese pedido no llegaba nunca y no quedaba rastro de él.
+   ============================================================ */
+
+async function probarColaLarga() {
+    console.log('\n--- Una cola larga no se manda dos veces ni pierde nada ---');
+    nubeLimpia();
+
+    // Un reloj que la prueba mueve a mano
+    let ahora = Date.now();
+    class Reloj extends Date {
+        constructor(...a) { super(...(a.length ? a : [ahora])); }
+        static now() { return ahora; }
+    }
+    const A = celular('gerente', { Date: Reloj });
+    const { corre } = A;
+
+    nube.caida = true;
+    for (let m = 1; m <= 4; m++) {
+        corre(`Servicio.enviarComanda({ mesa: ${m}, items: [${unaCola(1)}] })`);
+        ahora += 5;
+    }
+    await respirar();
+    comprobar('cuatro mesas anotadas sin señal: ocho envíos esperando', corre(`Servicio.pendientes()`), 8);
+    nube.caida = false;
+
+    /* Cada envío llega a la nube pero su respuesta tarda: se retiene
+       hasta soltarla, y entre una y otra pasan 15 segundos de reloj. */
+    const enviarDeVerdad = A.ctx.Sync.enviar;
+    let enElAire = [];
+    A.ctx.Sync.enviar = async (...a) => {
+        const r = await enviarDeVerdad(...a);
+        await new Promise(res => enElAire.push(res));
+        return r;
+    };
+    const soltar = async () => { const s = enElAire; enElAire = []; s.forEach(f => f()); await respirar(); };
+
+    corre(`Servicio.vaciarCola()`);
+    await respirar();
+    for (let i = 0; i < 3; i++) { ahora += 15000; await soltar(); }
+
+    // Van 45 segundos y salta el reloj que revisa la cola
+    corre(`Servicio.vaciarCola()`);
+    await respirar();
+    comprobar('una vuelta que sigue avanzando no se da por colgada', enElAire.length, 1);
+
+    // Un envío que de verdad lleva 40 segundos colgado sí se releva…
+    ahora += 41000;
+    corre(`Servicio.vaciarCola()`);
+    await respirar();
+    comprobar('un envío colgado 40 segundos sí se releva', enElAire.length, 2);
+
+    // …y la vuelta vieja, cuando por fin le contestan, no toca la cola
+    A.ctx.Sync.enviar = enviarDeVerdad;
+    await soltar();
+    for (let i = 0; i < 6; i++) { corre(`Servicio.vaciarCola()`); await respirar(); }
+
+    comprobar('llegan las cuatro comandas', Object.keys(sacarDeNube('servicio/comandas') || {}).length, 4);
+    comprobar('y las cuatro mesas', Object.keys(sacarDeNube('servicio/sesiones') || {}).length, 4);
+    comprobar('sin nada pendiente ni apartado',
+        [corre(`Servicio.pendientes()`), corre(`Servicio.apartadas()`)], [0, 0]);
+}
+
+/* ============================================================
+   LA COMANDA LLEGÓ, PERO LA RESPUESTA SE PERDIÓ
+
+   Las reglas dejan al mesero CREAR una comanda, no reescribirla. Si el
+   pedido llega a la nube y la respuesta se pierde por el camino, la
+   cola lo vuelve a mandar y ese segundo envío rebota: ya existe. Se
+   apartaba con el aviso de "la nube rechaza — la cocina nunca lo vio y
+   hay que volver a anotarlo", de un pedido que la cocina tenía delante.
+   Quien le hiciera caso lo mandaba dos veces.
+   ============================================================ */
+
+async function probarLaComandaQueSiLlego() {
+    console.log('\n--- La comanda llegó, pero la respuesta se perdió ---');
+    nubeLimpia();
+
+    // La regla de verdad: crear sí, reescribir no
+    nube.prohibido = (rama, valor, metodo) =>
+        metodo !== 'PATCH' && /^servicio\/comandas\/[^/]+$/.test(rama) && !!sacarDeNube(rama);
+
+    const A = celular('mesero');
+    const enviarDeVerdad = A.ctx.Sync.enviar;
+    let perdidas = 0;
+    A.ctx.Sync.enviar = async (rama, valor, metodo) => {
+        const r = await enviarDeVerdad(rama, valor, metodo);
+        // Llega a la nube, pero al celular no le vuelve la respuesta
+        if (r.ok && rama.indexOf('servicio/comandas/') === 0 && perdidas++ === 0) return { ok: false, status: 0 };
+        return r;
+    };
+
+    const c = A.corre(`Servicio.enviarComanda({ mesa: 2, items: [${unPollo(1)}] })`);
+    await respirar();
+    comprobar('la comanda está en la nube', !!sacarDeNube('servicio/comandas/' + c.id), true);
+    comprobar('pero este celular cree que no salió', A.corre(`Servicio.pendientes()`), 1);
+
+    A.corre(`Servicio.vaciarCola()`);          // el reintento rebota: ya existe
+    await respirar();
+    comprobar('el reintento no la deja pendiente', A.corre(`Servicio.pendientes()`), 0);
+    comprobar('ni la aparta como rechazada: sí había llegado', A.corre(`Servicio.apartadas()`), 0);
+
+    // Lo que la nube rechaza y de verdad NO tiene, se sigue apartando
+    nube.prohibido = rama => rama.indexOf('servicio/comandas/veneno') === 0;
+    A.corre(`localStorage.setItem('srv_cola', JSON.stringify([
+        { rama:'servicio/comandas/veneno', valor:{ id:'veneno', creado: 1 }, metodo:'PUT', intentos:0 } ]))`);
+    A.corre(`Servicio.vaciarCola()`);
+    await respirar();
+    comprobar('lo rechazado que no está en la nube se sigue apartando', A.corre(`Servicio.apartadas()`), 1);
+    nube.prohibido = null;
+}
+
+/* ============================================================
+   LO QUE SE AGREGA VA A LA CUENTA QUE ESTÁ EN PANTALLA
+
+   Lo que se escribe en "nombre del pedido" se quedaba con lo último
+   tecleado y se usaba también al agregar a un pedido que ya existía:
+   se anotaba el de Carlos, luego el de Uber, se volvía al de Carlos a
+   sumarle una cola — y la cola salía a nombre de Uber, en su cuenta.
+   ============================================================ */
+
+async function probarACualCuentaVa() {
+    console.log('\n--- Lo que se agrega va a la cuenta que está abierta en pantalla ---');
+    const { nodo, corre } = pantallaComanda();
+
+    const llevarNuevo = async (nombre, plato) => {
+        corre(`verLlevarNuevo()`);
+        corre(`nombreLlevar = '${nombre}'; pintarPie(); agregarAlBorrador(Store.findPlato('${plato}'), 1)`);
+        todasDe(corre, 'frejol');
+        await corre.esperando('enviar()');
+        const sesion = corre(`refActual.sesion`);
+        corre(`verMesas()`);
+        return sesion;
+    };
+    const abiertos = () => corre(`Servicio.llevarAbiertos().map(s => s.nombre)`);
+
+    const carlos = await llevarNuevo('Carlos', 'p5');
+    const uber   = await llevarNuevo('Uber', 'p1');
+    comprobar('cada nombre con su cuenta', carlos !== uber, true);
+
+    // Se vuelve al de Carlos a sumarle una cola
+    corre(`verLlevar('${carlos}'); agregarAlBorrador(Store.findPlato('b3'), 1)`);
+    await corre.esperando('enviar()');
+    const laCola = corre(`Object.values(Servicio.getComandas()).find(c => c.items.some(i => i.platoId === 'b3'))`);
+    comprobar('la cola va a la cuenta de Carlos, no a la del último nombre tecleado',
+        [laCola.sesion === carlos, laCola.nombre], [true, 'Carlos']);
+    comprobar('la de Uber no engorda', corre(`Servicio.cuentaDe({ sesion: '${uber}' }).total`), 3.75);
+    corre(`verMesas()`);
+
+    /* El campo también hay que vaciarlo: se limpiaba lo que la pantalla
+       recordaba, pero no lo que se veía escrito, y lo que se tecleara se
+       pegaba detrás. El pedido de Luis salía a nombre de "UberLuis". */
+    nodo('nombre-llevar').value = 'Uber';
+    corre(`verLlevarNuevo()`);
+    comprobar('al empezar otro pedido para llevar el campo sale vacío', nodo('nombre-llevar').value, '');
+    corre(`verMesas()`);
+
+    // Anular lo único que tenía y volver a anotarlo, sin salir de la cuenta
+    corre(`verLlevar('${uber}')`);
+    const deUber = corre(`Servicio.tandasDe({ sesion: '${uber}' })[0].id`);
+    corre(`Servicio.anularComanda('${deUber}', '')`);
+    comprobar('anulado lo de Uber, sale de la lista', abiertos(), ['Carlos']);
+
+    corre(`agregarAlBorrador(Store.findPlato('p2'), 1)`);          // era chuleta
+    todasDe(corre, 'frejol');
+    await corre.esperando('enviar()');
+    const nueva = corre(`Object.values(Servicio.getComandas()).find(c => c.estado === 'nuevo' && c.nombre === 'Uber')`);
+    comprobar('lo nuevo abre otra cuenta al mismo nombre: no cuelga de la cerrada',
+        [!!nueva, !!nueva && nueva.sesion !== uber], [true, true]);
+    comprobar('la pantalla sigue a la cuenta nueva', corre(`refActual.sesion`), nueva.sesion);
+    comprobar('y Uber vuelve a salir, una sola vez', abiertos(), ['Carlos', 'Uber']);
+
+    /* CORREGIR ALGO QUE YA SE CERRÓ. Mientras el mesero corregía la
+       tanda, otro celular cobró la mesa: guardar encima sería meterle
+       platos a una cuenta cerrada, que no se cobrarían nunca. */
+    corre(`verMesas(); verMesa(4); agregarAlBorrador(Store.findPlato('b3'), 1)`);
+    await corre.esperando('enviar()');
+    const t4 = corre(`Servicio.tandasDe({ mesa: 4 })[0].id`);
+    corre(`abrirEdicion('${t4}'); agregarAlBorrador(Store.findPlato('b3'), 1)`);
+    corre(`Servicio.registrarPago({ mesa: 4, forma: 'efectivo',
+        lineas: [{ platoId: 'b3', precio: 0.5, cantidad: 1 }] })`);
+    await corre.esperando('enviar()');
+    comprobar('guardar la corrección ya no toca la tanda cobrada',
+        corre(`Servicio.getComandas()['${t4}'].items[0].cantidad`), 1);
+    comprobar('y dice por qué', /ya no se puede tocar/.test(nodo('toast').textContent), true);
+    comprobar('la mesa sigue libre', corre(`Servicio.sesionDeMesa(4)`), null);
+}
+
+/* ============================================================
+   UN PEDIDO NO SALE DOS VECES
+
+   Con stock puesto, Enviar le pregunta antes a la nube si queda de
+   todo, y espera. Mientras espera el borrador sigue lleno. El botón se
+   apaga, pero a enviar también se llega con el Enter del nombre.
+   ============================================================ */
+
+async function probarUnSoloEnvio() {
+    console.log('\n--- Un pedido no sale dos veces por enviar dos veces ---');
+    const { corre } = pantallaComanda();
+
+    corre(`localStorage.setItem('menu_stock', JSON.stringify({ b3: { hay: 50, puesto: Date.now() - 1000 } }))`);
+    // La pregunta a la nube se queda en el aire hasta que la prueba la suelta
+    corre(`var soltarLectura; var enElAire = new Promise(r => { soltarLectura = () => r(undefined); });
+           Sync.leer = () => enElAire;`);
+
+    corre(`verMesa(1); agregarAlBorrador(Store.findPlato('b3'), 2)`);
+    corre(`enviar()`);          // el toque en Enviar
+    corre(`enviar()`);          // y otro envío, con la pregunta todavía sin contestar
+    corre(`soltarLectura()`);
+    await respirar();
+
+    comprobar('sale una sola comanda', corre(`Object.keys(Servicio.getComandas()).length`), 1);
+    comprobar('y se puede seguir enviando después', corre(`enviando`), false);
+}
+
+/* ============================================================
+   UN PEDIDO ANULADO NO DEJA SU AVISO SONANDO
+
+   El aviso de pedido nuevo se queda pendiente hasta que de verdad
+   suena. Si el pedido se anula antes —la pantalla todavía sin tocar—
+   seguía en esa lista para siempre: el borde latiendo y el cartel
+   diciendo "1 pedido nuevo" con el tablero vacío.
+   ============================================================ */
+
+async function probarAvisoDeUnPedidoAnulado() {
+    console.log('\n--- Un pedido anulado no deja su aviso sonando ---');
+    const p = pantallaEstacion('cocina');
+    const { corre } = p;
+
+    corre(`localStorage.setItem('srv_comandas', JSON.stringify({ n1: {
+        id: 'n1', sesion: 's', mesa: 3, creado: 1, estado: 'nuevo',
+        items: [{ uid: 'u1', platoId: 'p5', nombre: 'Pollo Asado', cantidad: 1, precio: 3.5,
+                  estacion: 'asador', sin: [] }] } }))`);
+
+    p.dejarSonar(false);                        // nadie ha tocado la pantalla todavía
+    await corre('revisarNovedades()');
+    comprobar('el pedido espera su aviso, y la pantalla lo dice',
+        [corre('porAvisar.size'), p.cuerpo.clases.has('hay-nuevo')], [1, true]);
+
+    corre(`Servicio.anularComanda('n1', '')`);  // lo anulan antes de que suene
+    await corre('revisarNovedades()');
+    comprobar('anulado, ya no hay nada que anunciar', corre('porAvisar.size'), 0);
+    comprobar('la pantalla deja de latir', p.cuerpo.clases.has('hay-nuevo'), false);
+    comprobar('y el cartel no anuncia un pedido que ya no existe',
+        /pedido nuevo/.test(p.nodo('sin-sonido').innerHTML), false);
+
+    p.dejarSonar(true);
+    await corre('desbloquear()');
+    comprobar('al tocar la pantalla no suena la alarma de un pedido anulado', p.sonadas(), 0);
+}
+
+/* ============================================================
+   LA CUENTA QUE SE CIERRA MIENTRAS OTRO LE SIGUE PIDIENDO
+
+   Dos celulares, la misma mesa, los mismos segundos: uno la cobra
+   entera y el otro, que todavía no se ha enterado, le agrega una cola.
+   La cola llegaba a la cocina colgada de una cuenta ya cerrada: no
+   salía en las mesas, no estaba en ninguna cuenta y no la cobraba nadie.
+   ============================================================ */
+
+async function probarLaCuentaQueSiguioPidiendo() {
+    console.log('\n--- Se cobra una mesa y otro celular, sin saberlo, le agrega algo ---');
+    nubeLimpia();
+    const A = celular('mesero'), B = celular('parrilla');
+
+    A.corre(`Servicio.iniciar(() => {})`);
+    await respirar();
+    const c = A.corre(`Servicio.enviarComanda({ mesa: 3, items: [${unPollo(2)}] })`);
+    await respirar();
+
+    // El asador ya conoce la mesa y su tanda
+    B.corre(`Servicio.iniciar(() => {})`);
+    B.eco('/', sacarDeNube('servicio/comandas'), false);
+    await respirar();
+    comprobar('el asador ve la mesa 3 abierta', B.corre(`!!Servicio.sesionDeMesa(3)`), true);
+
+    // El mesero cobra todo; el asador todavía no se ha enterado y manda una cola
+    A.corre(`Servicio.registrarPago({ mesa: 3, forma: 'efectivo',
+        lineas: [{ platoId: 'p5', precio: 3.5, cantidad: 2 }] })`);
+    comprobar('para el que cobró, la mesa queda libre', A.corre(`Servicio.sesionDeMesa(3)`), null);
+    const laCola = B.corre(`Servicio.enviarComanda({ mesa: 3, items: [${unaCola(1)}] })`);
+    comprobar('la cola del asador cae en la cuenta que él todavía ve abierta', laCola.sesion, c.sesion);
+    await respirar();
+
+    // Al mesero le llega la cola por el canal en vivo
+    A.propio.enviado.length = 0;
+    A.eco('/' + laCola.id, laCola, false);
+    await respirar();
+    comprobar('la mesa se vuelve a abrir en el celular que la cobró', A.corre(`!!Servicio.sesionDeMesa(3)`), true);
+    comprobar('debiendo solo la cola: lo cobrado sigue cobrado',
+        [A.corre(`Servicio.cuentaDe({ mesa: 3 }).saldo`), A.corre(`Servicio.cuentaDe({ mesa: 3 }).cobrado`)],
+        [0.5, 7]);
+    comprobar('y lo manda a la nube, para que lo vean todos',
+        A.propio.enviado.map(e => [e.rama, e.valor.abierta]), [['servicio/sesiones/' + c.sesion, true]]);
+
+    // Cobrada la cola se cierra otra vez, y lo que NO es una tanda nueva no la reabre
+    A.corre(`Servicio.registrarPago({ mesa: 3, forma: 'efectivo',
+        lineas: [{ platoId: 'b3', precio: 0.5, cantidad: 1 }] })`);
+    A.eco('/' + c.id + '/estado', 'entregado', false);        // la cocina entrega lo ya cobrado
+    A.eco('/' + c.id, { sacado: true }, true);                // el asador lo saca
+    await respirar();
+    comprobar('que la cocina entregue o el asador saque lo ya cobrado no reabre la mesa',
+        A.corre(`Servicio.sesionDeMesa(3)`), null);
+
+    // Y una tanda que llega ANULADA tampoco
+    const otra = Object.assign({}, laCola, { id: 'tarde', estado: 'anulado' });
+    A.eco('/tarde', otra, false);
+    await respirar();
+    comprobar('ni una tanda que llega ya anulada', A.corre(`Servicio.sesionDeMesa(3)`), null);
+}
+
 async function main() {
     probarExportacion();
     probarMesaConDosSesiones();
@@ -5517,6 +6173,15 @@ async function main() {
     await probarLaComandaQueLlegoTarde();
     await probarQueLosIdsNoSeAcumulan();
     await probarCuentaQueNoSaleNoSeMarca();
+    await probarAnularCierraLaCuenta();
+    await probarCobroQueNoSeRepite();
+    await probarLecturaQueLlegaTarde();
+    await probarColaLarga();
+    await probarLaComandaQueSiLlego();
+    await probarLaCuentaQueSiguioPidiendo();
+    await probarACualCuentaVa();
+    await probarUnSoloEnvio();
+    await probarAvisoDeUnPedidoAnulado();
     await probarTomarPedido();
     await probarAvisoDePedidoNuevo();
     await probarPedidoQueEntraMientrasSuena();

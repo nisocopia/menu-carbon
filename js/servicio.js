@@ -33,7 +33,9 @@ const Servicio = (() => {
         misLlam:  NS + 'mis_llamadas',// cuándo llamó ESTE aparato, para el freno
         fiados:   NS + 'fiados',      // lo que se llevaron sin pagar
         conta:    NS + 'contabilidad',// el resumen por día, que no se borra nunca
-        gastos:   NS + 'gastos'       // lo comprado: mercado, carne, carbón, gas
+        gastos:   NS + 'gastos',      // lo comprado: mercado, carne, carbón, gas
+        cierres:  NS + 'cierres',     // con qué tandas cerró ESTE celular cada cuenta
+        revisar:  NS + 'por_revisar'  // cuentas que mirar en cuanto lleguen las mesas
     };
 
     /* Un dispositivo puede quedarse sin nube (sync.js no cargó o el
@@ -226,6 +228,11 @@ const Servicio = (() => {
 
     let vaciando = false;
     let vaciandoDesde = 0;
+    let vuelta = 0;          // cuál de las vueltas es la que manda ahora
+
+    /** ¿Lo que hay al frente de la cola es lo mismo que se acaba de mandar? */
+    const mismaTarea = (a, b) => !!a && !!b && a.rama === b.rama && a.metodo === b.metodo &&
+        JSON.stringify(a.valor) === JSON.stringify(b.valor);
 
     async function vaciarCola() {
         if (!Red.activo) return;
@@ -240,11 +247,30 @@ const Servicio = (() => {
         vaciando = true;
         vaciandoDesde = Date.now();
 
+        /* UNA SOLA VUELTA TOCA LA COLA.
+
+           El plazo de arriba se medía desde que EMPEZÓ la vuelta, no
+           desde su último envío. Una cola larga con la red lenta —lo que
+           se junta tras un rato sin señal— tarda más de 40 segundos sin
+           que nada esté colgado, y entonces arrancaba una segunda vuelta
+           encima de la primera. Las dos mandaban lo mismo y cada una
+           quitaba "lo primero de la cola" al terminar: una de las dos
+           quitaba algo que la otra todavía no había conseguido mandar, y
+           ese pedido no llegaba nunca ni quedaba rastro de él.
+
+           Ahora el reloj se pone al día en cada envío, así que solo se
+           da por colgada una vuelta que lleva 40 segundos en UN envío. Y
+           si aun así la relevan, se retira sin tocar nada. */
+        const mia = ++vuelta;
+        const relevada = () => mia !== vuelta;
+
         try {
             let cola = read(K.cola, []);
             while (cola.length) {
                 const tarea = cola[0];
+                vaciandoDesde = Date.now();
                 const r = await Red.enviar(tarea.rama, tarea.valor, tarea.metodo);
+                if (relevada()) return;
 
                 if (!r.ok && r.status !== 401 && r.status !== 403) {
                     // El wifi o la nube. Se queda en la cola y se reintenta
@@ -262,15 +288,94 @@ const Servicio = (() => {
 
                    Se aparta y se sigue. No se borra: queda a un lado,
                    contado y a la vista, para decidirlo a mano. */
-                if (!r.ok) apartar(tarea);
+                let salio = r.ok;
+                if (!salio) {
+                    const motivo = porQueNoSale();
+                    vaciandoDesde = Date.now();
+                    salio = await yaLlego(tarea);
+                    if (relevada()) return;
+                    if (!salio) apartar(tarea, motivo);
+                }
 
-                cola = read(K.cola, []).slice(1);
-                write(K.cola, cola);
+                /* Se quita LO QUE SE MANDÓ, no "lo primero que haya". Casi
+                   siempre es lo mismo; deja de serlo si mientras tanto se
+                   vació el servicio y la cola empezó de nuevo. */
+                cola = read(K.cola, []);
+                if (mismaTarea(cola[0], tarea)) {
+                    cola = cola.slice(1);
+                    write(K.cola, cola);
+                    if (salio) anotarSalida(tarea);
+                }
                 marcarLinea(true);
             }
         } finally {
-            vaciando = false;
+            if (!relevada()) vaciando = false;
         }
+    }
+
+    /**
+     * ¿Lo que la nube acaba de rechazar es una comanda que YA ESTABA ALLÁ?
+     *
+     * Las reglas dejan al mesero y al asador CREAR una comanda, no
+     * reescribirla. Si el pedido llegó a la nube pero la respuesta se
+     * perdió por el camino —el wifi flojo de siempre— la cola lo vuelve
+     * a mandar, y ese segundo envío rebota: ya existe. Se apartaba con
+     * el aviso de "la nube rechaza, la cocina nunca lo vio, hay que
+     * volver a anotarlo"... de un pedido que la cocina tenía en pantalla.
+     * Quien le hiciera caso lo mandaba dos veces.
+     *
+     * Antes de apartar se pregunta. Si está allá, y es el mismo, salió.
+     */
+    async function yaLlego(tarea) {
+        const partes = String(tarea.rama || '').split('/');
+        const esComandaEntera = tarea.metodo !== 'PATCH' && partes.length === 3 &&
+            partes[0] === 'servicio' && partes[1] === 'comandas' &&
+            tarea.valor && tarea.valor.id;
+        if (!esComandaEntera || !Red.leer) return false;
+
+        const enNube = await Red.leer(tarea.rama, true);
+        return !!(enNube && enNube.id === tarea.valor.id && enNube.creado === tarea.valor.creado);
+    }
+
+    /* ------------------------------------------------------------
+       LO QUE ACABA DE SALIR
+
+       Las mesas y los cobros no se escuchan en vivo: se preguntan cada
+       seis segundos. Una pregunta tarda, y lo que contesta es una foto
+       de cuando se hizo. Si entre la foto y la respuesta este celular
+       cobró una mesa, la respuesta llegaba diciendo "esa mesa está
+       abierta y no tiene cobros" — y se le creía, porque para entonces
+       el cobro ya había salido y no estaba en la cola que lo protegía.
+       La mesa recién cobrada volvía a salir ocupada, con todo por
+       cobrar, hasta la ronda siguiente. Seis segundos en los que se
+       podía cobrar otra vez.
+
+       Por eso se apunta cuándo salió cada cosa. Una foto pedida ANTES
+       de esa hora no sabe nada de ella, y en eso manda este celular.
+       ------------------------------------------------------------ */
+
+    const recienSalidos = {};      // id -> cuándo dejó la cola
+
+    function anotarSalida(tarea) {
+        const ahora = Date.now();
+        const id = idDeRama(tarea);
+        if (id) recienSalidos[id] = ahora;
+
+        // Ninguna pregunta dura un minuto: lo más viejo ya no protege de nada
+        Object.keys(recienSalidos).forEach(k => {
+            if (ahora - recienSalidos[k] > 60000) delete recienSalidos[k];
+        });
+    }
+
+    /**
+     * Lo de este celular que una lectura pedida en `desde` puede no
+     * traer, o traer viejo: lo que sigue en la cola y lo que salió
+     * después de hacer la pregunta.
+     */
+    function idsMasNuevosQue(desde) {
+        const set = idsEnCola();
+        Object.keys(recienSalidos).forEach(id => { if (recienSalidos[id] >= desde) set.add(id); });
+        return set;
     }
 
     /* ------------------------------------------------------------
@@ -282,10 +387,10 @@ const Servicio = (() => {
        nadie lo vea: se cuenta, se muestra y se descarta a mano.
        ------------------------------------------------------------ */
 
-    function apartar(tarea) {
+    function apartar(tarea, motivo) {
         const fuera = read(K.apartado, []);
         fuera.push({ rama: tarea.rama, valor: tarea.valor, metodo: tarea.metodo,
-                     motivo: porQueNoSale(), cuando: Date.now() });
+                     motivo: motivo !== undefined ? motivo : porQueNoSale(), cuando: Date.now() });
         // Solo las últimas 50: esto es para mirarlo, no un archivo histórico
         write(K.apartado, fuera.slice(-50));
     }
@@ -557,8 +662,9 @@ const Servicio = (() => {
            tomar el pedido por no poder comprobar sería peor que el
            riesgo, y la pantalla ya avisa cuando no hay conexión. */
         if (Red.activo && Red.haySesion()) {
+            const desde = Date.now();
             const frescas = await Red.leer('servicio/comandas', true);
-            if (frescas !== undefined) mezclar(K.comandas, frescas);
+            if (frescas !== undefined) mezclar(K.comandas, frescas, desde);
         }
 
         const restante = {};
@@ -1155,6 +1261,78 @@ const Servicio = (() => {
         s.cerrado = Date.now();
         write(K.sesiones, todas);
         encolar(`servicio/sesiones/${sesionId}`, s);
+        recordarCierre(sesionId);
+    }
+
+    /* ------------------------------------------------------------
+       LO QUE LLEGA A UNA CUENTA DESPUÉS DE CERRARLA
+
+       Dos celulares, la misma cuenta, los mismos segundos: uno la cobra
+       entera —o le anula lo único que tenía— y el otro, que todavía no
+       se ha enterado, le agrega una cola. La cola llega a la cocina
+       colgada de una cuenta ya cerrada: no sale en las mesas, no está en
+       ninguna cuenta y no la cobra nadie. Y no hay aviso, porque los dos
+       celulares hicieron lo correcto con lo que sabían.
+
+       El que cierra es el único que sabe con qué cerró. Apunta las
+       tandas que tenía a la vista en ese momento, y si después le llega
+       una que no estaba —una tanda viva, de esa misma cuenta— es que
+       alguien siguió pidiendo: la cuenta se vuelve a abrir, con lo ya
+       cobrado como cobrado y lo nuevo por cobrar.
+
+       No se mira ninguna hora: los relojes de dos celulares no marcan
+       lo mismo. Se mira qué tandas conocía quien cerró, que es un hecho.
+       ------------------------------------------------------------ */
+
+    const MEMORIA_DE_CIERRES = 12 * 3600 * 1000;
+
+    function recordarCierre(sesionId) {
+        const ahora = Date.now();
+        const cierres = read(K.cierres, {});
+        Object.keys(cierres).forEach(k => {
+            if (ahora - ((cierres[k] || {}).cuando || 0) > MEMORIA_DE_CIERRES) delete cierres[k];
+        });
+        cierres[sesionId] = { cuando: ahora, tandas: comandasDeSesion(sesionId).map(c => c.id) };
+        write(K.cierres, cierres);
+    }
+
+    /** Se llama cuando llegan comandas de los otros celulares. */
+    function reabrirLoQueSiguioPidiendo() {
+        const cierres = read(K.cierres, {});
+        if (!Object.keys(cierres).length) return false;
+
+        // Abrir una cuenta es escribir en las mesas: solo quien toma pedidos
+        if (!puedeAnotar()) return false;
+
+        const sesiones = getSesiones();
+        const reabiertas = [];
+        let cambio = false;
+
+        Object.keys(cierres).forEach(id => {
+            const s = sesiones[id];
+
+            // Ya la abrió otro, o el servicio se vació: no hay nada que vigilar
+            if (!s || s.abierta) { delete cierres[id]; cambio = true; return; }
+
+            const vistas = cierres[id].tandas || [];
+            const llegoOtra = comandasDeSesion(id)
+                .some(c => c.estado !== 'anulado' && vistas.indexOf(c.id) < 0);
+            if (!llegoOtra) return;
+
+            s.abierta = true;
+            s.cerrado = null;
+            s.reabierta = Date.now();
+            reabiertas.push(s);
+            delete cierres[id];
+            cambio = true;
+        });
+
+        if (cambio) write(K.cierres, cierres);
+        if (!reabiertas.length) return false;
+
+        write(K.sesiones, sesiones);
+        reabiertas.forEach(s => encolar(`servicio/sesiones/${s.id}`, s));
+        return true;
     }
 
     /** La cuenta quedó pagada: se liberan todas sus sesiones, no solo una. */
@@ -1272,7 +1450,16 @@ const Servicio = (() => {
         /* Lo que se agrega a una tanda ya servida se pega a la cuenta de
            ESA tanda, no a "la sesión de esa mesa": si la mesa tiene dos
            cuentas abiertas se le cobraría a la equivocada. */
-        const sesion = (sesionId && getSesiones()[sesionId]) || abrirSesion(mesa, nombre);
+        /* PERO NUNCA A UNA CUENTA CERRADA. Entre que se abrió la pantalla
+           y se tocó Enviar, otro celular pudo cobrarla. Una tanda colgada
+           de una cuenta cerrada llega a la cocina y no la ve nadie más:
+           no sale en las mesas, no está en ninguna cuenta y no se cobra.
+           Si la que se pidió ya no está abierta, lo nuevo abre la suya,
+           en la misma mesa o al mismo nombre. */
+        const pedida = sesionId ? getSesiones()[sesionId] : null;
+        const sesion = (pedida && pedida.abierta)
+            ? pedida
+            : abrirSesion(mesa, nombre || (pedida && pedida.nombre) || '');
         // La letra se cuenta sobre la CUENTA: si la mesa quedó con dos
         // sesiones abiertas, sus tandas siguen siendo M3, M3b, M3c y no
         // dos series que empiezan de cero y se pisan.
@@ -1732,9 +1919,85 @@ const Servicio = (() => {
         return { antes, despues, diferencia: despues - antes };
     }
 
+    /**
+     * UNA CUENTA QUE YA NO DEBE NADA NO PUEDE SEGUIR ABIERTA.
+     *
+     * Una cuenta se cerraba en un solo sitio: al cobrar, cuando el saldo
+     * llegaba a cero. Pero el saldo también llega a cero sin cobrar —al
+     * anular lo único que se había pedido— y por ahí nadie la cerraba.
+     * El pedido para llevar de Carlos se anulaba, la cocina dejaba de
+     * verlo, y su nombre seguía en la lista con $0.00 para siempre: sin
+     * nada que cobrar no hay botón que la cierre, así que la única
+     * salida era vaciar el servicio entero. A una mesa le pasaba lo
+     * mismo: quedaba "ocupada" con cero platos.
+     *
+     * Se cierra en dos casos, y solo en esos:
+     *
+     *   · no le queda ninguna tanda viva — todo lo que pidió se anuló;
+     *   · ya se cobró algo y no falta nada — se anuló o se quitó justo
+     *     lo que quedaba por pagar.
+     *
+     * Se mira la CUENTA entera y no la sesión suelta: una mesa puede
+     * tener dos sesiones abiertas, y los cobros se apuntan en la más
+     * vieja. Cerrar una sola dejaría sus cobros fuera de la suma y lo ya
+     * pagado volvería a salir como pendiente.
+     *
+     * No se borra nada: la sesión queda cerrada, con su hora, y las
+     * tandas anuladas siguen ahí con su motivo.
+     */
+    function cerrarSiNoDebeNada(sesionId) {
+        const s = getSesiones()[sesionId];
+
+        /* Las comandas llegan en vivo, las mesas cada seis segundos. El
+           panel puede anular un pedido que acaba de entrar sin conocer
+           todavía su cuenta — y sin cuenta a la vista no hay qué cerrar.
+           Se deja apuntado y se vuelve a mirar en cuanto lleguen las
+           mesas (ver revisarLoApuntado). */
+        if (!s) { apuntarParaRevisar(sesionId); return false; }
+        if (!s.abierta) return false;
+
+        const ref = esLlevar(s) ? { sesion: s.id } : { mesa: s.mesa };
+        const vivas = tandasDe(ref).some(c => c.estado !== 'anulado');
+        const cuenta = cuentaDe(ref);
+
+        if (vivas && !(cuenta.cobrado > 0 && cuenta.saldo <= 0.001)) return false;
+
+        cerrarCuenta(ref);
+        return true;
+    }
+
+    /* Las cuentas que hubo que mirar sin tenerlas todavía a la vista. Son
+       de segundos, pero se guardan: si la página se recarga justo ahí,
+       la cuenta se quedaría abierta sin nada, que es lo que se arregla. */
+    function apuntarParaRevisar(sesionId) {
+        if (!sesionId) return;
+        const ahora = Date.now();
+        const lista = read(K.revisar, {});
+        Object.keys(lista).forEach(k => { if (ahora - lista[k] > 10 * 60 * 1000) delete lista[k]; });
+        lista[sesionId] = ahora;
+        write(K.revisar, lista);
+    }
+
+    /** Llegaron las mesas: lo que quedó apuntado ya se puede mirar. */
+    function revisarLoApuntado() {
+        const lista = read(K.revisar, {});
+        const ids = Object.keys(lista);
+        if (!ids.length) return;
+
+        const sesiones = getSesiones();
+        ids.forEach(id => { if (sesiones[id]) delete lista[id]; });
+        write(K.revisar, lista);
+
+        // Con la lista ya guardada: si alguna siguiera sin verse, se vuelve a apuntar sola
+        ids.forEach(id => { if (sesiones[id]) cerrarSiNoDebeNada(id); });
+    }
+
     /** Corregir un pedido mal tomado: se anula entero y se vuelve a mandar. */
-    const anularComanda = (id, motivo) =>
-        parchearComanda(id, { estado: 'anulado', anulado: Date.now(), motivo: motivo || '' });
+    function anularComanda(id, motivo) {
+        const c = parchearComanda(id, { estado: 'anulado', anulado: Date.now(), motivo: motivo || '' });
+        if (c) cerrarSiNoDebeNada(c.sesion);
+        return c;
+    }
 
     /* ============================================================
        HASTA CUÁNDO SE PUEDE TOCAR UNA TANDA
@@ -1863,7 +2126,12 @@ const Servicio = (() => {
         if (!hayCambio) return c;
 
         patch.editado = Date.now();
-        return parchearComanda(id, patch);
+        const guardada = parchearComanda(id, patch);
+
+        /* Quitar de la tanda justo lo que faltaba por pagar deja la
+           cuenta en cero igual que cobrarlo (ver cerrarSiNoDebeNada). */
+        if (guardada) cerrarSiNoDebeNada(guardada.sesion);
+        return guardada;
     }
 
     /* ============================================================
@@ -1936,10 +2204,41 @@ const Servicio = (() => {
 
     const cuentaDeMesa = mesa => cuentaDe({ mesa });
 
+    /**
+     * ¿Todo esto sigue por cobrar en esa cuenta?
+     *
+     * Lo que se va a cobrar se marca en una pantalla, y entre que se
+     * marcó y se tocó "Efectivo" otro celular pudo cobrar lo mismo. La
+     * selección no se entera sola. Aquí se vuelve a mirar, contra lo que
+     * este celular sabe en ese instante: cada renglón tiene que existir
+     * en la cuenta y no pasarse de lo que le falta.
+     */
+    function sigueSinCobrar(ref, lineas) {
+        const cuenta = cuentaDe(ref);
+        return (lineas || []).every(l => {
+            const enCuenta = cuenta.items.find(i => i.platoId === l.platoId && i.precio === l.precio);
+            return !!enCuenta && l.cantidad > 0 && l.cantidad <= enCuenta.pendiente;
+        });
+    }
+
+    /**
+     * Anota un cobro. Devuelve null, sin anotar nada, si no hay nada que
+     * cobrar ahí: la cuenta ya está cerrada, o parte de lo marcado ya se
+     * cobró. Quien llama tiene que mirarlo — un cobro que no se anotó no
+     * puede decir "cobrado".
+     */
     function registrarPago({ mesa, sesion, lineas, forma }) {
         const ref = sesion ? { sesion } : { mesa };
-        const abiertas = sesionesDe(ref);
+
+        /* SOLO LAS ABIERTAS. Una mesa ya se pregunta por sus sesiones
+           abiertas, pero un pedido para llevar se busca por su
+           identificador y aparece igual esté cobrado o no: sin este
+           filtro, un segundo toque —o el otro celular, con la cuenta
+           todavía en pantalla— le anotaba otro cobro encima. */
+        const abiertas = sesionesDe(ref).filter(s => s.abierta);
         if (!abiertas.length) return null;
+
+        if (!lineas || !lineas.length || !sigueSinCobrar(ref, lineas)) return null;
 
         const monto = lineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
         const pago = {
@@ -2044,6 +2343,7 @@ const Servicio = (() => {
            dejan para el gerente y el mesero. El asador entra al panel a
            ver el menú, la contabilidad y sus gastos, y ninguna de esas
            tres los usa — pedirlos sería un permiso denegado de adorno. */
+        const desde = Date.now();
         const [com, ses, pag, fia, con, gas] = await Promise.all([
             Red.leer('servicio/comandas', true),
             Red.leer('servicio/sesiones', true),
@@ -2055,9 +2355,10 @@ const Servicio = (() => {
 
         /* `undefined` es "no se pudo leer" y se deja lo que había;
            `null` es "está vacío" y hay que obedecerlo. */
-        if (com !== undefined) mezclar(K.comandas, com);
-        if (ses !== undefined) mezclar(K.sesiones, ses);
-        if (pag !== undefined) mezclar(K.pagos,    pag);
+        if (com !== undefined) mezclar(K.comandas, com, desde);
+        if (ses !== undefined) mezclar(K.sesiones, ses, desde);
+        if (pag !== undefined) mezclar(K.pagos,    pag, desde);
+        if (ses !== undefined) revisarLoApuntado();
         cargarDelGerente(fia, con, gas);
 
         alCambiar();
@@ -2890,8 +3191,15 @@ const Servicio = (() => {
         return set;
     }
 
-    function mezclar(clave, remotos) {
-        if (remotos == null) { vaciarSegunNube(clave); return; }
+    /**
+     * @param desde  cuándo se PIDIÓ esta lectura, si es una pregunta
+     *        suelta y no un aviso del canal en vivo. Con esa hora se
+     *        sabe qué puede traer atrasado (ver "Lo que acaba de salir").
+     *        El canal en vivo no la pasa: sus avisos llegan en orden, y
+     *        lo que se le escape a la primera foto viene justo detrás.
+     */
+    function mezclar(clave, remotos, desde) {
+        if (remotos == null) { vaciarSegunNube(clave, desde); return; }
 
         /* LO QUE LA NUBE YA NO TIENE, SE VA DE AQUÍ TAMBIÉN.
            Antes esto era un Object.assign: la nube ganaba en lo que
@@ -2916,6 +3224,18 @@ const Servicio = (() => {
         Object.keys(propios).forEach(id => { if (pendientes.has(id)) fusion[id] = propios[id]; });
         Object.assign(fusion, remotos);   // y lo de la nube manda encima
 
+        /* SALVO EN LO QUE ESTE CELULAR CAMBIÓ DESPUÉS DE PREGUNTAR.
+
+           "La nube manda encima" vale mientras la nube sepa más que este
+           celular. Deja de valer con lo que se acaba de tocar aquí: una
+           mesa recién cobrada sigue abierta en una foto tomada un segundo
+           antes, y obedecerla la volvía a pintar ocupada. Lo que sigue en
+           la cola, o salió después de pedir esta lectura, se queda como
+           está en este celular; la ronda siguiente ya lo trae al día. */
+        if (desde) {
+            idsMasNuevosQue(desde).forEach(id => { if (propios[id]) fusion[id] = propios[id]; });
+        }
+
         write(clave, fusion);
     }
 
@@ -2928,13 +3248,18 @@ const Servicio = (() => {
      * desaparecer: nadie más lo ha visto todavía, así que no es algo
      * que el gerente estuviera borrando.
      */
-    function vaciarSegunNube(clave) {
+    function vaciarSegunNube(clave, desde) {
         /* La MISMA regla que en mezclar, y a propósito: lo que solo
            existe en este celular no se va por una noticia de la nube.
            Tener dos reglas parecidas para lo mismo fue lo que dejó que
            un pedido rechazado se borrara solo y su aviso se quedara
            enseñando una dirección de la base en vez de su código. */
         const pendientes = idsSoloAqui();
+
+        /* Y tampoco lo que salió después de hacer la pregunta: el primer
+           cobro de la noche llega a una rama que un instante antes
+           estaba vacía, y esa foto vacía no puede llevárselo. */
+        if (desde) idsMasNuevosQue(desde).forEach(id => pendientes.add(id));
 
         if (!pendientes.size) { write(clave, {}); return; }
 
@@ -3033,15 +3358,22 @@ const Servicio = (() => {
            pantalla dejó de recibir". */
         const cobros = !soloMesas && puedeCobrar();
 
+        // La hora de la pregunta: lo que este celular cambie de aquí en
+        // adelante no puede pisarlo una respuesta que ya venía en camino
+        const desde = Date.now();
+
         const [ses, pag, ent] = await Promise.all([
             Red.leer('servicio/sesiones',  true),
             cobros    ? Red.leer('servicio/pagos',     true) : Promise.resolve(undefined),
             soloMesas ? Promise.resolve(undefined) : Red.leer('servicio/entrantes', true)
         ]);
 
-        if (ses !== undefined) mezclar(K.sesiones, ses);
-        if (pag !== undefined) mezclar(K.pagos, pag);
+        if (ses !== undefined) mezclar(K.sesiones, ses, desde);
+        if (pag !== undefined) mezclar(K.pagos, pag, desde);
         if (ent !== undefined) { entrantes = ent || {}; limpiarTomados(); }
+
+        // Lo que se anuló sin conocer todavía su cuenta ya se puede cerrar
+        if (ses !== undefined) revisarLoApuntado();
 
         alCambiar();
     }
@@ -3065,6 +3397,9 @@ const Servicio = (() => {
            completa da permiso denegado aunque cada hija sí se pueda leer. */
         Red.escuchar('servicio/comandas', (datos, ruta, esRetoque) => {
             aplicarEnRuta(K.comandas, ruta, datos, esRetoque);
+            // Si lo que llegó es una tanda para una cuenta que este
+            // celular acababa de cerrar, la cuenta se vuelve a abrir
+            reabrirLoQueSiguioPidiendo();
             alCambiar();
         }, true);
 
@@ -3140,8 +3475,17 @@ const Servicio = (() => {
      * una mesa con tres tandas es un cliente, no tres.
      */
     function sesionesEntre(desde, hasta) {
+        /* Atendida quiere decir que algo de lo que pidió sigue en pie. Una
+           cuenta a la que se le anuló todo —el pedido mal tomado que se
+           anula y se vuelve a mandar— no es una mesa más: contarla
+           inflaba las mesas del día con mesas que no comieron nada. */
+        const conAlgo = new Set(Object.values(getComandas())
+            .filter(c => c.estado !== 'anulado')
+            .map(c => c.sesion));
+
         return Object.values(getSesiones())
-            .filter(s => s.creado >= (desde || 0) && s.creado <= (hasta || Infinity));
+            .filter(s => s.creado >= (desde || 0) && s.creado <= (hasta || Infinity))
+            .filter(s => conAlgo.has(s.id));
     }
 
     /* ============================================================
@@ -3206,6 +3550,8 @@ const Servicio = (() => {
            comandas que ya no existen. */
         write(K.cola, []);
         write(K.apartado, []);
+        write(K.cierres, {});
+        write(K.revisar, {});
         entrantes = {};
 
         alCambiar();
