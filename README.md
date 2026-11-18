@@ -849,6 +849,12 @@ había forma de cobrar uno sin el otro.
 El botón de enviar **no dice Enviar hasta que hay nombre**. Un pedido para
 llevar sin nombre es una funda sin dueño.
 
+**Lo que se agrega va a la cuenta que está en pantalla.** El nombre que se
+teclea vale solo para el pedido nuevo que se está armando, y el campo sale
+vacío cada vez. Antes se quedaba con lo último escrito: se anotaba el de
+Carlos, luego el de Uber, se volvía al de Carlos a sumarle una cola — y la
+cola salía a nombre de Uber, en su cuenta.
+
 El nombre no reemplaza al código: `LL · 2PO` sigue siendo el código, y el
 nombre va al lado, en grande, en la parrilla y en la cocina. Los que
 siguen sin cobrar se ven en la pantalla de mesas, debajo del botón, como
@@ -879,6 +885,22 @@ como proteína: también se bloquean.
 **Anular** se puede hasta que alguien la haya tocado. Si el asador ya
 marcó "Ya lo saqué" o la cocina ya marcó ENTREGADO, no se anula y en el
 lugar del botón se lee con quién hay que hablar.
+
+**Anular lo único que tenía una cuenta la cierra.** Un pedido para llevar
+al que se le anula todo sale de la lista, y una mesa queda libre. Antes no:
+la cocina dejaba de verlo, pero la cuenta seguía abierta — y una cuenta solo
+se cerraba al cobrar. Sin nada que cobrar no había botón que la cerrara, así
+que el nombre se quedaba ahí con `$0.00` hasta vaciar el servicio entero.
+
+Mientras le quede una tanda viva, la cuenta no se toca: con dos pedidos al
+mismo nombre, anular uno deja el otro. Y no se borra nada — la cuenta queda
+cerrada con su hora y la tanda anulada con su motivo. Lo mismo vale si se
+cobró una parte y se anula, o se quita de la tanda, justo lo que faltaba por
+pagar: ya no debe nada.
+
+Vale también desde el panel. Si el gerente anula un pedido recién entrado
+antes de que a su pantalla le lleguen las mesas —llegan cada seis segundos—,
+la cuenta se cierra en cuanto llegan.
 
 ### Cambiar de mesa
 
@@ -977,6 +999,43 @@ Siempre por lo que comió cada uno, nunca en partes iguales. Se tocan los platos
 de esa persona, se cobra en efectivo o transferencia, y lo que falta se queda
 abierto en la mesa.
 
+**Un cobro no se anota dos veces.** Lo que se va a cobrar se marca en una
+pantalla, y la pantalla no se entera sola de que otro celular cobró lo mismo.
+Al tocar Efectivo se vuelve a mirar: la cuenta tiene que seguir abierta y cada
+renglón tiene que seguir por cobrar. Si no, no se anota nada y se dice — *Esa
+cuenta ya estaba cobrada* — en vez de "cobrado". Con un pedido para llevar
+esto no se comprobaba, y se le anotaba otro cobro encima.
+
+**Lo recién cobrado no lo deshace una respuesta atrasada.** Las mesas y los
+cobros se preguntan a la nube cada seis segundos, y lo que contesta es una
+foto de cuando se preguntó. Si se cobraba justo después, esa foto llegaba
+diciendo "la mesa está abierta" y se le creía: la mesa volvía a salir ocupada
+unos segundos, con `$0.00` o con todo por cobrar otra vez. Ahora, en lo que
+este celular cambió después de preguntar, manda este celular; la ronda
+siguiente ya lo trae al día.
+
+### Dos celulares sobre la misma cuenta
+
+Pasa: el mesero cobra la mesa entera y el asador, que todavía no se ha
+enterado, le agrega una cola. La cola llegaba a la cocina colgada de una
+cuenta cerrada — no salía en las mesas, no estaba en ninguna cuenta y no la
+cobraba nadie.
+
+**El que cierra una cuenta apunta con qué tandas la cerró.** Si después le
+llega una que no estaba, es que alguien siguió pidiendo: la cuenta se vuelve
+a abrir, con lo ya cobrado como cobrado y lo nuevo por cobrar. No se mira la
+hora —los relojes de dos celulares no marcan lo mismo— sino qué tandas
+conocía quien cerró.
+
+Y al revés: lo que se manda desde una pantalla que tiene abierta una cuenta
+ya cerrada no se cuelga de ella. Abre una nueva, en la misma mesa o al mismo
+nombre. Corregir una tanda cuya cuenta ya se cobró tampoco entra: se avisa y
+no se escribe nada.
+
+Lo que **no** se puede evitar desde el celular: que dos personas cobren lo
+mismo en los mismos segundos, cada una en su pantalla, antes de que ninguna
+sepa de la otra. Eso pediría que el cobro lo decidiera la nube.
+
 Las bebidas que no están en la lista (las de la tienda de al lado) se agregan
 con **"Otra bebida"**. Como el precio sale de preguntar el costo en la tienda y
 subirle 25 o 50 centavos, se escribe lo que costó y el precio de venta sale
@@ -1024,6 +1083,19 @@ señal. Pero como eso puede tardar, el sistema lo dice sin rodeos:
 
 Nunca dice "enviado" cuando no salió. Si el rojo no se apaga, hay que ir a
 decirlo a mano o sacar el cuaderno.
+
+Dos cosas que pasaban justo con la red floja, y ya no:
+
+- **Un pedido que sí llegó no sale como rechazado.** Las reglas dejan al
+  mesero crear una comanda, no reescribirla. Si el pedido llegaba y la
+  respuesta se perdía por el camino, el reintento rebotaba —ya existe— y
+  salía el aviso de *"la nube rechaza: la cocina nunca lo vio, hay que volver
+  a anotarlo"*, de un pedido que la cocina tenía delante. Antes de apartar
+  algo se pregunta si ya está allá.
+- **Una cola larga no pierde nada.** Lo que se junta tras un rato sin señal
+  puede tardar más de 40 segundos en salir. Eso se tomaba por una vuelta
+  colgada y arrancaba otra encima: las dos mandaban lo mismo, y una quitaba
+  de la cola algo que la otra todavía no había conseguido mandar.
 
 ---
 
@@ -1125,7 +1197,10 @@ campos, que la cuenta de una mesa junte todas sus sesiones, que un pedido
 del comensal no se pueda confirmar dos veces, que cada pantalla escriba
 solo su campo, que cada cuenta llegue solo hasta donde le toca, que un
 aviso que no sonó siga pendiente y que el ayudante no se meta con los
-pedidos.
+pedidos. Y lo que solo se ve con dos celulares a la vez: que anular lo
+único de una cuenta la cierre sin tocar las demás, que un cobro no entre
+dos veces, y que una respuesta atrasada de la nube no reabra la mesa que
+se acaba de cobrar.
 
 `version.py` marca los `.css` y `.js` de las páginas **y también la caja
 del ayudante**, que es lo que hace que la anterior se tire al publicar.

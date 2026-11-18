@@ -358,10 +358,26 @@ async function intentarAvisar() {
  * desaparecía sin dejar rastro.
  */
 function revisarNovedades() {
+    const enTablero = new Set();
+
     Servicio.comandasDe(ESTACION).forEach(c => {
+        enTablero.add(c.id);
         const marca = marcaDe(c);
         if (avisadas.get(c.id) !== marca) porAvisar.set(c.id, marca);
     });
+
+    /* Lo que ya no está en el tablero no tiene nada que anunciar. Un
+       pedido que se anula antes de que su aviso llegue a sonar —la
+       pantalla todavía sin tocar, el navegador sin dejar— se quedaba en
+       la lista de pendientes para siempre: el borde seguía latiendo y el
+       cartel diciendo "1 pedido nuevo" con el tablero vacío, y al tocar
+       sonaba la alarma de un pedido que ya no existía. */
+    let sobraba = false;
+    [...porAvisar.keys()].forEach(id => {
+        if (!enTablero.has(id)) { porAvisar.delete(id); sobraba = true; }
+    });
+    if (sobraba) pintarPendiente();
+
     return porAvisar.size ? intentarAvisar() : Promise.resolve();
 }
 

@@ -41,6 +41,10 @@ let pregunta = null;
    cuenta de la mesa no queda escrita en ningún plato: viaja aquí. */
 let respondida = null;
 
+/* Hay un envío preguntando a la nube si queda de todo: mientras dure,
+   otro Enviar no hace nada (ver enviar). */
+let enviando = false;
+
 /** La referencia que entiende Servicio; null mientras el pedido no tenga nombre. */
 const ref = () => (refActual && !refActual.nuevoLlevar) ? refActual : null;
 
@@ -396,7 +400,16 @@ function abrirCuenta(nueva) {
     refActual = nueva;
     borrador = [];
     editandoTanda = null;
-    if (nueva.nuevoLlevar) nombreLlevar = '';
+    if (nueva.nuevoLlevar) {
+        nombreLlevar = '';
+        /* Y el campo también. Se vaciaba lo que la pantalla recordaba,
+           pero no lo que se veía escrito: al empezar un segundo pedido
+           para llevar el campo seguía diciendo "Carlos" —con el botón
+           pidiendo el nombre igual— y lo que se tecleara se pegaba
+           detrás. El pedido de Luis salía a nombre de "CarlosLuis". */
+        const campo = $('nombre-llevar');
+        if (campo) campo.value = '';
+    }
 
     mostrarVista('mesa');
     $('titulo').textContent = nueva.nuevoLlevar ? 'Para llevar' : Servicio.nombreDeCuenta(nueva);
@@ -1490,10 +1503,32 @@ const vaAparte = it => saleAparte(it.platoId) && !yaVenia(it);
  * encima de la tanda de siempre, y lo agregado como tanda nueva.
  */
 function guardarEdicion(laDeLaMesa) {
+    /* Mientras se corregía, otro celular pudo cobrar esta cuenta o anular
+       la tanda. Guardar encima sería meterle platos a algo que ya está
+       cerrado: no se cobrarían nunca. Se vuelve a mirar antes de escribir. */
+    const ahora = Servicio.getComandas()[editandoTanda.id];
+    if (!ahora || Servicio.edicionDe(ahora) === 'no') {
+        cancelarEdicion();
+        toast('Esa tanda ya no se puede tocar: la cuenta se cerró o la anularon.');
+        return;
+    }
+
     const aparte = borrador.filter(vaAparte);
     const encima = borrador.filter(it => !aparte.includes(it));
 
     const dicho = [];
+
+    /* Lo que sale como tanda nueva se manda PRIMERO. Si la corrección
+       quita justo lo que faltaba por pagar, la cuenta queda en cero y se
+       cierra; lo nuevo tiene que estar ya dentro para que eso no pase
+       con platos todavía por cobrar. */
+    const nueva = aparte.length ? Servicio.enviarComanda({
+        mesa: editandoTanda.mesa || 0,
+        sesion: editandoTanda.sesion,
+        items: sinLaDeLaMesa(aparte),
+        origen: 'mesero',
+        menestra: aparte.some(menestraContada) ? laDeLaMesa : null
+    }) : null;
 
     if (encima.length) {
         // Si no cambió nada, editarComanda no manda nada y no hay qué anunciar
@@ -1508,16 +1543,7 @@ function guardarEdicion(laDeLaMesa) {
         if (c && c.editado !== antes) dicho.push((c.codigo || '') + ' corregido');
     }
 
-    if (aparte.length) {
-        const nueva = Servicio.enviarComanda({
-            mesa: editandoTanda.mesa || 0,
-            sesion: editandoTanda.sesion,
-            items: sinLaDeLaMesa(aparte),
-            origen: 'mesero',
-            menestra: aparte.some(menestraContada) ? laDeLaMesa : null
-        });
-        if (nueva) dicho.push((nueva.codigo || '') + ' a la cola');
-    }
+    if (nueva) dicho.push((nueva.codigo || '') + ' a la cola');
 
     editandoTanda = null;
     borrador = [];
@@ -1575,6 +1601,13 @@ function avisarRecorte(recortes, quedoAlgo, comanda) {
 }
 
 async function enviar() {
+    /* UN ENVÍO A LA VEZ. Más abajo se le pregunta a la nube si queda de
+       todo y se espera la respuesta, y mientras se espera el borrador
+       sigue lleno. El botón se apaga, pero a enviar también se llega con
+       el Enter del nombre: un segundo envío en ese hueco mandaba el
+       mismo pedido dos veces. */
+    if (enviando) return;
+
     // Lo contestado vale para este envío y para ninguno más
     const dicha = respondida;
     respondida = null;
@@ -1607,6 +1640,8 @@ async function enviar() {
         return;
     }
 
+    enviando = true;
+
     /* LA ÚLTIMA PREGUNTA. Entre que este pedido se empezó a escribir y
        ahora, otro celular pudo haberse llevado las últimas costillas.
        Se le pregunta a la nube y se recorta lo que ya no existe, para
@@ -1622,6 +1657,8 @@ async function enviar() {
     } catch (e) {
         // Si no se pudo preguntar, se manda lo que hay: dejar a la mesa
         // sin pedido por no poder comprobar es peor que el riesgo.
+    } finally {
+        enviando = false;
     }
     if (boton) boton.disabled = false;
 
@@ -1632,9 +1669,24 @@ async function enviar() {
         return;
     }
 
+    /* A QUÉ CUENTA VA. Lo que se escribe en "nombre del pedido" vale
+       solo para el pedido nuevo que se está armando. Antes se usaba
+       también al agregar a un pedido que ya existía, y ese campo se
+       queda con lo último que se tecleó: se anotaba el de Carlos, luego
+       el de Uber, se volvía al de Carlos a sumarle una cola — y la cola
+       salía a nombre de Uber, en la cuenta de Uber.
+
+       A una cuenta que ya existe se le agrega por ella misma, no por su
+       nombre. Y si mientras tanto se cerró —la cobraron, o se le anuló
+       todo— lo nuevo abre otra al mismo nombre. */
+    const abierta = !!refActual.sesion && Servicio.sesionesDe(refActual).some(s => s.abierta);
+
     const comanda = Servicio.enviarComanda({
         mesa: refActual.mesa || 0,
-        nombre: refActual.mesa ? '' : (nombreLlevar || Servicio.nombreDeCuenta(refActual)),
+        nombre: refActual.mesa ? ''
+              : refActual.nuevoLlevar ? nombreLlevar
+              : Servicio.nombreDeCuenta(refActual),
+        sesion: abierta ? refActual.sesion : undefined,
         items: sinLaDeLaMesa(aMandar),
         origen: 'mesero',
         menestra: laDeLaMesa
@@ -1642,7 +1694,8 @@ async function enviar() {
 
     // El pedido para llevar ya tiene cuenta propia: se sigue trabajando
     // sobre ella, para poder agregarle otra tanda o cobrarla sin salir.
-    if (comanda && refActual.nuevoLlevar) {
+    // También cuando la que había se cerró y esta tanda abrió otra.
+    if (comanda && !refActual.mesa && refActual.sesion !== comanda.sesion) {
         refActual = { sesion: comanda.sesion };
         $('titulo').textContent = Servicio.nombreDeCuenta(refActual);
     }
@@ -1715,11 +1768,35 @@ function cobrar(forma) {
 
     if (!lineas.length) { toast('Toca primero lo que se va a cobrar.'); return; }
 
-    Servicio.registrarPago(Object.assign({ lineas, forma }, refCobrando));
+    const pago = Servicio.registrarPago(Object.assign({ lineas, forma }, refCobrando));
+    if (!pago) { cobroQueNoEntro(); return; }
+
+    // Lo marcado ya se cobró: no puede quedar puesto para otro toque
+    seleccion = new Map();
 
     const cuenta = Servicio.cuentaDe(refCobrando);
     if (cuenta.saldo <= 0.001) { toast(refCobrando.mesa ? 'Mesa cerrada' : 'Pedido cobrado'); verMesas(); }
-    else { seleccion = new Map(); pintarCobrar(); toast('Cobrado · faltan ' + money(cuenta.saldo)); }
+    else { pintarCobrar(); toast('Cobrado · faltan ' + money(cuenta.saldo)); }
+}
+
+/**
+ * Se tocó cobrar y NO se anotó nada.
+ *
+ * Pasa cuando lo marcado ya no está por cobrar: otro celular cobró esa
+ * cuenta —o parte de ella— mientras esta pantalla seguía abierta con la
+ * selección puesta. No puede decir "cobrado": hay que decir que no, y
+ * dejar a la vista lo que de verdad falta.
+ */
+function cobroQueNoEntro() {
+    seleccion = new Map();
+
+    if (!Servicio.sesionesDe(refCobrando).some(s => s.abierta)) {
+        toast('Esa cuenta ya estaba cobrada. No se anotó otro cobro.');
+        verMesas();
+        return;
+    }
+    pintarCobrar();
+    toast('Eso ya no está por cobrar. Marca de nuevo lo que falta.');
 }
 
 /**
@@ -1749,11 +1826,13 @@ function fiar() {
     if (!nombre) { toast('Sin nombre no se puede fiar.'); return; }
 
     const deuda = Servicio.fiar(Object.assign({ lineas, nombre }, refCobrando));
-    if (!deuda) { toast('No se pudo anotar el fiado.'); return; }
+    if (!deuda) { cobroQueNoEntro(); return; }
+
+    seleccion = new Map();
 
     const cuenta = Servicio.cuentaDe(refCobrando);
     if (cuenta.saldo <= 0.001) { toast(`Fiado a ${nombre} · ${money(monto)}`); verMesas(); }
-    else { seleccion = new Map(); pintarCobrar(); toast(`Fiado ${money(monto)} · faltan ` + money(cuenta.saldo)); }
+    else { pintarCobrar(); toast(`Fiado ${money(monto)} · faltan ` + money(cuenta.saldo)); }
 }
 
 /* ============================================================
@@ -2033,7 +2112,15 @@ function conectarEventos() {
 
             if (confirm('¿Anular esta tanda? Desaparece de la parrilla y de la cocina.')) {
                 Servicio.anularComanda(anular.dataset.anular);
-                toast('Tanda anulada');
+
+                /* Si era lo único que tenía la cuenta, se cerró con ella:
+                   se dice, para que no extrañe que la mesa quede libre o
+                   que el nombre ya no salga entre los para llevar. */
+                const r = ref();
+                const sigue = !r || Servicio.sesionesDe(r).some(s => s.abierta);
+                toast(sigue ? 'Tanda anulada'
+                    : r.mesa ? 'Tanda anulada · la mesa quedó libre'
+                    : 'Tanda anulada · el pedido quedó cerrado');
             }
             return;
         }
