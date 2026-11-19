@@ -1847,7 +1847,16 @@ function probarPermisosDeAvisos() {
 
     // Cualquier cuenta del local apunta la suya, pero solo la suya:
     // el nombre del sitio sale de la direccion del buzon, que no se sabe.
-    comprobar('cualquier cuenta del local apunta la suya', aparato['.write'], 'auth != null');
+
+    /* "auth != null" no basta: Firebase deja que cualquiera se cree una
+       cuenta con la apiKey, que es pública. Tiene que ser una de las cinco. */
+    const LOCAL = ['fbdIzi6tOwhwJwQR6xY0MLUz4UE3', 'YHeMmcUbMFdsPQrIcvT561FDunt1',
+                   'rgi36tpn1KNHeDEqJN17dpbWguy2', '0elTDMQYcHSZYZHHyZ4i3RFPQEo1',
+                   'eYL6FEUszadeWbFcVLSVLDswWVs2'];
+    const soloDelLocal = r => typeof r === 'string' && r.startsWith('auth != null && (') &&
+        LOCAL.every(u => r.includes(`auth.uid == '${u}'`)) &&
+        r.split("auth.uid == '").length - 1 === LOCAL.length;
+    comprobar('el personal del local apunta la suya, no una cuenta cualquiera', soloDelLocal(aparato['.write']), true);
 
     comprobar('un apunte sin buzón no entra',
         /hasChildren\(\['endpoint', 'p256dh', 'auth', 'creado'\]\)/.test(aparato['.validate']), true);
@@ -2957,7 +2966,16 @@ function probarCuantasConexiones() {
     // Y la nube tiene que dejar escribir la llamada a quien la hace
     const reglas = JSON.parse(fuente('firebase-rules.json')).rules.servicio.llamadas;
     comprobar('la rama de las llamadas existe', !!reglas, true);
-    comprobar('la lee cualquiera del local', reglas['.read'], 'auth != null');
+
+    /* "auth != null" no basta: Firebase deja que cualquiera se cree una
+       cuenta con la apiKey, que es pública. Tiene que ser una de las cinco. */
+    const LOCAL = ['fbdIzi6tOwhwJwQR6xY0MLUz4UE3', 'YHeMmcUbMFdsPQrIcvT561FDunt1',
+                   'rgi36tpn1KNHeDEqJN17dpbWguy2', '0elTDMQYcHSZYZHHyZ4i3RFPQEo1',
+                   'eYL6FEUszadeWbFcVLSVLDswWVs2'];
+    const soloDelLocal = r => typeof r === 'string' && r.startsWith('auth != null && (') &&
+        LOCAL.every(u => r.includes(`auth.uid == '${u}'`)) &&
+        r.split("auth.uid == '").length - 1 === LOCAL.length;
+    comprobar('la lee el personal del local, no una cuenta cualquiera', soloDelLocal(reglas['.read']), true);
     comprobar('la escriben la cocina y el asador',
         /rgi36tpn1KNHeDEqJN17dpbWguy2/.test(reglas.$aQuien['.write']) &&
         /0elTDMQYcHSZYZHHyZ4i3RFPQEo1/.test(reglas.$aQuien['.write']), true);

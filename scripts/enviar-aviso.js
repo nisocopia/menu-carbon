@@ -128,7 +128,7 @@ async function main() {
     }
     if (!correo || !clave) {
         console.error('\nFaltan las credenciales del gerente. En PowerShell:\n');
-        console.error("  $env:CORREO_PUSH   = 'eduardolino78@gmail.com'");
+        console.error("  $env:CORREO_PUSH   = 'correo-del-gerente'");
         console.error("  $env:CLAVE_GERENTE = '...'\n");
         process.exit(1);
     }

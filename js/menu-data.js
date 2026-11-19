@@ -83,11 +83,11 @@ const RESTAURANTE = {
    ------------------------------------------------------------ */
 
 const EQUIPO = {
-    'fbdIzi6tOwhwJwQR6xY0MLUz4UE3': 'gerente',    // eduardolino78@gmail.com
-    'YHeMmcUbMFdsPQrIcvT561FDunt1': 'mesero',     // mesa@gmail.com
-    'rgi36tpn1KNHeDEqJN17dpbWguy2': 'cocina',     // cocina@gmail.com
-    '0elTDMQYcHSZYZHHyZ4i3RFPQEo1': 'parrilla',    // asador@gmail.com
-    'eYL6FEUszadeWbFcVLSVLDswWVs2': 'servir'      // servir@gmail.com
+    'fbdIzi6tOwhwJwQR6xY0MLUz4UE3': 'gerente',
+    'YHeMmcUbMFdsPQrIcvT561FDunt1': 'mesero',
+    'rgi36tpn1KNHeDEqJN17dpbWguy2': 'cocina',
+    '0elTDMQYcHSZYZHHyZ4i3RFPQEo1': 'parrilla',
+    'eYL6FEUszadeWbFcVLSVLDswWVs2': 'servir'
 };
 
 /* ------------------------------------------------------------
@@ -138,7 +138,7 @@ const PUSH = {
 
     /* A quién escribirle si un aviso da problemas. Lo exige el estándar
        y lo lee una persona de Google, no un programa. */
-    contacto: 'mailto:eduardolino78@gmail.com'
+    contacto: ''   // mailto:tu-correo — solo si algún día se montan los avisos
 };
 
 /* ------------------------------------------------------------
