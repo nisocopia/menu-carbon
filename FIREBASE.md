@@ -182,6 +182,13 @@ Desde ese momento:
 Que los uid queden a la vista en el repositorio no es un descuido: **un
 uid no es una clave y no sirve para entrar**. Es solo un nombre.
 
+> **"Tener cuenta" no es "ser del local".** Con la `apiKey` (que es pública,
+> va en el código) **cualquiera puede crearse una cuenta** en tu proyecto.
+> Por eso ninguna regla dice solo `auth != null`: siempre va con la lista
+> de uid. Si agregas una cuenta nueva, súmala en **todas** esas listas.
+> Y apaga el registro: **Authentication → Configuración → Acciones del
+> usuario → desmarcar "Habilitar creación (registro)"**.
+
 ### 5. Copiar la configuración al menú
 
 En **Configuración** (arriba en la barra lateral, bajo "Descripción general
